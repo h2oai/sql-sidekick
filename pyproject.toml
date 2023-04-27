@@ -1,0 +1,64 @@
+[tool.poetry]
+name = "sql-sidekick"
+version = "0.0.1"
+license = "Proprietary"
+description = "An AI assistant for SQL"
+authors = [
+  "Pramit Choudhary <pchoudha@uci.edu>",
+  "Michal Malohlava <michal@h2o.ai>"
+]
+readme = "README.md"
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: Other/Proprietary License",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.8",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence"
+]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+pandas = "^1.3.3"
+numpy = "^1.21.2"
+click = "^8.0.1"
+
+
+[tool.poetry.dev-dependencies]
+pylint = { version = "^2.12.2", allow-prereleases = true }
+flake8 = { version = "^4.0.1", allow-prereleases = true }
+black = { version = "21.12b0", allow-prereleases = true }
+
+[tool.black]
+line-length = 120
+skip-string-normalization = true
+target-version = ['py38.16']
+include = '\.pyi?$'
+exclude = '''
+(
+  /(
+      \.eggs         # exclude a few common directories in the
+    | \.git          # root of the project
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | _build
+    | buck-out
+    | build
+    | dist
+  )/
+  | notebooks
+  | local
+)
+'''
+
+[tool.isort]
+line_length = 120
+multi_line_output = 3
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
