@@ -24,6 +24,9 @@ python = "^3.8"
 pandas = "^1.3.3"
 numpy = "^1.21.2"
 click = "^8.0.1"
+sqlalchemy = "^1.4.23"
+psycopg2-binary = "^2.9.6"
+colorama = "^0.4.6"
 
 
 [tool.poetry.dev-dependencies]
