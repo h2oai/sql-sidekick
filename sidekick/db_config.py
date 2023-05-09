@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from psycopg2.extras import Json
 
 
-class DBUtils:
+class DBConfig:
     def __init__(self, db_name, hostname, user_name, password, port) -> None:
         self.db_name = db_name
         self.hostname = hostname

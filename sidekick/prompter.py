@@ -1,9 +1,13 @@
+import os
+import openai
 import click
-from db_utils import DBUtils
+from db_config import DBConfig
 from colorama import init
 from colorama import Fore as F
 from colorama import Back as B
 from colorama import Style
+from query import generate_sql
+from loguru import logger
 
 
 def color(fore="", back="", text=None):
@@ -38,7 +42,7 @@ def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: i
     """Creates context for the new Database"""
     click.echo(f" Information supplied:\n {db_name}, {hostname}, {user_name}, {password}, {port}")
     try:
-        db_obj = DBUtils(db_name, hostname, user_name, password, port)
+        db_obj = DBConfig(db_name, hostname, user_name, password, port)
         db_obj.create_db()
         click.echo("Database created successfully!")
     except Exception as e:
@@ -57,7 +61,6 @@ def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: i
         val = input(color(F.GREEN, "", "Would you like to add few sample rows (at-least 3)? (y/n): "))
         if val.lower() == "y":
             db_obj.add_samples()
-            pass
         else:
             click.echo("Exiting...")
             return
@@ -65,7 +68,23 @@ def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: i
 
 @cli.group("learn")
 def learn():
-    """Learn context."""
+    """Helps learn context for generation."""
+
+
+@cli.command()
+@click.option("--table_info", "-t", help="Table info", prompt="Which table to use?")
+@click.option("--question", "-q", help="Database name", prompt="Ask a question")
+def query(table_info: str, question: str):
+    """Asks question and returns answer."""
+
+    os.environ["OPENAI_API_KEY"] = "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"
+    openai.api_key = os.getenv("OPENAI_API_KEY")
+    # Set context
+    logger.info("Setting context...")
+    question = "Compute the number of AI units for each user using stream for each resource type."
+    logger.info(f"Question: {question}")
+    _task = generate_sql(table_info, question)
+    click.echo(_task)
 
 
 if __name__ == "__main__":

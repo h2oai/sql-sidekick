@@ -1,4 +1,5 @@
 {
+    "index_path": "./var/lib/tmp/data",
     "table_schema":{
         "sourceFormat": "postgres",
         "fields": ""
