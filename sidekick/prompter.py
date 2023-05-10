@@ -1,13 +1,19 @@
 import os
-import openai
+from pathlib import Path
+
 import click
-from db_config import DBConfig
-from colorama import init
-from colorama import Fore as F
+import openai
+import toml
 from colorama import Back as B
-from colorama import Style
-from query import generate_sql
+from colorama import Fore as F
+from colorama import Style, init
+from db_config import DBConfig
 from loguru import logger
+from query import generate_sql
+
+# Load the config file and initialize required paths
+base_path = (Path(__file__).parent / "../").resolve()
+env_settings = toml.load(f"{base_path}/.env.toml")
 
 
 def color(fore="", back="", text=None):
@@ -76,15 +82,29 @@ def learn():
 @click.option("--question", "-q", help="Database name", prompt="Ask a question")
 def query(table_info: str, question: str):
     """Asks question and returns answer."""
+    # Check if .env.toml file exists
+    api_key = env_settings["OPENAI"]["OPENAI_API_KEY"]
+    if api_key is None or api_key == "":
+        if os.getenv("OPENAI_API_KEY") is None or os.getenv("OPENAI_API_KEY") == "":
+            val = input(
+                color(F.GREEN, "", "Looks like API key is not set, would you like to set OPENAI_API_KEY? (y/n):")
+            )
+            if val.lower() == "y":
+                api_key = input(color(F.GREEN, "", "Enter OPENAI_API_KEY:"))
+        os.environ["OPENAI_API_KEY"] = api_key
+    openai.api_key = api_key
 
-    os.environ["OPENAI_API_KEY"] = "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"
-    openai.api_key = os.getenv("OPENAI_API_KEY")
     # Set context
     logger.info("Setting context...")
-    question = "Compute the number of AI units for each user using stream for each resource type."
     logger.info(f"Question: {question}")
     _task = generate_sql(table_info, question)
-    click.echo(_task)
+    click.echo(f"Tasks:\n {_task}")
+
+    if _task is not None:
+        edit_val = click.prompt("Would you like to edit the tasks? (y/n): ")
+        if edit_val.lower() == "y":
+            _task = click.edit(_task)
+            click.echo(f"Tasks:\n {_task}")
 
 
 if __name__ == "__main__":
