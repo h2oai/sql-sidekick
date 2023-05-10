@@ -30,6 +30,8 @@ colorama = "^0.4.6"
 llama_index = "^0.5.27"
 loguru = "^0.7.0"
 toml = "^0.10.2"
+sqlglot = "^12.2.0"
+transformers = "^4.29.0"
 
 
 [tool.poetry.dev-dependencies]

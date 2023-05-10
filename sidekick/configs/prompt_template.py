@@ -1,4 +1,4 @@
-task_prompt_template = {
+TASK_PROMPT = {
         "system_prompt": "Act as a Data Analyst",
         "user_prompt": """
         ### For Table: {table_name} Given an input question, only list specific tasks itemized for SQL generation that answer the question. Don't generate SQL code.
@@ -9,7 +9,7 @@ task_prompt_template = {
     """
 }
 
-query_prompt_template = """
+QUERY_PROMPT = """
                 ### System: Act as a SQL Expert
                 # Given an input question, only generate syntactically correct SQL queries
                 # Pick the SQL query which has the highest average log probability of explaining the
@@ -17,7 +17,7 @@ query_prompt_template = """
                 ### {dialect} SQL tables
                 Examples:\n
                 {_sample_queries}
-                ### question: {question_format};
+                ### question: {_question};
                 # SELECT 1
                 ### Tasks:\n
                 {_tasks}
@@ -32,7 +32,7 @@ query_prompt_template = """
                 # Add explanation
             """
 
-debugging_prompt_template = {
+DEBUGGING_PROMPT = {
                 "system_prompt": "Act as a SQL expert for PostgreSQL code",
                 "user_prompt": """
                 ### Fix syntax errors for provided SQL Query.

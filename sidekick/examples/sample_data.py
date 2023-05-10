@@ -104,7 +104,7 @@ Sample Values:
 """
 
 # For few shot prompting
-samples ="""
+samples_queries ="""
 # query: Describe the table playlistsong
 # answer: SELECT * FROM 'PlaylistTrack' LIMIT 3
 # query: Total number of CPUs used?

@@ -9,7 +9,7 @@ from colorama import Fore as F
 from colorama import Style, init
 from db_config import DBConfig
 from loguru import logger
-from query import generate_sql
+from query import SQLGenerator
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
@@ -81,7 +81,7 @@ def learn():
 @click.option("--table_info", "-t", help="Table info", prompt="Which table to use?")
 @click.option("--question", "-q", help="Database name", prompt="Ask a question")
 def query(table_info: str, question: str):
-    """Asks question and returns answer."""
+    """Asks question and returns SQL."""
     # Check if .env.toml file exists
     api_key = env_settings["OPENAI"]["OPENAI_API_KEY"]
     if api_key is None or api_key == "":
@@ -97,14 +97,31 @@ def query(table_info: str, question: str):
     # Set context
     logger.info("Setting context...")
     logger.info(f"Question: {question}")
-    _task = generate_sql(table_info, question)
-    click.echo(f"Tasks:\n {_task}")
+    # Below re-definition is temporary
+    host_name = "localhost"
+    user_name = "postgres"
+    passwd = "abc"
+    db_name = "postgres"
+    db_name = "querydb"
+    db_url = f"postgresql+psycopg2://{user_name}:{passwd}@{host_name}/{db_name}".format(
+        user_name, passwd, host_name, db_name
+    )
 
-    if _task is not None:
+    sql_g = SQLGenerator(db_url, api_key)
+    sql_g._tasks = sql_g.generate_tasks(table_info, question)
+    click.echo(sql_g._tasks)
+
+    updated_tasks = None
+    if sql_g._tasks is not None:
         edit_val = click.prompt("Would you like to edit the tasks? (y/n): ")
         if edit_val.lower() == "y":
-            _task = click.edit(_task)
-            click.echo(f"Tasks:\n {_task}")
+            updated_tasks = click.edit(sql_g._tasks)
+            click.echo(f"Tasks:\n {updated_tasks}")
+        else:
+            click.echo("Skipping edit...")
+    if updated_tasks is not None:
+        sql_g._tasks = updated_tasks
+    sql_g.generate_sql(table_info, question)
 
 
 if __name__ == "__main__":
