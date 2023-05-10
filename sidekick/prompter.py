@@ -121,7 +121,16 @@ def query(table_info: str, question: str):
             click.echo("Skipping edit...")
     if updated_tasks is not None:
         sql_g._tasks = updated_tasks
-    sql_g.generate_sql(table_info, question)
+    res = sql_g.generate_sql(table_info, question)
+    logger.info(f"Generated response:\n\n {res}")
+
+    if res is not None:
+        edit_val = click.prompt("Would you like to edit the SQL? (y/n): ")
+        if edit_val.lower() == "y":
+            updated_sql = click.edit(res)
+            click.echo(f"Updated SQL:\n {updated_sql}")
+        else:
+            click.echo("Exiting...")
 
 
 if __name__ == "__main__":

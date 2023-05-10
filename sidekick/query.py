@@ -131,7 +131,6 @@ class SQLGenerator:
             [], sql_database=self.sql_database, table_name=table_name, service_context=service_context_gpt3
         )
         res = self.generate_response(context_container, sql_index=index, input_prompt=query_str)
-        logger.info(f"Generated response:\n\n {res}")
 
         try:
             # Check if `SQL` is formatted ---> ``` SQL_text ```
