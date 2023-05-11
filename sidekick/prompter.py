@@ -92,6 +92,11 @@ def query(table_info: str, question: str):
             if val.lower() == "y":
                 api_key = input(color(F.GREEN, "", "Enter OPENAI_API_KEY:"))
         os.environ["OPENAI_API_KEY"] = api_key
+        env_settings["OPENAI"]["OPENAI_API_KEY"] = api_key
+        # Update settings file for future use.
+        f = open(f"{base_path}/.env.toml", "w")
+        toml.dump(env_settings, f)
+        f.close()
     openai.api_key = api_key
 
     # Set context
