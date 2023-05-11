@@ -74,7 +74,7 @@ class SQLGenerator:
                     # Reference: Teaching Large Language Models to Self-Debug, https://arxiv.org/abs/2304.05128
                     logger.info(f"Attempting to heal ...,\n {se}")
                     system_prompt = DEBUGGING_PROMPT["system_prompt"]
-                    user_prompt = DEBUGGING_PROMPT["user_prompt"].format(ex_traceback, qry_txt)
+                    user_prompt = DEBUGGING_PROMPT["user_prompt"].format(ex_traceback=ex_traceback, qry_txt=qry_txt)
                     # Role and content
                     query_txt = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
 
@@ -144,15 +144,18 @@ class SQLGenerator:
 
     def task_formatter(self, input_task: str):
         # Generated format
-        #  Tasks:
-        # 1. Generate a SELECT query to display all columns of the telemetry table.
-        # 2. Infer the return type of the question as a description of the table schema.
-        # 3. Final output: Return the table schema for the telemetry.
+        """
+        Tasks:
+        1. Generate a SELECT query to display all columns of the telemetry table.
+        2. Infer the return type of the question as a description of the table schema.
+        3. Final output: Return the table schema for the telemetry.
+        """
 
         # Converted format
-        # # 1. Generate a SELECT query to display all columns of the telemetry table.
-        # # 2. Infer the return type of the question as a description of the table schema.
-        res = input_task.split(".")
-        for _r in res[1:]:
-            rows = "\n".join(f"# {_r}")
-        return rows
+        """
+        # 1. Generate a SELECT query to display all columns of the telemetry table.
+        # 2. Infer the return type of the question as a description of the table schema.
+        """
+        _res = input_task.split("\n")
+        res = "\n".join([f"# {i}" for i in _res[1:]])  # Skip the first line
+        return res

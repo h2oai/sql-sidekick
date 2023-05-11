@@ -113,7 +113,7 @@ def query(table_info: str, question: str):
 
     updated_tasks = None
     if sql_g._tasks is not None:
-        edit_val = click.prompt("Would you like to edit the tasks? (y/n): ")
+        edit_val = click.prompt("Would you like to edit the tasks? (y/n)")
         if edit_val.lower() == "y":
             updated_tasks = click.edit(sql_g._tasks)
             click.echo(f"Tasks:\n {updated_tasks}")
@@ -122,10 +122,10 @@ def query(table_info: str, question: str):
     if updated_tasks is not None:
         sql_g._tasks = updated_tasks
     res = sql_g.generate_sql(table_info, question)
-    logger.info(f"Generated response:\n\n {res}")
+    logger.info(f"Generated response:\n\n{res}")
 
     if res is not None:
-        edit_val = click.prompt("Would you like to edit the SQL? (y/n): ")
+        edit_val = click.prompt("Would you like to edit the SQL? (y/n)")
         if edit_val.lower() == "y":
             updated_sql = click.edit(res)
             click.echo(f"Updated SQL:\n {updated_sql}")
