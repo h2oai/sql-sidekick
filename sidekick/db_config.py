@@ -78,7 +78,7 @@ class DBConfig:
         cursor = conn.cursor()
 
         cursor.execute(
-            f"""INSERT into telemetry (id, ts, kind, user_id, user_name, resource_type, resource_id, stream, source, payload)
+            f"""INSERT into {self.table_name} (id, ts, kind, user_id, user_name, resource_type, resource_id, stream, source, payload)
         values ('12325678-1234-5678-1234-567812345678',
                 '2023-04-11 17:39:56+0000', 'EVENT',
                 '8cd4-476d-97e1-594b438eab7a', 'test_user',
@@ -92,7 +92,7 @@ class DBConfig:
         """
         )
         cursor.execute(
-            f"""INSERT into telemetry (id, ts, kind, user_id, user_name, resource_type, resource_id, stream, source, payload)
+            f"""INSERT into {self.table_name} (id, ts, kind, user_id, user_name, resource_type, resource_id, stream, source, payload)
         values ('12335679-1234-5678-1234-567812345679',
                 '2023-04-11 17:49:56+0000', 'EVENT',
                 '8ce4-476d-97e1-594b438eab7a', 'test_user',
@@ -106,7 +106,7 @@ class DBConfig:
         )
 
         cursor.execute(
-            f"""insert into telemetry (id, ts, kind, user_id, user_name, resource_type, resource_id, stream, source, payload)
+            f"""insert into {self.table_name} (id, ts, kind, user_id, user_name, resource_type, resource_id, stream, source, payload)
         values ('12345379-1234-5678-1234-567812345778',
                 '2023-04-11 18:49:56+0000', 'EVENT',
                 '7ce4-476d-97e1-594b438eab9a', 'test_user',
