@@ -137,7 +137,7 @@ class SQLGenerator:
             if "```" in str(res):
                 res = str(res).split("```", 1)[1].split("```", 1)[0]
             sqlglot.transpile(res)
-        except (sqlglot.errors.ParseError, RuntimeError) as e:
+        except (sqlglot.errors.ParseError, ValueError, RuntimeError) as e:
             logger.info("We did the best we could, there might be still be some error:\n")
             logger.info(f"Realized query so far:\n {res}")
         return res
@@ -157,5 +157,6 @@ class SQLGenerator:
         # 2. Infer the return type of the question as a description of the table schema.
         """
         _res = input_task.split("\n")
-        res = "\n".join([f"# {i}" for i in _res[1:]])  # Skip the first line
+        start_index = 1 if "Tasks" in _res[0] else 0
+        res = "\n".join([f"# {i}" for i in _res[start_index:]])  # Skip the first line
         return res
