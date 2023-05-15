@@ -8,5 +8,10 @@ A simple sql assistant (WIP)
 2. cd sql-sidekick
 3. make setup
 4. source ./.sidekickvenv/bin/activate
-5. poetry update; poetry install
+```
+## Start
+```
+1. python sidekick/prompter.py
+2. python sidekick/prompter.py configure db-setup # Setup local DB config
+3. python sidekick/prompter.py query
 ```
