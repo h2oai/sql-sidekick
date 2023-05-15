@@ -1,11 +1,16 @@
 TASK_PROMPT = {
     "system_prompt": "Act as a Data Analyst",
     "user_prompt": """
-        ### For Table: {table_name} Given an input (question), only return specific tasks as an ordered itemized list for SQL generation that answer the question. Don't generate SQL code.
-        Infer the return type of the question. Add a task to return final output.
-        # Example data: \n {samples}
-        # (question):\n {question_str}
-        # Output format: Tasks: list of tasks
+        ### For Table: {_table_name} Given an input *Question*, only return specific and informative tasks as an ordered itemized list for SQL generation that answer the question.
+        Extract all of the proper nouns (generally capitalized, abbreviated) from the Samples section and add to Context section as Key, Value pair.
+        Use the Context section and Samples section to establish relationship when tokens from Question does not match column names.
+        If information is not found in Context or Samples section, attempt to reason for possible tasks but also ask questions for.
+        Infer the return type of the Question. Don't generate SQL code.
+        # Data information: \n{_data_info}
+        # Samples: \n{_sample_queries}
+        # Context: {_context}
+        # *Question*: {_question_str};
+        # Output: Tasks: ordered list of tasks
     """,
 }
 
@@ -16,14 +21,17 @@ TASK_PROMPT = {
 # Reference: https://arxiv.org/pdf/2005.14165.pdf
 QUERY_PROMPT = """
                 ### System: Act as a SQL Expert
-                # Given an input (question), only generate syntactically correct SQL queries
+                # Given an input *Question*, only generate syntactically correct SQL queries using step by step reasoning from Tasks section.
+                # Extract all of the proper nouns (generally capitalized, abbreviated) from the Examples section and add to Context section as Key, Value pair.
+                # Use the context section to establish relationship when tokens from Question does not match column names.
                 # Pick the SQL query which has the highest average log probability of explaining the
-                candidate question
+                candidate question.
                 ### {dialect} SQL tables
                 Examples:\n{_sample_queries}
-                ### *question*:\n{_question};
+                ### *Question*: {_question};
                 # SELECT 1
                 ### Tasks:\n{_tasks}
+                ### Context: {_context}
                 ### Suggestions:
                 # Don't use aggregate and window function together;
                 # Avoid COUNT(*) and prefer COUNT(1);

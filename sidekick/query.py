@@ -6,7 +6,8 @@ import sqlglot
 from configs.prompt_template import DEBUGGING_PROMPT, QUERY_PROMPT, TASK_PROMPT
 from examples.sample_data import sample_values, samples_queries
 from langchain import OpenAI
-from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
+from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
+                         LLMPredictor, ServiceContext, SQLDatabase)
 from llama_index.indices.struct_store import SQLContextContainerBuilder
 from loguru import logger
 from sqlalchemy import create_engine
@@ -35,14 +36,18 @@ class SQLGenerator:
             table_schema_index.save_to_disk(f"{self.path}/sql_index_check.json")
         return table_schema_index
 
-    def _query_tasks(self, question_str, context_info: dict, samples, table_name: str):
+    def _query_tasks(self, question_str, context_info: dict, data_info, sample_queries, table_name: str):
         keys = [table_name]
         # TODO: Throw error if context_info is not a dict.
         schema_info = list(map(context_info.get, keys))
         try:
             system_prompt = TASK_PROMPT["system_prompt"]
             user_prompt = TASK_PROMPT["user_prompt"].format(
-                table_name=table_name, schema_info=schema_info, samples=samples, question_str=question_str
+                _table_name=table_name,
+                _schema_info=schema_info,
+                _data_info=data_info,
+                _sample_queries=sample_queries,
+                _question_str=question_str,
             )
 
             # Role and content
@@ -98,8 +103,7 @@ class SQLGenerator:
             context_builder = SQLContextContainerBuilder(self.sql_database)
 
             c_info = context_builder.full_context_dict
-            _sample_values = sample_values
-            task_list = self._query_tasks(input_question, c_info, _sample_values, table_name)
+            task_list = self._query_tasks(input_question, c_info, sample_values, samples_queries, table_name)
             with open(f"{path}/tasks.txt", "w") as f:
                 f.write(task_list)
             return task_list
