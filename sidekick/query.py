@@ -1,5 +1,7 @@
+import json
 import os
 import sys
+from pathlib import Path
 
 import openai
 import sqlglot
@@ -41,15 +43,19 @@ class SQLGenerator:
         # TODO: Throw error if context_info is not a dict.
         schema_info = list(map(context_info.get, keys))
         try:
+            context_file = f"{self.path}/context.json"
+            additional_context = json.load(open(context_file, "r")) if Path(context_file).exists() else {}
             system_prompt = TASK_PROMPT["system_prompt"]
             user_prompt = TASK_PROMPT["user_prompt"].format(
                 _table_name=table_name,
                 _schema_info=schema_info,
                 _data_info=data_info,
                 _sample_queries=sample_queries,
+                _context=str(additional_context).lower(),
                 _question_str=question_str,
             )
 
+            logger.info(f"Info: {user_prompt}")
             # Role and content
             query_txt = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
             # TODO ADD local model
@@ -114,11 +120,14 @@ class SQLGenerator:
         self, table_name: str, input_question: str, _dialect: str = "postgres", path: str = "./var/lib/tmp/data"
     ):
         _tasks = self.task_formatter(self._tasks)
+        context_file = f"{self.path}/context.json"
+        additional_context = json.load(open(context_file, "r")) if Path(context_file).exists() else {}
         query_str = QUERY_PROMPT.format(
             dialect=_dialect,
             _question=input_question.lower(),
             table_name=table_name,
             _sample_queries=samples_queries.lower(),
+            _context=str(additional_context).lower(),
             _tasks=_tasks.lower(),
         )
 

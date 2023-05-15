@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 
@@ -72,9 +73,28 @@ def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: i
             return
 
 
-@cli.group("learn")
-def learn():
+@cli.command()
+@click.option(
+    "--context",
+    "-c",
+    help="Save context in memory for future use",
+    prompt="Would you like to add/update additional context? (y/n)?",
+)
+def learn(context: str):
     """Helps learn context for generation."""
+    context_dict = """{"<context_key>": "<context_value>"
+    }
+    """
+    if context.lower() == "y":
+        updated_context = click.edit(context_dict)
+        click.echo(f"Context:\n {updated_context}")
+        if updated_context:
+            context_dict = json.loads(updated_context)
+            path = f"{base_path}/var/lib/tmp/data/"
+            with open(f"{path}/context.json", "w") as outfile:
+                json.dump(context_dict, outfile, indent=4, sort_keys=False)
+    else:
+        click.echo("Value not supported. Try Y/N ...")
 
 
 @cli.command()
