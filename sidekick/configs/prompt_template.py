@@ -5,7 +5,7 @@ TASK_PROMPT = {
         Extract all of the proper nouns (generally capitalized, abbreviated) from the Samples section and add to Context section as Key, Value pair.
         Use the Context section and Samples section to establish relationship when tokens from Question does not match column names.
         If information is not found in Context or Samples section, attempt to reason for possible tasks but also ask questions for.
-        Infer the return type of the Question. Don't generate SQL code.
+        Infer the return type of the Question. Do not generate final SQL response, only return tasks.
         # Data information: \n{_data_info}
         # Samples: \n{_sample_queries}
         # Context: {_context}
