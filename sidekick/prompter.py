@@ -98,10 +98,22 @@ def learn(context: str):
 
 
 @cli.command()
-@click.option("--table_info", "-t", help="Table info", prompt="Which table to use?")
 @click.option("--question", "-q", help="Database name", prompt="Ask a question")
-def query(table_info: str, question: str):
+def query(question: str):
     """Asks question and returns SQL."""
+
+    # Check if table exists
+    path = f"{base_path}/var/lib/tmp/data/"
+    table_context_file = f"{path}/table_context.json"
+    table_context = json.load(open(table_context_file, "r")) if Path(table_context_file).exists() else {}
+    if table_context:
+        table_name = table_context.get("tables_in_use", None)
+    else:
+        table_name = [click.prompt("Which table to use?")]
+        table_context["tables_in_use"] = table_name
+        with open(f"{path}/table_context.json", "w") as outfile:
+            json.dump(table_context, outfile, indent=4, sort_keys=False)
+    logger.info(f"Table in use: {table_name}")
     # Check if .env.toml file exists
     api_key = env_settings["OPENAI"]["OPENAI_API_KEY"]
     if api_key is None or api_key == "":
@@ -133,7 +145,7 @@ def query(table_info: str, question: str):
     )
 
     sql_g = SQLGenerator(db_url, api_key)
-    sql_g._tasks = sql_g.generate_tasks(table_info, question)
+    sql_g._tasks = sql_g.generate_tasks(table_name, question)
     click.echo(sql_g._tasks)
 
     updated_tasks = None
@@ -146,7 +158,7 @@ def query(table_info: str, question: str):
             click.echo("Skipping edit...")
     if updated_tasks is not None:
         sql_g._tasks = updated_tasks
-    res = sql_g.generate_sql(table_info, question)
+    res = sql_g.generate_sql(table_name, question)
     logger.info(f"Generated response:\n\n{res}")
 
     if res is not None:

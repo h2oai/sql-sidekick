@@ -38,10 +38,11 @@ class SQLGenerator:
             table_schema_index.save_to_disk(f"{self.path}/sql_index_check.json")
         return table_schema_index
 
-    def _query_tasks(self, question_str, context_info: dict, data_info, sample_queries, table_name: str):
-        keys = [table_name]
+    def _query_tasks(self, question_str, context_info: dict, data_info, sample_queries, table_name: list):
+        keys = table_name
         # TODO: Throw error if context_info is not a dict.
         schema_info = list(map(context_info.get, keys))
+
         try:
             context_file = f"{self.path}/context.json"
             additional_context = json.load(open(context_file, "r")) if Path(context_file).exists() else {}
@@ -98,8 +99,8 @@ class SQLGenerator:
                         res = qry_txt
                     return res
                 except Exception as se:
-                    _, ex_value, ex_traceback = sys.exc_info()
-                    res = ex_value.statement
+                    # Another exception occurred, return the original SQL
+                    res = qry_txt
                     return res
 
     def generate_tasks(self, table_name: str, input_question: str, path: str = "./var/lib/tmp/data"):
@@ -131,7 +132,6 @@ class SQLGenerator:
             _tasks=_tasks.lower(),
         )
 
-        logger.info(f"Prompt:\n {query_str}")
         table_schema_index = self.build_index(persist=False)
         self.context_builder.query_index_for_context(table_schema_index, query_str, store_context_str=True)
         context_container = self.context_builder.build_context_container()
