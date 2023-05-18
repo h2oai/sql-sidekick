@@ -8,8 +8,7 @@ import sqlglot
 from configs.prompt_template import DEBUGGING_PROMPT, QUERY_PROMPT, TASK_PROMPT
 from examples.sample_data import sample_values, samples_queries
 from langchain import OpenAI
-from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
-                         LLMPredictor, ServiceContext, SQLDatabase)
+from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
 from llama_index.indices.struct_store import SQLContextContainerBuilder
 from loguru import logger
 from sqlalchemy import create_engine
@@ -17,12 +16,12 @@ from sqlalchemy.engine import URL
 
 
 class SQLGenerator:
-    def __init__(self, db_url: str, openai_key: str = None):
+    def __init__(self, db_url: str, openai_key: str = None, path: str = "../var/lib/tmp/data"):
         self.db_url = db_url
         self.engine = create_engine(db_url)
         self.sql_database = SQLDatabase(self.engine)
-        self.context_builder = SQLContextContainerBuilder(self.sql_database)
-        self.path = "./var/lib/tmp/data"
+        self.context_builder = None
+        self.path = path
         self._tasks = None
         self.openai_key = openai_key
 
@@ -38,25 +37,20 @@ class SQLGenerator:
             table_schema_index.save_to_disk(f"{self.path}/sql_index_check.json")
         return table_schema_index
 
-    def _query_tasks(self, question_str, context_info: dict, data_info, sample_queries, table_name: list):
-        keys = table_name
-        # TODO: Throw error if context_info is not a dict.
-        schema_info = list(map(context_info.get, keys))
-
+    def _query_tasks(self, question_str, data_info, sample_queries, table_name: list):
         try:
-            context_file = f"{self.path}/context.json"
+            context_file = f"{self.path}/var/lib/tmp/data/context.json"
             additional_context = json.load(open(context_file, "r")) if Path(context_file).exists() else {}
+
             system_prompt = TASK_PROMPT["system_prompt"]
             user_prompt = TASK_PROMPT["user_prompt"].format(
                 _table_name=table_name,
-                _schema_info=schema_info,
                 _data_info=data_info,
                 _sample_queries=sample_queries,
                 _context=str(additional_context).lower(),
                 _question_str=question_str,
             )
 
-            logger.info(f"Info: {user_prompt}")
             # Role and content
             query_txt = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
             # TODO ADD local model
@@ -103,41 +97,40 @@ class SQLGenerator:
                     res = qry_txt
                     return res
 
-    def generate_tasks(self, table_name: str, input_question: str, path: str = "./var/lib/tmp/data"):
+    def generate_tasks(self, table_name: str, input_question: str):
         try:
             # Step 1: Given a question, generate tasks to possibly answer the question and persist the result -> tasks.txt
             # Step 2: Append task list to 'query_prompt_template', generate SQL code to answer the question and persist the result -> sql.txt
-            context_builder = SQLContextContainerBuilder(self.sql_database)
 
-            c_info = context_builder.full_context_dict
-            task_list = self._query_tasks(input_question, c_info, sample_values, samples_queries, table_name)
-            with open(f"{path}/tasks.txt", "w") as f:
+            task_list = self._query_tasks(input_question, sample_values, samples_queries, table_name)
+            with open(f"{self.path}/var/lib/tmp/data/tasks.txt", "w") as f:
                 f.write(task_list)
             return task_list
         except Exception as se:
             raise se
 
-    def generate_sql(
-        self, table_name: str, input_question: str, _dialect: str = "postgres", path: str = "./var/lib/tmp/data"
-    ):
+    def generate_sql(self, table_name: str, input_question: str, _dialect: str = "postgres"):
         _tasks = self.task_formatter(self._tasks)
-        context_file = f"{self.path}/context.json"
+        context_file = f"{self.path}/var/lib/tmp/data/context.json"
         additional_context = json.load(open(context_file, "r")) if Path(context_file).exists() else {}
+
         query_str = QUERY_PROMPT.format(
             dialect=_dialect,
             _question=input_question.lower(),
             table_name=table_name,
             _sample_queries=samples_queries.lower(),
-            _context=str(additional_context).lower(),
             _tasks=_tasks.lower(),
         )
+
+        table_context_dict = {str(table_name[0]).lower(): str(additional_context).lower()}
+        self.context_builder = SQLContextContainerBuilder(self.sql_database, context_dict=table_context_dict)
 
         table_schema_index = self.build_index(persist=False)
         self.context_builder.query_index_for_context(table_schema_index, query_str, store_context_str=True)
         context_container = self.context_builder.build_context_container()
 
         # Reference: https://github.com/jerryjliu/llama_index/issues/987
-        llm_predictor_gpt3 = LLMPredictor(llm=OpenAI(temperature=0, model_name="text-davinci-003"))
+        llm_predictor_gpt3 = LLMPredictor(llm=OpenAI(temperature=0.7, model_name="text-davinci-003"))
         service_context_gpt3 = ServiceContext.from_defaults(llm_predictor=llm_predictor_gpt3, chunk_size_limit=512)
 
         index = GPTSQLStructStoreIndex(

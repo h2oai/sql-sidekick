@@ -104,11 +104,8 @@ Sample Values:
 """
 
 # For few shot prompting
-samples_queries ="""
-# query: Describe the table playlistsong
-# answer: SELECT * FROM 'PlaylistTrack' LIMIT 3
+samples_queries = """
 # query: Total number of CPUs used?
-- Make use of payload->'engineEvent'-> 'pausing' -> 'engine'->> 'cpu'
 # answer:
 SELECT sum((payload->'engineEvent'-> 'pausing' -> 'engine'->> 'cpu')::integer) AS total_cpus_used
 FROM telemetry

@@ -144,7 +144,7 @@ def query(question: str):
         user_name, passwd, host_name, db_name
     )
 
-    sql_g = SQLGenerator(db_url, api_key)
+    sql_g = SQLGenerator(db_url, api_key, path=base_path)
     sql_g._tasks = sql_g.generate_tasks(table_name, question)
     click.echo(sql_g._tasks)
 
