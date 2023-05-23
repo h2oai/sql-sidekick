@@ -12,7 +12,6 @@ from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredict
 from llama_index.indices.struct_store import SQLContextContainerBuilder
 from loguru import logger
 from sqlalchemy import create_engine
-from sqlalchemy.engine import URL
 
 
 class SQLGenerator:

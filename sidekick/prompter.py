@@ -7,10 +7,11 @@ import openai
 import toml
 from colorama import Back as B
 from colorama import Fore as F
-from colorama import Style, init
+from colorama import Style
 from db_config import DBConfig
 from loguru import logger
 from query import SQLGenerator
+from memory import EntityMemory
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
@@ -73,19 +74,51 @@ def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: i
             return
 
 
-@cli.command()
+@cli.group("learn")
+def learn():
+    """Helps in learning and building memory."""
+
+
+def _add_context(entity_memory: EntityMemory):
+    _FORMAT = '''# Add input Query and Response \n\n
+"Query": "<any query>"
+"Response": """<respective response>"""
+'''
+    res = click.edit(_FORMAT.replace("\t", ""))
+    # Check if user has entered any value
+    if res:
+        try:
+            entity_memory.save_context(res)
+        except ValueError as ve:
+            logger.info(f"Not a valid input. Try again")
+
+
+@learn.command("add-context", help="Enter information to add more context")
+def add_query_response():
+    em = EntityMemory(k=5, path=base_path)
+    _add_context(em)
+    _more = "y"
+    while _more.lower() != "n" or _more.lower() != "no":
+        _more = click.prompt("Would you like to enter more information? (y/n)")
+        if _more.lower() == "y":
+            _add_context(em)
+        else:
+            break
+
+
+@learn.command()
 @click.option(
-    "--context",
-    "-c",
-    help="Save context in memory for future use",
+    "--edit_context",
+    "-ec",
+    help="Update context in memory for future use",
     prompt="Would you like to add/update additional context? (y/n)?",
 )
-def learn(context: str):
+def update_context(edit_context: str):
     """Helps learn context for generation."""
     context_dict = """{"<context_key>": "<context_value>"
     }
     """
-    if context.lower() == "y":
+    if edit_context.lower() == "y":
         updated_context = click.edit(context_dict)
         click.echo(f"Context:\n {updated_context}")
         if updated_context:
