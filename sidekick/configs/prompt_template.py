@@ -38,7 +38,7 @@ QUERY_PROMPT = """
                 # Avoid using the WITH statement
                 # When using DESC keep NULLs at the end
                 # If JSONB format found in Table schema, do pattern matching on keywords from the question
-                # Add explanation
+                # Add explanation and reasoning for each SQL query
             """
 
 DEBUGGING_PROMPT = {
@@ -47,6 +47,7 @@ DEBUGGING_PROMPT = {
                 ### Fix syntax errors for provided SQL Query.
                 # Add ``` as prefix and ``` as suffix to generated SQL
                 # Error: {ex_traceback}
+                # Add explanation and reasoning for each SQL query
                 Query:\n {qry_txt}
                 """,
 }
