@@ -36,6 +36,22 @@ class SQLGenerator:
             table_schema_index.save_to_disk(f"{self.path}/sql_index_check.json")
         return table_schema_index
 
+    def update_context_queries(self):
+        # Read the history file and update the context queries
+        with open(f"{self.path}/var/lib/tmp/data/history.jsonl", "r") as in_file:
+            for line in in_file:
+                # Format:
+                # """
+                # # query:
+                # # answer:
+                # """
+                query = json.loads(line)["Query"]
+                response = json.loads(line)["Answer"]
+                _new_samples = f"""# query: {query}\n# answer: {response}"""
+                _combined = [samples_queries, _new_samples]
+                new_context_queries = "\n".join(_combined)
+        return new_context_queries
+
     def _query_tasks(self, question_str, data_info, sample_queries, table_name: list):
         try:
             context_file = f"{self.path}/var/lib/tmp/data/context.json"
@@ -100,8 +116,12 @@ class SQLGenerator:
         try:
             # Step 1: Given a question, generate tasks to possibly answer the question and persist the result -> tasks.txt
             # Step 2: Append task list to 'query_prompt_template', generate SQL code to answer the question and persist the result -> sql.txt
+            context_queries = self.update_context_queries()
 
-            task_list = self._query_tasks(input_question, sample_values, samples_queries, table_name)
+            # Remove duplicates from the context queries
+            generate_sentence_embeddings(context_queries)
+
+            task_list = self._query_tasks(input_question, sample_values, context_queries, table_name)
             with open(f"{self.path}/var/lib/tmp/data/tasks.txt", "w") as f:
                 f.write(task_list)
             return task_list
@@ -113,11 +133,13 @@ class SQLGenerator:
         context_file = f"{self.path}/var/lib/tmp/data/context.json"
         additional_context = json.load(open(context_file, "r")) if Path(context_file).exists() else {}
 
+        # Attempt updating in-case additional context is provided
+        context_queries = self.update_context_queries()
         query_str = QUERY_PROMPT.format(
             dialect=_dialect,
             _question=input_question.lower(),
             table_name=table_name,
-            _sample_queries=samples_queries.lower(),
+            _sample_queries=context_queries.lower(),
             _tasks=_tasks.lower(),
         )
 
