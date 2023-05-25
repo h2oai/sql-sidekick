@@ -27,8 +27,8 @@ class EntityMemory:
         # 'Answer':
         # }
         # Extract info from the supplied text
-        query = " ".join(info.split(":")[1].split("\n")[0].split()).replace("'", "").replace("\/", "")
-        response = " ".join(info.split(":")[2].replace("'", "").replace("}", "").split())
+        query = " ".join(info.partition(":")[2].split(";")[0].strip().split())
+        response = " ".join(info.partition(":")[2].split(";")[1].partition(":")[2].strip().split())
         # TODO add additional guardrails to check if the response is a valid response.
         # At-least syntactically correct SQL.
         if query.strip() and "SELECT".lower() in response.lower():
