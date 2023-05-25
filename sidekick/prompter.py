@@ -118,7 +118,8 @@ def update_context():
         path = f"{base_path}/var/lib/tmp/data/"
         with open(f"{path}/context.json", "w") as outfile:
             json.dump(context_dict, outfile, indent=4, sort_keys=False)
-    click.echo("No content updated ...")
+    else:
+        click.echo("No content updated ...")
 
 
 @cli.command()
