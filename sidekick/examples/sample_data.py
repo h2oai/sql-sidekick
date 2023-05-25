@@ -104,12 +104,15 @@ Sample Values:
 """
 
 # For few shot prompting
-samples_queries = """
+samples_queries = [
+"""
 # query: Total number of CPUs used?
 # answer:
 SELECT sum((payload->'engineEvent'-> 'pausing' -> 'engine'->> 'cpu')::integer) AS total_cpus_used
 FROM telemetry
 WHERE payload->'engineEvent'-> 'pausing' -> 'engine'->> 'cpu' IS NOT NULL;
+""",
+"""
 # query: Find the number of AI units for each user using stream for each resource type (overall)
 # answer:
 SELECT user_id, user_name, resource_type, date_trunc('day', ts) as start_day,
@@ -120,7 +123,8 @@ SELECT user_id, user_name, resource_type, date_trunc('day', ts) as start_day,
       WHERE stream = 'running'
      ) sub GROUP BY user_id, user_name, resource_type, start_day
 ORDER BY start_day DESC NULLS LAST;
-
+""",
+"""
 # query: Compute global usage over time
 # answer:
 SELECT
@@ -141,3 +145,4 @@ FROM (
 ) AS internal
 ORDER BY 1, 2 DESC;
 """
+]
