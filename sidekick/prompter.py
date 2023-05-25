@@ -10,8 +10,8 @@ from colorama import Fore as F
 from colorama import Style
 from db_config import DBConfig
 from loguru import logger
-from query import SQLGenerator
 from memory import EntityMemory
+from query import SQLGenerator
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
@@ -93,41 +93,32 @@ def _add_context(entity_memory: EntityMemory):
             logger.info(f"Not a valid input. Try again")
 
 
-@learn.command("add-context", help="Enter information to add more context")
+@learn.command("add-samples", help="Helps add contextual query/answer pairs.")
 def add_query_response():
     em = EntityMemory(k=5, path=base_path)
     _add_context(em)
     _more = "y"
     while _more.lower() != "n" or _more.lower() != "no":
-        _more = click.prompt("Would you like to enter more information? (y/n)")
+        _more = click.prompt("Would you like to add more samples? (y/n)")
         if _more.lower() == "y":
             _add_context(em)
         else:
             break
 
 
-@learn.command()
-@click.option(
-    "--edit_context",
-    "-ec",
-    help="Update context in memory for future use",
-    prompt="Would you like to add/update additional context? (y/n)?",
-)
-def update_context(edit_context: str):
+@learn.command("update-context", help="Update context in memory for future use")
+def update_context():
     """Helps learn context for generation."""
-    context_dict = """{"<context_key>": "<context_value>"
-    }
+    context_dict = """{"<context_key>": "<context_value>"\n}
     """
-    if edit_context.lower() == "y":
-        updated_context = click.edit(context_dict)
-        click.echo(f"Context:\n {updated_context}")
-        if updated_context:
-            context_dict = json.loads(updated_context)
-            path = f"{base_path}/var/lib/tmp/data/"
-            with open(f"{path}/context.json", "w") as outfile:
-                json.dump(context_dict, outfile, indent=4, sort_keys=False)
-    else:
-        click.echo("Value not supported. Try Y/N ...")
+    updated_context = click.edit(context_dict)
+    click.echo(f"Context:\n {updated_context}")
+    if updated_context:
+        context_dict = json.loads(updated_context)
+        path = f"{base_path}/var/lib/tmp/data/"
+        with open(f"{path}/context.json", "w") as outfile:
+            json.dump(context_dict, outfile, indent=4, sort_keys=False)
+    click.echo("No content updated ...")
 
 
 @cli.command()
