@@ -31,12 +31,12 @@ def remove_duplicates(input_x: list, model_path: str, threshold: float = 0.89):
     # Remove duplicates pairs
     embeddings = generate_sentence_embeddings(model_path, x=input_x, device="cpu")
     similarity_scores = compute_similarity(embeddings)
-
     similar_indices = [(x, y) for (x, y) in np.argwhere(similarity_scores > threshold) if x != y]
+
     # Remove identical pairs e.g. [(0, 3), (3, 0)] -> [(0, 3)]
-    si = [sum(tpl) for tpl in similar_indices]
+    si = [similarity_scores[tpl] for tpl in similar_indices]
     dup_pairs_idx = np.where(pd.Series(si).duplicated())[0].tolist()
-    for _itm in dup_pairs_idx:
-        similar_indices.pop(_itm)
-    res = list(set([item[1] for item in similar_indices]))
+    remove_vals = [similar_indices[_itm] for _itm in dup_pairs_idx]
+    [similar_indices.remove(_itm) for _itm in remove_vals]
+    res = list(set([item[0] for item in similar_indices]))
     return res

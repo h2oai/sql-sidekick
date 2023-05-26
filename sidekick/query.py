@@ -158,6 +158,7 @@ class SQLGenerator:
             _tasks=_tasks.lower(),
         )
 
+        logger.debug(f"Query Prompt:\n{query_str}")
         table_context_dict = {str(table_name[0]).lower(): str(additional_context).lower()}
         self.context_builder = SQLContextContainerBuilder(self.sql_database, context_dict=table_context_dict)
 
