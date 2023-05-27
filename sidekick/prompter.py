@@ -81,7 +81,7 @@ def learn():
 
 def _add_context(entity_memory: EntityMemory):
     _FORMAT = '''# Add input Query and Response \n\n
-"Query": "<any query>"
+"Query": "<any query>";\n
 "Response": """<respective response>"""
 '''
     res = click.edit(_FORMAT.replace("\t", ""))
@@ -109,17 +109,24 @@ def add_query_response():
 @learn.command("update-context", help="Update context in memory for future use")
 def update_context():
     """Helps learn context for generation."""
-    context_dict = """{"<context_key>": "<context_value>"\n}
+    context_dict = """{\n"<new_context_key>": "<new_context_value>"\n}
     """
-    updated_context = click.edit(context_dict)
-    click.echo(f"Context:\n {updated_context}")
+    content_file_path = f"{base_path}/var/lib/tmp/data/context.json"
+    if Path(f"{base_path}/var/lib/tmp/data/context.json").exists():
+        context_dict = json.load(open(content_file_path, "r"))
+        context_dict["<new_context_key>"] = "<new_context_value"
+        context_str = json.dumps(context_dict, indent=4, sort_keys=True, default=str)
+    updated_context = click.edit(context_str)
+    logger.debug(f"Context:\n {updated_context}")
     if updated_context:
         context_dict = json.loads(updated_context)
+        if "<new_context_key>" in context_dict:
+            del context_dict["<new_context_key>"]
         path = f"{base_path}/var/lib/tmp/data/"
         with open(f"{path}/context.json", "w") as outfile:
             json.dump(context_dict, outfile, indent=4, sort_keys=False)
     else:
-        click.echo("No content updated ...")
+        logger.debug("No content updated ...")
 
 
 @cli.command()
