@@ -88,7 +88,7 @@ def _add_context(entity_memory: EntityMemory):
     # Check if user has entered any value
     if res:
         try:
-            entity_memory.save_context(res)
+            _ = entity_memory.save_context(res)
         except ValueError as ve:
             logger.info(f"Not a valid input. Try again")
 
@@ -116,8 +116,8 @@ def update_context():
         context_dict = json.load(open(content_file_path, "r"))
         context_dict["<new_context_key>"] = "<new_context_value"
         context_str = json.dumps(context_dict, indent=4, sort_keys=True, default=str)
+
     updated_context = click.edit(context_str)
-    logger.debug(f"Context:\n {updated_context}")
     if updated_context:
         context_dict = json.loads(updated_context)
         if "<new_context_key>" in context_dict:

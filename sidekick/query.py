@@ -9,8 +9,7 @@ import sqlglot
 from configs.prompt_template import DEBUGGING_PROMPT, QUERY_PROMPT, TASK_PROMPT
 from examples.sample_data import sample_values, samples_queries
 from langchain import OpenAI
-from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
-                         LLMPredictor, ServiceContext, SQLDatabase)
+from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
 from llama_index.indices.struct_store import SQLContextContainerBuilder
 from loguru import logger
 from sqlalchemy import create_engine
@@ -45,7 +44,7 @@ class SQLGenerator:
         new_context_queries = samples_queries
         history_file = f"{self.path}/var/lib/tmp/data/history.jsonl"
         if Path(history_file).exists():
-            with open(f"{self.path}/var/lib/tmp/data/history.jsonl", "r") as in_file:
+            with open(history_file, "r") as in_file:
                 for line in in_file:
                     # Format:
                     # """
@@ -56,7 +55,6 @@ class SQLGenerator:
                     response = json.loads(line)["Answer"]
                     _new_samples = f"""# query: {query}\n# answer: {response}"""
                     new_context_queries.append(_new_samples)
-
         return new_context_queries
 
     def _query_tasks(self, question_str, data_info, sample_queries, table_name: list):
