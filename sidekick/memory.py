@@ -61,9 +61,10 @@ class EntityMemory:
             if extract_context:
                 # Update context.json file for tracking entities
                 content_file_path = f"{self.path}/var/lib/tmp/data/context.json"
+                context_dict = extracted_entity
                 if Path(content_file_path).exists():
                     context_dict = json.load(open(content_file_path, "r"))
                     context_dict.update(extracted_entity)
-                    with open(content_file_path, "w") as outfile:
-                        json.dump(context_dict, outfile, indent=4, sort_keys=False)
+                with open(content_file_path, "w") as outfile:
+                    json.dump(context_dict, outfile, indent=4, sort_keys=False)
         return res

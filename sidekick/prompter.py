@@ -112,6 +112,7 @@ def update_context():
     context_dict = """{\n"<new_context_key>": "<new_context_value>"\n}
     """
     content_file_path = f"{base_path}/var/lib/tmp/data/context.json"
+    context_str = context_dict
     if Path(f"{base_path}/var/lib/tmp/data/context.json").exists():
         context_dict = json.load(open(content_file_path, "r"))
         context_dict["<new_context_key>"] = "<new_context_value"
