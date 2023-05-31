@@ -9,7 +9,8 @@ import sqlglot
 from configs.prompt_template import DEBUGGING_PROMPT, QUERY_PROMPT, TASK_PROMPT
 from examples.sample_data import sample_values, samples_queries
 from langchain import OpenAI
-from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
+from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
+                         LLMPredictor, ServiceContext, SQLDatabase)
 from llama_index.indices.struct_store import SQLContextContainerBuilder
 from loguru import logger
 from sqlalchemy import create_engine
@@ -70,9 +71,9 @@ class SQLGenerator:
                 _context=str(additional_context).lower(),
                 _question_str=question_str,
             )
-
             # Role and content
             query_txt = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
+            logger.debug(f"Query Text:\n {query_txt}")
             # TODO ADD local model
             completion = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo-0301",
@@ -157,6 +158,7 @@ class SQLGenerator:
         )
 
         logger.debug(f"Query Prompt:\n{query_str}")
+
         table_context_dict = {str(table_name[0]).lower(): str(additional_context).lower()}
         self.context_builder = SQLContextContainerBuilder(self.sql_database, context_dict=table_context_dict)
 

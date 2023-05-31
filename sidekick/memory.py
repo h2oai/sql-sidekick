@@ -46,6 +46,17 @@ class EntityMemory:
 
         chat_history = {}
         if query.strip() and "SELECT".lower() in response.lower():
+            # Remove <key> and <value> tags from the query/response before persisting
+            query = (
+                query.lower().replace("<key>", "").replace("</key>", "").replace("<value>", "").replace("</value>", "")
+            )
+            response = (
+                response.lower()
+                .replace("<key>", "")
+                .replace("</key>", "")
+                .replace("<value>", "")
+                .replace("</value>", "")
+            )
             chat_history = {"Query": query, "Answer": response, "entity": extracted_entity}
             self.track_history.append(chat_history)
         else:
