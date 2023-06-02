@@ -34,6 +34,7 @@ sqlglot = "^12.2.0"
 transformers = "^4.29.0"
 sentence-transformers = "^2.2.2"
 torch = "^2.0.1"
+sqlalchemy-utils = "^0.41.1"
 
 
 [tool.poetry.dev-dependencies]
