@@ -33,6 +33,11 @@ def configure():
     """Helps in configuring local database."""
 
 
+def enter_table_name():
+    val = input(color(F.GREEN, "", "Would you like to create a table for the database? (y/n): "))
+    return val
+
+
 @configure.command("db-setup", help="Enter information to configure postgres database locally")
 @click.option("--db_name", "-n", default="querydb", help="Database name", prompt="Enter Database name")
 @click.option("--hostname", "-h", default="localhost", help="Database hostname", prompt="Enter hostname name")
@@ -68,17 +73,24 @@ def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: i
         else:
             click.echo("Database already exists!")
 
-        val = input(color(F.GREEN, "", "Would you like to create a table for the database? (y/n): "))
-        if val.lower() == "y":
+        val = enter_table_name()
+        while True:
+            if val.lower() != "y" and val.lower() != "n":
+                click.echo("In-correct values. Enter Yes(y) or no(n)")
+                val = enter_table_name()
+            else:
+                break
+
+        if val.lower() == "y" or val.lower() == "yes":
             table_value = input("Enter table name: ")
             click.echo(f"Table name: {table_value}")
             # set table name
-            db_obj.table_name = table_value
+            db_obj.table_name = table_value.replace(" ", "_")
             db_obj.create_table()
 
         # Check if table exists; pending --> and doesn't have any rows
         if db_obj.has_table():
-            click.echo(f"Local table {db_obj.table_name} exists.")
+            click.echo(f"Checked table {db_obj.table_name} exists in the DB.")
             val = input(color(F.GREEN, "", "Would you like to add few sample rows (at-least 3)? (y/n): "))
             if val.lower() == "y":
                 db_obj.add_samples()
@@ -190,9 +202,6 @@ def query(question: str):
     passwd = env_settings["LOCAL_DB_CONFIG"]["PASSWORD"]
     db_name = env_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
 
-    import pdb
-
-    pdb.set_trace()
     db_url = f"postgresql+psycopg2://{user_name}:{passwd}@{host_name}/{db_name}".format(
         user_name, passwd, host_name, db_name
     )
@@ -224,5 +233,13 @@ def query(question: str):
 
 
 if __name__ == "__main__":
-    click.echo("Welcome to the SQL Sidekick!")
+    click.echo(
+        """Welcome to the SQL Sidekick!\nI am AI assistant that helps you with SQL queries.
+I can help you with the following:
+1. Configure a local database(for schema validation and syntax checking): `python sidekick/prompter.py configure db-setup`.
+2. Learn contextual query/answer pairs: `python sidekick/prompter.py learn add-samples`.
+3. Simply add context: `python sidekick/prompter.py learn update-context`.
+4. Ask a question: `python sidekick/prompter.py query`.\n
+"""
+    )
     cli()
