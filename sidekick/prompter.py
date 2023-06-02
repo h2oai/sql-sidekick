@@ -50,28 +50,45 @@ def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: i
     """Creates context for the new Database"""
     click.echo(f" Information supplied:\n {db_name}, {hostname}, {user_name}, {password}, {port}")
     try:
-        db_obj = DBConfig(db_name, hostname, user_name, password, port)
-        db_obj.create_db()
-        click.echo("Database created successfully!")
-    except Exception as e:
-        click.echo(f"Error creating database\n: {e}")
-    val = input(color(F.GREEN, "", "Would you like to create a table for the database? (y/n): "))
-    if val.lower() == "y":
-        table_value = input("Enter table name: ")
-        click.echo(f"Table name: {table_value}")
-        # set table name
-        db_obj.table_name = table_value
-        db_obj.create_table()
+        env_settings["LOCAL_DB_CONFIG"]["HOST_NAME"] = hostname
+        env_settings["LOCAL_DB_CONFIG"]["USER_NAME"] = user_name
+        env_settings["LOCAL_DB_CONFIG"]["PASSWORD"] = password
+        env_settings["LOCAL_DB_CONFIG"]["PORT"] = port
+        env_settings["LOCAL_DB_CONFIG"]["DB_NAME"] = db_name
+        # Update settings file for future use.
+        f = open(f"{base_path}/.env.toml", "w")
+        toml.dump(env_settings, f)
+        f.close()
 
-    # Check if table exists; pending --> and doesn't have any rows
-    if db_obj.has_table():
-        click.echo(f"Local table {db_obj.table_name} exists.")
-        val = input(color(F.GREEN, "", "Would you like to add few sample rows (at-least 3)? (y/n): "))
-        if val.lower() == "y":
-            db_obj.add_samples()
+        # For current session
+        db_obj = DBConfig(db_name, hostname, user_name, password, port)
+        if not db_obj.db_exists():
+            db_obj.create_db()
+            click.echo("Database created successfully!")
         else:
-            click.echo("Exiting...")
-            return
+            click.echo("Database already exists!")
+
+        val = input(color(F.GREEN, "", "Would you like to create a table for the database? (y/n): "))
+        if val.lower() == "y":
+            table_value = input("Enter table name: ")
+            click.echo(f"Table name: {table_value}")
+            # set table name
+            db_obj.table_name = table_value
+            db_obj.create_table()
+
+        # Check if table exists; pending --> and doesn't have any rows
+        if db_obj.has_table():
+            click.echo(f"Local table {db_obj.table_name} exists.")
+            val = input(color(F.GREEN, "", "Would you like to add few sample rows (at-least 3)? (y/n): "))
+            if val.lower() == "y":
+                db_obj.add_samples()
+            else:
+                click.echo("Exiting...")
+                return
+        else:
+            click.echo("Job done. Ask a question now!")
+    except Exception as e:
+        click.echo(f"Error creating database. Check configuration parameters.\n: {e}")
 
 
 @cli.group("learn")
@@ -167,12 +184,15 @@ def query(question: str):
     # Set context
     logger.info("Setting context...")
     logger.info(f"Question: {question}")
-    # Below re-definition is temporary
-    host_name = "localhost"
-    user_name = "postgres"
-    passwd = "abc"
-    db_name = "postgres"
-    db_name = "querydb"
+    # Get updated info from .env.toml
+    host_name = env_settings["LOCAL_DB_CONFIG"]["HOST_NAME"]
+    user_name = env_settings["LOCAL_DB_CONFIG"]["USER_NAME"]
+    passwd = env_settings["LOCAL_DB_CONFIG"]["PASSWORD"]
+    db_name = env_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
+
+    import pdb
+
+    pdb.set_trace()
     db_url = f"postgresql+psycopg2://{user_name}:{passwd}@{host_name}/{db_name}".format(
         user_name, passwd, host_name, db_name
     )

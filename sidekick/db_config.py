@@ -1,9 +1,9 @@
 # create db with supplied info
-import json
 import psycopg2 as pg
 import sqlalchemy
-from sqlalchemy import create_engine
 from psycopg2.extras import Json
+from sqlalchemy import create_engine
+from sqlalchemy_utils import database_exists
 
 
 class DBConfig:
@@ -16,6 +16,7 @@ class DBConfig:
         self._table_name = None
         self.schema_info = None
         self._engine = None
+        self._url = f"postgresql://{self.user_name}:{self.password}@{self.hostname}:{self.port}/"
 
     @property
     def table_name(self):
@@ -29,21 +30,25 @@ class DBConfig:
     def engine(self):
         return self._engine
 
+    def db_exists(self):
+        engine = create_engine(f"{self._url}{self.db_name}", echo=True)
+        return database_exists(f"{engine.url}")
+
     def create_db(self):
-        engine = create_engine(f"postgresql://{self.user_name}:{self.password}@{self.hostname}:{self.port}/")
+        engine = create_engine(self._url)
         self._engine = engine
 
         with engine.connect() as conn:
             conn.execute("commit")
             # Do not substitute user-supplied database names here.
-            conn.execute(f"CREATE DATABASE {self.db_name}")
-        return
+            res = conn.execute(f"CREATE DATABASE {self.db_name}")
+        return res
 
     def create_table(self):
         engine = create_engine(
             f"postgresql://{self.user_name}:{self.password}@{self.hostname}:{self.port}/{self.db_name}"
         )
-
+        self._engine = engine
         schema_info = """
             id uuid PRIMARY KEY,
             ts TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -67,7 +72,10 @@ class DBConfig:
         return
 
     def has_table(self):
-        return sqlalchemy.inspect(self.engine).has_table(self.table_name)
+        engine = create_engine(
+            f"postgresql://{self.user_name}:{self.password}@{self.hostname}:{self.port}/{self.db_name}"
+        )
+        return sqlalchemy.inspect(engine).has_table(self.table_name)
 
     def add_samples(self):
         conn = pg.connect(
