@@ -15,6 +15,9 @@ from loguru import logger
 from sqlalchemy import create_engine
 from utils import remove_duplicates
 
+logger.remove()
+logger.add(sys.stderr, level="INFO")
+
 
 class SQLGenerator:
     def __init__(self, db_url: str, openai_key: str = None, path: str = "../var/lib/tmp/data"):
@@ -171,11 +174,12 @@ class SQLGenerator:
             [], sql_database=self.sql_database, table_name=table_name, service_context=service_context_gpt3
         )
         res = self.generate_response(context_container, sql_index=index, input_prompt=query_str)
-
         try:
             # Check if `SQL` is formatted ---> ``` SQL_text ```
             if "```" in str(res):
-                res = str(res).split("```", 1)[1].split("```", 1)[0]
+                res = (
+                    str(res).split("```", 1)[1].split(";", 1)[0].strip().replace("```", "").replace("sql\n", "").strip()
+                )
             sqlglot.transpile(res)
         except (sqlglot.errors.ParseError, ValueError, RuntimeError) as e:
             logger.info("We did the best we could, there might be still be some error:\n")
@@ -186,14 +190,14 @@ class SQLGenerator:
         # Generated format
         """
         Tasks:
-        1. Generate a SELECT query to display all columns of the telemetry table.
+        1. Generate a SELECT query to display all columns of the {selected tables}.
         2. Infer the return type of the question as a description of the table schema.
-        3. Final output: Return the table schema for the telemetry.
+        3. Final output: Return the table schema for the selected table.
         """
 
         # Converted format
         """
-        # 1. Generate a SELECT query to display all columns of the telemetry table.
+        # 1. Generate a SELECT query to display all columns of the {selected tables}.
         # 2. Infer the return type of the question as a description of the table schema.
         """
         _res = input_task.split("\n")
