@@ -12,6 +12,7 @@ from db_config import DBConfig
 from loguru import logger
 from memory import EntityMemory
 from query import SQLGenerator
+from utils import save_query
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
@@ -170,9 +171,10 @@ def query(question: str):
     table_context = json.load(open(table_context_file, "r")) if Path(table_context_file).exists() else {}
     if table_context:
         table_name = table_context.get("tables_in_use", None)
+        table_name = [_t.replace(" ", "_") for _t in table_name]
     else:
         table_name = [click.prompt("Which table to use?")]
-        table_context["tables_in_use"] = table_name
+        table_context["tables_in_use"] = table_name.replace(" ", "_")
         with open(f"{path}/table_context.json", "w") as outfile:
             json.dump(table_context, outfile, indent=4, sort_keys=False)
     logger.info(f"Table in use: {table_name}")
@@ -225,11 +227,14 @@ def query(question: str):
 
     if res is not None:
         edit_val = click.prompt("Would you like to edit the SQL? (y/n)")
-        if edit_val.lower() == "y":
+        if edit_val.lower() == "y" or edit_val.lower() == "yes":
             updated_sql = click.edit(res)
             click.echo(f"Updated SQL:\n {updated_sql}")
-        else:
-            click.echo("Exiting...")
+
+        save_sql = click.prompt("Would you like to save the generated SQL?")
+        if save_sql.lower() == "y" or save_sql.lower() == "yes":
+            # Persist for future use
+            save_query(base_path, query=question, response=res)
 
 
 if __name__ == "__main__":

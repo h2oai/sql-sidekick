@@ -57,7 +57,7 @@ class EntityMemory:
                 .replace("<value>", "")
                 .replace("</value>", "")
             )
-            chat_history = {"Query": query, "Answer": response, "entity": extracted_entity}
+            chat_history = {"Query": query, "Answer": response, "Entity": extracted_entity}
             self.track_history.append(chat_history)
         else:
             raise ValueError("Response not valid. Please try again.")

@@ -1,3 +1,4 @@
+import json
 from typing import Optional
 
 import numpy as np
@@ -40,3 +41,11 @@ def remove_duplicates(input_x: list, model_path: str, threshold: float = 0.89):
     [similar_indices.remove(_itm) for _itm in remove_vals]
     res = list(set([item[0] for item in similar_indices]))
     return res
+
+
+def save_query(output_path: str, query, response, extracted_entity: Optional[dict] = ""):
+    chat_history = {"Query": query, "Answer": response, "Entity": extracted_entity}
+
+    with open(f"{output_path}/var/lib/tmp/data/history.jsonl", "a") as outfile:
+        json.dump(chat_history, outfile)
+        outfile.write("\n")
