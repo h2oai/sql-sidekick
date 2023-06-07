@@ -5,8 +5,6 @@ sentence_transformer = s3cmd get --recursive --skip-existing s3://h2o-model-gym/
 all: download-models
 
 setup: download_models ## Setup
-	mkdir -p ./var/lib/tmp/data
-	mkdir -p ./var/lib/tmp/.cache
 	python3 -m venv .sidekickvenv
 	./.sidekickvenv/bin/python3 -m pip install --upgrade pip
 	./.sidekickvenv/bin/python3 -m pip install wheel

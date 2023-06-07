@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
@@ -49,3 +50,10 @@ def save_query(output_path: str, query, response, extracted_entity: Optional[dic
     with open(f"{output_path}/var/lib/tmp/data/history.jsonl", "a") as outfile:
         json.dump(chat_history, outfile)
         outfile.write("\n")
+
+
+def setup_dir(base_path: str):
+    dir_list = ["var/lib/tmp/data", "var/lib/tmp/.cache"]
+    for _dl in dir_list:
+        p = Path(f"{base_path}/{_dl}")
+        p.mkdir(parents=True, exist_ok=True)

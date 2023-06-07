@@ -8,15 +8,15 @@ import toml
 from colorama import Back as B
 from colorama import Fore as F
 from colorama import Style
-from db_config import DBConfig
+from .db_config import DBConfig
 from loguru import logger
-from memory import EntityMemory
-from query import SQLGenerator
-from utils import save_query
+from .memory import EntityMemory
+from .query import SQLGenerator
+from .utils import save_query, setup_dir
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
-env_settings = toml.load(f"{base_path}/.env.toml")
+env_settings = toml.load(f"{base_path}/sidekick/configs/.env.toml")
 
 
 def color(fore="", back="", text=None):
@@ -26,7 +26,17 @@ def color(fore="", back="", text=None):
 @click.group()
 @click.version_option()
 def cli():
-    """ """
+    click.echo(
+        """Welcome to the SQL Sidekick!\nI am AI assistant that helps you with SQL queries.
+I can help you with the following:
+1. Configure a local database(for schema validation and syntax checking): `python sidekick/prompter.py configure db-setup`.
+2. Learn contextual query/answer pairs: `python sidekick/prompter.py learn add-samples`.
+3. Simply add context: `python sidekick/prompter.py learn update-context`.
+4. Ask a question: `python sidekick/prompter.py query`.\n
+"""
+    )
+    # Book-keeping
+    setup_dir(base_path)
 
 
 @cli.group("configure")
@@ -139,6 +149,9 @@ def add_query_response():
 @learn.command("update-context", help="Update context in memory for future use")
 def update_context():
     """Helps learn context for generation."""
+    # Book-keeping
+    setup_dir(base_path)
+
     context_dict = """{\n"<new_context_key>": "<new_context_value>"\n}
     """
     content_file_path = f"{base_path}/var/lib/tmp/data/context.json"
@@ -164,20 +177,23 @@ def update_context():
 @click.option("--question", "-q", help="Database name", prompt="Ask a question")
 def query(question: str):
     """Asks question and returns SQL."""
+    # Book-keeping
+    setup_dir(base_path)
 
     # Check if table exists
-    path = f"{base_path}/var/lib/tmp/data/"
+    path = f"{base_path}/var/lib/tmp/data"
     table_context_file = f"{path}/table_context.json"
     table_context = json.load(open(table_context_file, "r")) if Path(table_context_file).exists() else {}
+    table_names = []
     if table_context:
         table_name = table_context.get("tables_in_use", None)
-        table_name = [_t.replace(" ", "_") for _t in table_name]
+        table_names = [_t.replace(" ", "_") for _t in table_name]
     else:
-        table_name = [click.prompt("Which table to use?")]
-        table_context["tables_in_use"] = table_name.replace(" ", "_")
+        table_names = [click.prompt("Which table to use?")]
+        table_context["tables_in_use"] = [_t.replace(" ", "_") for _t in table_names]
         with open(f"{path}/table_context.json", "w") as outfile:
             json.dump(table_context, outfile, indent=4, sort_keys=False)
-    logger.info(f"Table in use: {table_name}")
+    logger.info(f"Table in use: {table_names}")
     # Check if .env.toml file exists
     api_key = env_settings["OPENAI"]["OPENAI_API_KEY"]
     if api_key is None or api_key == "":
@@ -209,7 +225,7 @@ def query(question: str):
     )
 
     sql_g = SQLGenerator(db_url, api_key, path=base_path)
-    sql_g._tasks = sql_g.generate_tasks(table_name, question)
+    sql_g._tasks = sql_g.generate_tasks(table_names, question)
     click.echo(sql_g._tasks)
 
     updated_tasks = None
@@ -238,13 +254,4 @@ def query(question: str):
 
 
 if __name__ == "__main__":
-    click.echo(
-        """Welcome to the SQL Sidekick!\nI am AI assistant that helps you with SQL queries.
-I can help you with the following:
-1. Configure a local database(for schema validation and syntax checking): `python sidekick/prompter.py configure db-setup`.
-2. Learn contextual query/answer pairs: `python sidekick/prompter.py learn add-samples`.
-3. Simply add context: `python sidekick/prompter.py learn update-context`.
-4. Ask a question: `python sidekick/prompter.py query`.\n
-"""
-    )
     cli()

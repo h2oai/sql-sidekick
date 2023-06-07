@@ -6,14 +6,14 @@ from pathlib import Path
 import numpy as np
 import openai
 import sqlglot
-from configs.prompt_template import DEBUGGING_PROMPT, QUERY_PROMPT, TASK_PROMPT
-from examples.sample_data import sample_values, samples_queries
+from .configs.prompt_template import DEBUGGING_PROMPT, QUERY_PROMPT, TASK_PROMPT
+from .examples.sample_data import sample_values, samples_queries
 from langchain import OpenAI
 from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
 from llama_index.indices.struct_store import SQLContextContainerBuilder
 from loguru import logger
 from sqlalchemy import create_engine
-from utils import remove_duplicates
+from .utils import remove_duplicates
 
 logger.remove()
 logger.add(sys.stderr, level="INFO")
@@ -120,7 +120,7 @@ class SQLGenerator:
                     res = qry_txt
                     return res
 
-    def generate_tasks(self, table_name: str, input_question: str):
+    def generate_tasks(self, table_names: list, input_question: str):
         try:
             # Step 1: Given a question, generate tasks to possibly answer the question and persist the result -> tasks.txt
             # Step 2: Append task list to 'query_prompt_template', generate SQL code to answer the question and persist the result -> sql.txt
@@ -133,7 +133,7 @@ class SQLGenerator:
 
             _queries = "\n".join(updated_context)
             self.content_queries = _queries
-            task_list = self._query_tasks(input_question, sample_values, _queries.lower(), table_name)
+            task_list = self._query_tasks(input_question, sample_values, _queries.lower(), table_names)
             with open(f"{self.path}/var/lib/tmp/data/tasks.txt", "w") as f:
                 f.write(task_list)
             return task_list
