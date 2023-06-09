@@ -1,3 +1,4 @@
+import io
 import json
 import os
 from pathlib import Path
@@ -17,25 +18,26 @@ from sidekick.utils import save_query, setup_dir
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
 env_settings = toml.load(f"{base_path}/sidekick/configs/.env.toml")
-os.environ["TOKENIZERS_PARALLELISM"] = False
+os.environ["TOKENIZERS_PARALLELISM"] = "False"
+__version__ = "0.0.1"
 
 
 def color(fore="", back="", text=None):
     return f"{fore}{back}{text}{Style.RESET_ALL}"
 
 
-@click.group()
-@click.version_option()
-def cli():
-    click.echo(
-        """Welcome to the SQL Sidekick!\nI am AI assistant that helps you with SQL queries.
-I can help you with the following:
-1. Configure a local database(for schema validation and syntax checking): `python sidekick/prompter.py configure db-setup`.
-2. Learn contextual query/answer pairs: `python sidekick/prompter.py learn add-samples`.
-3. Simply add context: `python sidekick/prompter.py learn update-context`.
-4. Ask a question: `python sidekick/prompter.py query`.\n
+msg = """Welcome to the SQL Sidekick!\nI am AI assistant that helps you with SQL queries.
+I can help you with the following:\n
+1. Configure a local database(for schema validation and syntax checking): `sql-sidekick configure db-setup`.\n
+2. Learn contextual query/answer pairs: `sql-sidekick learn add-samples`.\n
+3. Simply add context: `sql-sidekick learn update-context`.\n
+4. Ask a question: `sql-sidekick query`.
 """
-    )
+
+
+@click.group(help=msg)
+@click.version_option("-V", "--version", message=f"sql-sidekick - {__version__}")
+def cli():
     # Book-keeping
     setup_dir(base_path)
 
@@ -48,6 +50,16 @@ def configure():
 def enter_table_name():
     val = input(color(F.GREEN, "", "Would you like to create a table for the database? (y/n): "))
     return val
+
+
+@configure.command("log", help="Adjust log settings")
+@click.option("--set_level", "-l", help="Set log level (Default: INFO)")
+def set_loglevel(set_level):
+    env_settings["LOGGING"]["LOG-LEVEL"] = set_level
+    # Update settings file for future use.
+    f = open(f"{base_path}/sidekick/configs/.env.toml", "w")
+    toml.dump(env_settings, f)
+    f.close()
 
 
 @configure.command("db-setup", help="Enter information to configure postgres database locally")
@@ -204,7 +216,7 @@ def query(question: str):
                 color(F.GREEN, "", "Looks like API key is not set, would you like to set OPENAI_API_KEY? (y/n):")
             )
             if val.lower() == "y":
-                api_key = input(color(F.GREEN, "", "Enter OPENAI_API_KEY:"))
+                api_key = input(color(F.GREEN, "", "Enter OPENAI_API_KEY :"))
         os.environ["OPENAI_API_KEY"] = api_key
         env_settings["OPENAI"]["OPENAI_API_KEY"] = api_key
 
@@ -241,7 +253,7 @@ def query(question: str):
             click.echo("Skipping edit...")
     if updated_tasks is not None:
         sql_g._tasks = updated_tasks
-    res = sql_g.generate_sql(table_name, question)
+    res = sql_g.generate_sql(table_names, question)
     logger.info(f"Generated response:\n\n{res}")
 
     if res is not None:
