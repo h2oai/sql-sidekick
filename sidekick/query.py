@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import openai
 import sqlglot
+import toml
 from langchain import OpenAI
 from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
                          LLMPredictor, ServiceContext, SQLDatabase)
@@ -18,7 +19,9 @@ from sidekick.utils import remove_duplicates
 from sqlalchemy import create_engine
 
 logger.remove()
-logger.add(sys.stderr, level="INFO")
+base_path = (Path(__file__).parent / "../").resolve()
+env_settings = toml.load(f"{base_path}/sidekick/configs/.env.toml")
+logger.add(sys.stderr, level=env_settings['LOGGING']['LOG-LEVEL'])
 
 
 class SQLGenerator:
@@ -78,6 +81,7 @@ class SQLGenerator:
             # Role and content
             query_txt = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
             logger.debug(f"Query Text:\n {query_txt}")
+
             # TODO ADD local model
             completion = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo-0301",
@@ -129,7 +133,7 @@ class SQLGenerator:
             context_queries: list = self.update_context_queries()
 
             # Remove duplicates from the context queries
-            m_path = f"{self.path}/var/lib/.cache/models/"
+            m_path = f"{self.path}/var/lib/tmp/.cache/models"
             duplicates_idx = remove_duplicates(context_queries, m_path)
             updated_context = np.delete(np.array(context_queries), duplicates_idx).tolist()
 
@@ -142,7 +146,7 @@ class SQLGenerator:
         except Exception as se:
             raise se
 
-    def generate_sql(self, table_name: str, input_question: str, _dialect: str = "postgres"):
+    def generate_sql(self, table_name: list, input_question: str, _dialect: str = "postgres"):
         _tasks = self.task_formatter(self._tasks)
         context_file = f"{self.path}/var/lib/tmp/data/context.json"
         additional_context = json.load(open(context_file, "r")) if Path(context_file).exists() else {}

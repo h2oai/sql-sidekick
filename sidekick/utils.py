@@ -22,7 +22,7 @@ def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, devic
         if is_empty:
             # Download n cache at the specified location
             # https://public.ukp.informatik.tu-darmstadt.de/reimers/sentence-transformers/v0.2/all-MiniLM-L6-v2.zip
-            os.environ["TORCH_HOME"] = "var/lib/.cache/models/"
+            os.environ["TORCH_HOME"] = model_path
             model_name_path = "sentence-transformers/all-MiniLM-L6-v2"
     sentence_model = SentenceTransformer(model_name_path, device=device)
     all_res = np.zeros(shape=(len(x), 0))
@@ -67,7 +67,7 @@ def setup_dir(base_path: str):
     dir_list = [
         "var/lib/tmp/data",
         "var/lib/tmp/.cache",
-        "var/lib/.cache/models/sentence_transformers/sentence-transformers_all-MiniLM-L6-v2",
+        "var/lib/tmp/.cache/models/sentence_transformers/sentence-transformers_all-MiniLM-L6-v2",
     ]
     for _dl in dir_list:
         p = Path(f"{base_path}/{_dl}")
