@@ -6,17 +6,22 @@ from pathlib import Path
 import numpy as np
 import openai
 import sqlglot
-from configs.prompt_template import DEBUGGING_PROMPT, QUERY_PROMPT, TASK_PROMPT
-from examples.sample_data import sample_values, samples_queries
+import toml
 from langchain import OpenAI
-from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
+from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
+                         LLMPredictor, ServiceContext, SQLDatabase)
 from llama_index.indices.struct_store import SQLContextContainerBuilder
 from loguru import logger
+from sidekick.configs.prompt_template import (DEBUGGING_PROMPT, QUERY_PROMPT,
+                                              TASK_PROMPT)
+from sidekick.examples.sample_data import sample_values, samples_queries
+from sidekick.utils import remove_duplicates
 from sqlalchemy import create_engine
-from utils import remove_duplicates
 
 logger.remove()
-logger.add(sys.stderr, level="INFO")
+base_path = (Path(__file__).parent / "../").resolve()
+env_settings = toml.load(f"{base_path}/sidekick/configs/.env.toml")
+logger.add(sys.stderr, level=env_settings['LOGGING']['LOG-LEVEL'])
 
 
 class SQLGenerator:
@@ -76,6 +81,7 @@ class SQLGenerator:
             # Role and content
             query_txt = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
             logger.debug(f"Query Text:\n {query_txt}")
+
             # TODO ADD local model
             completion = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo-0301",
@@ -120,27 +126,27 @@ class SQLGenerator:
                     res = qry_txt
                     return res
 
-    def generate_tasks(self, table_name: str, input_question: str):
+    def generate_tasks(self, table_names: list, input_question: str):
         try:
             # Step 1: Given a question, generate tasks to possibly answer the question and persist the result -> tasks.txt
             # Step 2: Append task list to 'query_prompt_template', generate SQL code to answer the question and persist the result -> sql.txt
             context_queries: list = self.update_context_queries()
 
             # Remove duplicates from the context queries
-            m_path = f"{self.path}/models/sentence_transformer/all-MiniLM-L6-v1/"
+            m_path = f"{self.path}/var/lib/tmp/.cache/models"
             duplicates_idx = remove_duplicates(context_queries, m_path)
             updated_context = np.delete(np.array(context_queries), duplicates_idx).tolist()
 
             _queries = "\n".join(updated_context)
             self.content_queries = _queries
-            task_list = self._query_tasks(input_question, sample_values, _queries.lower(), table_name)
+            task_list = self._query_tasks(input_question, sample_values, _queries.lower(), table_names)
             with open(f"{self.path}/var/lib/tmp/data/tasks.txt", "w") as f:
                 f.write(task_list)
             return task_list
         except Exception as se:
             raise se
 
-    def generate_sql(self, table_name: str, input_question: str, _dialect: str = "postgres"):
+    def generate_sql(self, table_name: list, input_question: str, _dialect: str = "postgres"):
         _tasks = self.task_formatter(self._tasks)
         context_file = f"{self.path}/var/lib/tmp/data/context.json"
         additional_context = json.load(open(context_file, "r")) if Path(context_file).exists() else {}

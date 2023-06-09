@@ -1,3 +1,4 @@
+import io
 import json
 import os
 from pathlib import Path
@@ -8,25 +9,37 @@ import toml
 from colorama import Back as B
 from colorama import Fore as F
 from colorama import Style
-from db_config import DBConfig
 from loguru import logger
-from memory import EntityMemory
-from query import SQLGenerator
-from utils import save_query
+from sidekick.db_config import DBConfig
+from sidekick.memory import EntityMemory
+from sidekick.query import SQLGenerator
+from sidekick.utils import save_query, setup_dir
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
-env_settings = toml.load(f"{base_path}/.env.toml")
+env_settings = toml.load(f"{base_path}/sidekick/configs/.env.toml")
+os.environ["TOKENIZERS_PARALLELISM"] = "False"
+__version__ = "0.0.1"
 
 
 def color(fore="", back="", text=None):
     return f"{fore}{back}{text}{Style.RESET_ALL}"
 
 
-@click.group()
-@click.version_option()
+msg = """Welcome to the SQL Sidekick!\nI am AI assistant that helps you with SQL queries.
+I can help you with the following:\n
+1. Configure a local database(for schema validation and syntax checking): `sql-sidekick configure db-setup`.\n
+2. Learn contextual query/answer pairs: `sql-sidekick learn add-samples`.\n
+3. Simply add context: `sql-sidekick learn update-context`.\n
+4. Ask a question: `sql-sidekick query`.
+"""
+
+
+@click.group(help=msg)
+@click.version_option("-V", "--version", message=f"sql-sidekick - {__version__}")
 def cli():
-    """ """
+    # Book-keeping
+    setup_dir(base_path)
 
 
 @cli.group("configure")
@@ -37,6 +50,16 @@ def configure():
 def enter_table_name():
     val = input(color(F.GREEN, "", "Would you like to create a table for the database? (y/n): "))
     return val
+
+
+@configure.command("log", help="Adjust log settings")
+@click.option("--set_level", "-l", help="Set log level (Default: INFO)")
+def set_loglevel(set_level):
+    env_settings["LOGGING"]["LOG-LEVEL"] = set_level
+    # Update settings file for future use.
+    f = open(f"{base_path}/sidekick/configs/.env.toml", "w")
+    toml.dump(env_settings, f)
+    f.close()
 
 
 @configure.command("db-setup", help="Enter information to configure postgres database locally")
@@ -62,7 +85,7 @@ def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: i
         env_settings["LOCAL_DB_CONFIG"]["PORT"] = port
         env_settings["LOCAL_DB_CONFIG"]["DB_NAME"] = db_name
         # Update settings file for future use.
-        f = open(f"{base_path}/.env.toml", "w")
+        f = open(f"{base_path}/sidekick/configs/.env.toml", "w")
         toml.dump(env_settings, f)
         f.close()
 
@@ -139,6 +162,9 @@ def add_query_response():
 @learn.command("update-context", help="Update context in memory for future use")
 def update_context():
     """Helps learn context for generation."""
+    # Book-keeping
+    setup_dir(base_path)
+
     context_dict = """{\n"<new_context_key>": "<new_context_value>"\n}
     """
     content_file_path = f"{base_path}/var/lib/tmp/data/context.json"
@@ -164,20 +190,24 @@ def update_context():
 @click.option("--question", "-q", help="Database name", prompt="Ask a question")
 def query(question: str):
     """Asks question and returns SQL."""
+    # Book-keeping
+    setup_dir(base_path)
 
     # Check if table exists
-    path = f"{base_path}/var/lib/tmp/data/"
+    path = f"{base_path}/var/lib/tmp/data"
     table_context_file = f"{path}/table_context.json"
     table_context = json.load(open(table_context_file, "r")) if Path(table_context_file).exists() else {}
+    table_names = []
     if table_context:
         table_name = table_context.get("tables_in_use", None)
-        table_name = [_t.replace(" ", "_") for _t in table_name]
+        table_names = [_t.replace(" ", "_") for _t in table_name]
     else:
-        table_name = [click.prompt("Which table to use?")]
-        table_context["tables_in_use"] = table_name.replace(" ", "_")
+        # Ask for table name only when more than one table exists.
+        table_names = [click.prompt("Which table to use?")]
+        table_context["tables_in_use"] = [_t.replace(" ", "_") for _t in table_names]
         with open(f"{path}/table_context.json", "w") as outfile:
             json.dump(table_context, outfile, indent=4, sort_keys=False)
-    logger.info(f"Table in use: {table_name}")
+    logger.info(f"Table in use: {table_names}")
     # Check if .env.toml file exists
     api_key = env_settings["OPENAI"]["OPENAI_API_KEY"]
     if api_key is None or api_key == "":
@@ -186,11 +216,12 @@ def query(question: str):
                 color(F.GREEN, "", "Looks like API key is not set, would you like to set OPENAI_API_KEY? (y/n):")
             )
             if val.lower() == "y":
-                api_key = input(color(F.GREEN, "", "Enter OPENAI_API_KEY:"))
+                api_key = input(color(F.GREEN, "", "Enter OPENAI_API_KEY :"))
         os.environ["OPENAI_API_KEY"] = api_key
         env_settings["OPENAI"]["OPENAI_API_KEY"] = api_key
+
         # Update settings file for future use.
-        f = open(f"{base_path}/.env.toml", "w")
+        f = open(f"{base_path}/sidekick/configs/.env.toml", "w")
         toml.dump(env_settings, f)
         f.close()
     openai.api_key = api_key
@@ -209,7 +240,7 @@ def query(question: str):
     )
 
     sql_g = SQLGenerator(db_url, api_key, path=base_path)
-    sql_g._tasks = sql_g.generate_tasks(table_name, question)
+    sql_g._tasks = sql_g.generate_tasks(table_names, question)
     click.echo(sql_g._tasks)
 
     updated_tasks = None
@@ -222,7 +253,7 @@ def query(question: str):
             click.echo("Skipping edit...")
     if updated_tasks is not None:
         sql_g._tasks = updated_tasks
-    res = sql_g.generate_sql(table_name, question)
+    res = sql_g.generate_sql(table_names, question)
     logger.info(f"Generated response:\n\n{res}")
 
     if res is not None:
@@ -238,13 +269,4 @@ def query(question: str):
 
 
 if __name__ == "__main__":
-    click.echo(
-        """Welcome to the SQL Sidekick!\nI am AI assistant that helps you with SQL queries.
-I can help you with the following:
-1. Configure a local database(for schema validation and syntax checking): `python sidekick/prompter.py configure db-setup`.
-2. Learn contextual query/answer pairs: `python sidekick/prompter.py learn add-samples`.
-3. Simply add context: `python sidekick/prompter.py learn update-context`.
-4. Ask a question: `python sidekick/prompter.py query`.\n
-"""
-    )
     cli()

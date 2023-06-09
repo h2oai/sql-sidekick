@@ -18,7 +18,7 @@ Column Type: TEXT
 Column Name: resource_type
 Column Type: TEXT NOT NULL, -- or int?
 Sample Values: ['FEATURE_STORE', 'PROJECT', 'MLOPS_EXPERIMENT', 'APP', 'APP_INSTANCE', 'MLOPS_DEPLOYMENT',
-'MLOPS_DATASET', 'MLOPS_USER', 'RESOURCE_TYPE_UNSPECIFIED', 'SCORING'], 'DAI_ENGINE', 'MLOPS_MODEL']
+'MLOPS_DATASET', 'MLOPS_USER', 'RESOURCE_TYPE_UNSPECIFIED', 'SCORING', 'DAI_ENGINE', 'MLOPS_MODEL']
 
 Column Name: resource_id
 Column Type: TEXT
@@ -66,7 +66,6 @@ Sample Values: ['ai/h2o/cloud/mlops/deployment/created', 'ai/h2o/cloud/appstore/
 Column Name: source
 Column Type: TEXT NOT NULL
 
-
 Column Name: payload
 Column Type: jsonb NOT NULL
 Sample Values:
@@ -105,14 +104,14 @@ Sample Values:
 
 # For few shot prompting
 samples_queries = [
-"""
+    """
 # query: Total number of CPUs used?
 # answer:
 SELECT sum((payload->'engineEvent'-> 'pausing' -> 'engine'->> 'cpu')::integer) AS total_cpus_used
 FROM telemetry
 WHERE payload->'engineEvent'-> 'pausing' -> 'engine'->> 'cpu' IS NOT NULL;
 """,
-"""
+    """
 # query: Find the number of AI units for each user using stream for each resource type (overall)
 # answer:
 SELECT user_id, user_name, resource_type, date_trunc('day', ts) as start_day,
@@ -124,7 +123,7 @@ SELECT user_id, user_name, resource_type, date_trunc('day', ts) as start_day,
      ) sub GROUP BY user_id, user_name, resource_type, start_day
 ORDER BY start_day DESC NULLS LAST;
 """,
-"""
+    """
 # query: Compute global usage over time
 # answer:
 SELECT
@@ -144,5 +143,5 @@ FROM (
     WHERE stream = 'gauage_resources'
 ) AS internal
 ORDER BY 1, 2 DESC;
-"""
+""",
 ]
