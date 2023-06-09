@@ -8,15 +8,16 @@ import toml
 from colorama import Back as B
 from colorama import Fore as F
 from colorama import Style
-from .db_config import DBConfig
 from loguru import logger
-from .memory import EntityMemory
-from .query import SQLGenerator
-from .utils import save_query, setup_dir
+from sidekick.db_config import DBConfig
+from sidekick.memory import EntityMemory
+from sidekick.query import SQLGenerator
+from sidekick.utils import save_query, setup_dir
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
 env_settings = toml.load(f"{base_path}/sidekick/configs/.env.toml")
+os.environ["TOKENIZERS_PARALLELISM"] = False
 
 
 def color(fore="", back="", text=None):
@@ -72,7 +73,7 @@ def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: i
         env_settings["LOCAL_DB_CONFIG"]["PORT"] = port
         env_settings["LOCAL_DB_CONFIG"]["DB_NAME"] = db_name
         # Update settings file for future use.
-        f = open(f"{base_path}/.env.toml", "w")
+        f = open(f"{base_path}/sidekick/configs/.env.toml", "w")
         toml.dump(env_settings, f)
         f.close()
 
@@ -189,6 +190,7 @@ def query(question: str):
         table_name = table_context.get("tables_in_use", None)
         table_names = [_t.replace(" ", "_") for _t in table_name]
     else:
+        # Ask for table name only when more than one table exists.
         table_names = [click.prompt("Which table to use?")]
         table_context["tables_in_use"] = [_t.replace(" ", "_") for _t in table_names]
         with open(f"{path}/table_context.json", "w") as outfile:
@@ -205,8 +207,9 @@ def query(question: str):
                 api_key = input(color(F.GREEN, "", "Enter OPENAI_API_KEY:"))
         os.environ["OPENAI_API_KEY"] = api_key
         env_settings["OPENAI"]["OPENAI_API_KEY"] = api_key
+
         # Update settings file for future use.
-        f = open(f"{base_path}/.env.toml", "w")
+        f = open(f"{base_path}/sidekick/configs/.env.toml", "w")
         toml.dump(env_settings, f)
         f.close()
     openai.api_key = api_key

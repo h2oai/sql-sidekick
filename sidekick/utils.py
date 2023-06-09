@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -14,11 +15,21 @@ def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, devic
     # 3. Model Card: https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2
     # 4. Reference: https://huggingface.co/spaces/mteb/leaderboard
     # Maps sentence & paragraphs to a 384 dimensional dense vector space.
-    sentence_model = SentenceTransformer(model_path, device=device)
+    model_name_path = f"{model_path}/sentence_transformers/sentence-transformers_all-MiniLM-L6-v2/"
+    current_torch_home = os.environ.get("TORCH_HOME", "")
+    if Path(model_name_path).is_dir():
+        is_empty = not any(Path(model_name_path).iterdir())
+        if is_empty:
+            # Download n cache at the specified location
+            # https://public.ukp.informatik.tu-darmstadt.de/reimers/sentence-transformers/v0.2/all-MiniLM-L6-v2.zip
+            os.environ["TORCH_HOME"] = "var/lib/.cache/models/"
+            model_name_path = "sentence-transformers/all-MiniLM-L6-v2"
+    sentence_model = SentenceTransformer(model_name_path, device=device)
     all_res = np.zeros(shape=(len(x), 0))
     res = sentence_model.encode(x, batch_size=batch_size, show_progress_bar=True)
     all_res = np.hstack((all_res, res))
     del sentence_model
+    os.environ["TORCH_HOME"] = current_torch_home
     return all_res
 
 
@@ -53,7 +64,12 @@ def save_query(output_path: str, query, response, extracted_entity: Optional[dic
 
 
 def setup_dir(base_path: str):
-    dir_list = ["var/lib/tmp/data", "var/lib/tmp/.cache"]
+    dir_list = [
+        "var/lib/tmp/data",
+        "var/lib/tmp/.cache",
+        "var/lib/.cache/models/sentence_transformers/sentence-transformers_all-MiniLM-L6-v2",
+    ]
     for _dl in dir_list:
         p = Path(f"{base_path}/{_dl}")
-        p.mkdir(parents=True, exist_ok=True)
+        if not p.is_dir():
+            p.mkdir(parents=True, exist_ok=True)

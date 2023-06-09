@@ -6,14 +6,16 @@ from pathlib import Path
 import numpy as np
 import openai
 import sqlglot
-from .configs.prompt_template import DEBUGGING_PROMPT, QUERY_PROMPT, TASK_PROMPT
-from .examples.sample_data import sample_values, samples_queries
 from langchain import OpenAI
-from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
+from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
+                         LLMPredictor, ServiceContext, SQLDatabase)
 from llama_index.indices.struct_store import SQLContextContainerBuilder
 from loguru import logger
+from sidekick.configs.prompt_template import (DEBUGGING_PROMPT, QUERY_PROMPT,
+                                              TASK_PROMPT)
+from sidekick.examples.sample_data import sample_values, samples_queries
+from sidekick.utils import remove_duplicates
 from sqlalchemy import create_engine
-from .utils import remove_duplicates
 
 logger.remove()
 logger.add(sys.stderr, level="INFO")
@@ -127,7 +129,7 @@ class SQLGenerator:
             context_queries: list = self.update_context_queries()
 
             # Remove duplicates from the context queries
-            m_path = f"{self.path}/models/sentence_transformer/all-MiniLM-L6-v1/"
+            m_path = f"{self.path}/var/lib/.cache/models/"
             duplicates_idx = remove_duplicates(context_queries, m_path)
             updated_context = np.delete(np.array(context_queries), duplicates_idx).tolist()
 
