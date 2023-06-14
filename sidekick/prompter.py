@@ -265,7 +265,8 @@ def query(question: str):
         save_sql = click.prompt("Would you like to save the generated SQL?")
         if save_sql.lower() == "y" or save_sql.lower() == "yes":
             # Persist for future use
-            save_query(base_path, query=question, response=res)
+            _val = updated_sql if updated_sql else res
+            save_query(base_path, query=question, response=_val)
 
 
 if __name__ == "__main__":
