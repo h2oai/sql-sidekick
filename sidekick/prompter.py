@@ -257,6 +257,7 @@ def query(question: str):
     logger.info(f"Generated response:\n\n{res}")
 
     if res is not None:
+        updated_sql = None
         edit_val = click.prompt("Would you like to edit the SQL? (y/n)")
         if edit_val.lower() == "y" or edit_val.lower() == "yes":
             updated_sql = click.edit(res)

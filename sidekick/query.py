@@ -8,12 +8,10 @@ import openai
 import sqlglot
 import toml
 from langchain import OpenAI
-from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
-                         LLMPredictor, ServiceContext, SQLDatabase)
+from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
 from llama_index.indices.struct_store import SQLContextContainerBuilder
 from loguru import logger
-from sidekick.configs.prompt_template import (DEBUGGING_PROMPT, QUERY_PROMPT,
-                                              TASK_PROMPT)
+from sidekick.configs.prompt_template import DEBUGGING_PROMPT, QUERY_PROMPT, TASK_PROMPT
 from sidekick.examples.sample_data import sample_values, samples_queries
 from sidekick.utils import remove_duplicates
 from sqlalchemy import create_engine
@@ -21,7 +19,7 @@ from sqlalchemy import create_engine
 logger.remove()
 base_path = (Path(__file__).parent / "../").resolve()
 env_settings = toml.load(f"{base_path}/sidekick/configs/.env.toml")
-logger.add(sys.stderr, level=env_settings['LOGGING']['LOG-LEVEL'])
+logger.add(sys.stderr, level=env_settings["LOGGING"]["LOG-LEVEL"])
 
 
 class SQLGenerator:
@@ -51,18 +49,25 @@ class SQLGenerator:
         # Read the history file and update the context queries
         new_context_queries = samples_queries
         history_file = f"{self.path}/var/lib/tmp/data/history.jsonl"
-        if Path(history_file).exists():
-            with open(history_file, "r") as in_file:
-                for line in in_file:
-                    # Format:
-                    # """
-                    # # query:
-                    # # answer:
-                    # """
-                    query = json.loads(line)["Query"]
-                    response = json.loads(line)["Answer"]
-                    _new_samples = f"""# query: {query}\n# answer: {response}"""
-                    new_context_queries.append(_new_samples)
+        try:
+            if Path(history_file).exists():
+                with open(history_file, "r") as in_file:
+                    for line in in_file:
+                        # Format:
+                        # """
+                        # # query:
+                        # # answer:
+                        # """
+                        if line.strip():
+                            data = json.loads(line)
+                            if "Query" in data and "Answer" in data:
+                                query = data["Query"]
+                                response = data["Answer"]
+                            _new_samples = f"""# query: {query}\n# answer: {response}"""
+                            new_context_queries.append(_new_samples)
+        except ValueError as ve:
+            logger.error(f"Error in reading history file: {ve}")
+            pass
         return new_context_queries
 
     def _query_tasks(self, question_str, data_info, sample_queries, table_name: list):
@@ -72,7 +77,7 @@ class SQLGenerator:
 
             system_prompt = TASK_PROMPT["system_prompt"]
             user_prompt = TASK_PROMPT["user_prompt"].format(
-                _table_name=table_name,
+                _table_name=",".join(table_name),
                 _data_info=data_info,
                 _sample_queries=sample_queries,
                 _context=str(additional_context).lower(),
@@ -91,7 +96,7 @@ class SQLGenerator:
             return res
         except Exception as se:
             _, ex_value, _ = sys.exc_info()
-            res = ex_value.statement
+            res = ex_value.statement if ex_value.statement else None
             return res
 
     def generate_response(self, context_container, sql_index, input_prompt, attempt_fix_on_error: bool = True):
@@ -157,10 +162,12 @@ class SQLGenerator:
             context_queries = self.content_queries
         else:
             context_queries = self.update_context_queries()
+        # TODO: The need to pass data info again could be eliminated if Task generation becomes more consistent and accurate.
         query_str = QUERY_PROMPT.format(
-            dialect=_dialect,
+            _dialect=_dialect,
+            _data_info=sample_values,
             _question=input_question.lower(),
-            table_name=table_name,
+            _table_name=table_name,
             _sample_queries=context_queries.lower(),
             _tasks=_tasks.lower(),
         )
