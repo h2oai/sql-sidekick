@@ -6,6 +6,8 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 from sentence_transformers import SentenceTransformer
+from sidekick.logger import logger
+from sklearn.metrics.pairwise import cosine_similarity
 
 
 def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, device: Optional[str] = None):
@@ -33,17 +35,30 @@ def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, devic
     return all_res
 
 
-def compute_similarity(vectors: list):
-    from sklearn.metrics.pairwise import cosine_similarity
+def filter_samples(input_q: str, probable_qs: list, model_path: str, threshold: float = 0.45):
+    # Only consider the questions, note: this might change in future.
+    _inq = ("# query: " + input_q).strip().lower()
+    logger.debug(f"Input questions: {_inq}")
+    question_embeddings = generate_sentence_embeddings(model_path, x=[_inq], device="cpu")
 
-    similarity = cosine_similarity(vectors)
-    return similarity
+    input_xs = [_se.split("# answer")[0].strip().lower() for _se in probable_qs]
+    logger.debug(f"Probable questions: {input_xs}")
+    embeddings = generate_sentence_embeddings(model_path, x=input_xs, device="cpu")
+    res = []
+    for idx, _se in enumerate(embeddings):
+        similarities_score = cosine_similarity(
+            [_se.astype(float).tolist()], [question_embeddings.astype(float).tolist()[0]]
+        )
+        logger.debug(f"Similarity score for: {input_xs[idx]}: {similarities_score[0][0]}")
+        if similarities_score[0][0] > threshold:
+            res.append(probable_qs[idx])
+    return res
 
 
 def remove_duplicates(input_x: list, model_path: str, threshold: float = 0.89):
     # Remove duplicates pairs
     embeddings = generate_sentence_embeddings(model_path, x=input_x, device="cpu")
-    similarity_scores = compute_similarity(embeddings)
+    similarity_scores = cosine_similarity(embeddings)
     similar_indices = [(x, y) for (x, y) in np.argwhere(similarity_scores > threshold) if x != y]
 
     # Remove identical pairs e.g. [(0, 3), (3, 0)] -> [(0, 3)]
