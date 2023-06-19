@@ -258,12 +258,19 @@ def query(question: str):
 
     if res is not None:
         updated_sql = None
-        edit_val = click.prompt("Would you like to edit the SQL? (y/n)")
-        if edit_val.lower() == "y" or edit_val.lower() == "yes":
-            updated_sql = click.edit(res)
-            click.echo(f"Updated SQL:\n {updated_sql}")
+        res_val = "e"
+        while res_val.lower() in ["e", "edit", "r", "regenerate"]:
+            res_val = click.prompt(
+                "Would you like to 'edit' or 'regenerate' the SQL? Use 'e' to edit or 'r' to regenerate."
+            )
+            if res_val.lower() == "e" or res_val.lower() == "edit":
+                updated_sql = click.edit(res)
+                click.echo(f"Updated SQL:\n {updated_sql}")
+            elif res_val.lower() == "r" or res_val.lower() == "regenerate":
+                click.echo("Attempting to regenerate...")
+                res = sql_g.generate_sql(table_names, question)
 
-        save_sql = click.prompt("Would you like to save the generated SQL?")
+        save_sql = click.prompt("Would you like to save the generated SQL (y/n)?")
         if save_sql.lower() == "y" or save_sql.lower() == "yes":
             # Persist for future use
             _val = updated_sql if updated_sql else res
