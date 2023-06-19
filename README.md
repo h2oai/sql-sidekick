@@ -17,24 +17,24 @@ Step1:
 - docker pull postgres (will pull the latest version)
 - docker run --rm --name pgsql-dev -e POSTGRES_PASSWORD=abc -p 5432:5432 postgres
 
-Step2: Download and install .whl --> s3://sql-sidekick/releases/sql_sidekick-0.0.1-py3-none-any.whl
+Step2: Download and install .whl --> s3://sql-sidekick/releases/sql_sidekick-0.0.2-py3-none-any.whl
 - python3 -m venv .sidekickvenv
 - source .sidekickvenv/bin/activate
-- python3 -m pip install sql_sidekick-0.0.1-py3-none-any.whl
+- python3 -m pip install sql_sidekick-0.0.2-py3-none-any.whl
 ```
 ## Start
 ```
 Welcome to the SQL Sidekick! I am AI assistant that helps you with SQL
-  queries. I can help you with the following:
+queries. I can help you with the following:
 
   1. Configure a local database(for schema validation and syntax checking):
   `sql-sidekick configure db-setup`.
 
-  2. Learn contextual query/answer pairs: `sql-sidekick learn add-samples`. (optional)
+  2. Ask a question: `sql-sidekick query`.
 
-  3. Simply add context: `sql-sidekick learn update-context`. (optional)
+  3. Learn contextual query/answer pairs: `sql-sidekick learn add-samples`. (optional)
 
-  4. Ask a question: `sql-sidekick query`.
+  4. Simply add context: `sql-sidekick learn update-context`. (optional)
 
 Options:
   --version  Show the version and exit.
