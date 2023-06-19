@@ -8,18 +8,15 @@ import openai
 import sqlglot
 import toml
 from langchain import OpenAI
-from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
+from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
+                         LLMPredictor, ServiceContext, SQLDatabase)
 from llama_index.indices.struct_store import SQLContextContainerBuilder
-from loguru import logger
-from sidekick.configs.prompt_template import DEBUGGING_PROMPT, QUERY_PROMPT, TASK_PROMPT
+from sidekick.configs.prompt_template import (DEBUGGING_PROMPT, QUERY_PROMPT,
+                                              TASK_PROMPT)
 from sidekick.examples.sample_data import sample_values, samples_queries
-from sidekick.utils import remove_duplicates
+from sidekick.logger import logger
+from sidekick.utils import filter_samples, remove_duplicates
 from sqlalchemy import create_engine
-
-logger.remove()
-base_path = (Path(__file__).parent / "../").resolve()
-env_settings = toml.load(f"{base_path}/sidekick/configs/.env.toml")
-logger.add(sys.stderr, level=env_settings["LOGGING"]["LOG-LEVEL"])
 
 
 class SQLGenerator:
@@ -142,7 +139,9 @@ class SQLGenerator:
             duplicates_idx = remove_duplicates(context_queries, m_path)
             updated_context = np.delete(np.array(context_queries), duplicates_idx).tolist()
 
-            _queries = "\n".join(updated_context)
+            # Filter closest samples to the input question, threshold = 0.45
+            filtered_context = filter_samples(input_question, updated_context, m_path)
+            _queries = "\n".join(filtered_context)
             self.content_queries = _queries
             task_list = self._query_tasks(input_question, sample_values, _queries.lower(), table_names)
             with open(f"{self.path}/var/lib/tmp/data/tasks.txt", "w") as f:
@@ -156,19 +155,14 @@ class SQLGenerator:
         context_file = f"{self.path}/var/lib/tmp/data/context.json"
         additional_context = json.load(open(context_file, "r")) if Path(context_file).exists() else {}
 
-        # Attempt updating in-case additional context is provided
-        context_queries = None
-        if self.content_queries:
-            context_queries = self.content_queries
-        else:
-            context_queries = self.update_context_queries()
+        context_queries = self.content_queries
         # TODO: The need to pass data info again could be eliminated if Task generation becomes more consistent and accurate.
         query_str = QUERY_PROMPT.format(
             _dialect=_dialect,
             _data_info=sample_values,
             _question=input_question.lower(),
             _table_name=table_name,
-            _sample_queries=context_queries.lower(),
+            _sample_queries=context_queries,
             _tasks=_tasks.lower(),
         )
 

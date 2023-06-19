@@ -261,7 +261,8 @@ def query(question: str):
         res_val = "e"
         while res_val.lower() in ["e", "edit", "r", "regenerate"]:
             res_val = click.prompt(
-                "Would you like to 'edit' or 'regenerate' the SQL? Use 'e' to edit or 'r' to regenerate."
+                "Would you like to 'edit' or 'regenerate' the SQL? Use 'e' to edit or 'r' to regenerate. "
+                "To skip, enter 's' or 'skip'"
             )
             if res_val.lower() == "e" or res_val.lower() == "edit":
                 updated_sql = click.edit(res)

@@ -69,36 +69,7 @@ Column Type: TEXT NOT NULL
 Column Name: payload
 Column Type: jsonb NOT NULL
 Sample Values:
-[
-[{'mlopsEvent': {'operationCode': 'CREATE_REGISTERED_MODEL_VERSION',
-    'operationMessage': 'Registered Model version created.',
-    'createRegisteredModelVersion': {'modelVersion': {'id': '71e9f8ca-1539-47ad-a0cd-2c411ff8bb62',
-      'model': {'id': 'd29b9a6f-d865-481c-887a-59f392f702ba',
-       'projectId': 'f1f1d167-75f1-4864-9704-12ad351821f6',
-       'displayName': 'swinging-beagle'},
-      'projectId': 'f1f1d167-75f1-4864-9704-12ad351821f6',
-      'experiment': {'id': '6a9586d3-8705-4936-861a-9700649bfac2',
-       'status': 'EXPERIMENT_STATUS_UNSPECIFIED',
-       'projectId': 'f1f1d167-75f1-4864-9704-12ad351821f6',
-       'displayName': 'swinging-beagle',
-       'targetColumn': 'output',
-       'trainingDuration': '0s'},
-      'versionNumber': '1'}}}}],
- [{'mlopsEvent': {'operationCode': 'CREATE_REGISTERED_MODEL',
-    'operationMessage': 'Registered model created.',
-    'createRegisteredModel': {'model': {'id': '1f98399c-f528-41b0-acd2-c21178cbb830',
-      'projectId': '58861d2f-8a02-4354-b808-32f1e5f8f911',
-      'displayName': 'h2o3 model'}}}}],
- [{'mlopsEvent': {'operationCode': 'CREATE_PROJECT',
-    'projectCreated': {'project': {'id': '323a83a9-545e-40ae-a662-9355a788dd63'}},
-    'operationMessage': 'Project created.'}}],
- [{'mlopsEvent': {'operationCode': 'CREATE_EXPERIMENT',
-    'operationMessage': 'Experiment created.',
-    'experimentCreated': {'experiment': {'id': 'bb36cccc-8012-4419-8183-29e9c10a4397',
-      'status': 'EXPERIMENT_STATUS_UNSPECIFIED',
-      'displayName': 'Michael Bennett',
-      'targetColumn': 'Distance',
-      'trainingDuration': '0s'}}}}],
+[{'engineEvent': {'pausing': {'engine': {'cpu': '1', 'memory': '1', 'gpu': '0'}}}}]
 ]
 """
 
