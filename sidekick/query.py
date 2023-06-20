@@ -8,11 +8,13 @@ import openai
 import sqlglot
 import toml
 from langchain import OpenAI
-from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
+from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
+                         LLMPredictor, ServiceContext, SQLDatabase)
 from llama_index.indices.struct_store import SQLContextContainerBuilder
-from sidekick.configs.prompt_template import DEBUGGING_PROMPT, QUERY_PROMPT, TASK_PROMPT
+from sidekick.configs.prompt_template import (DEBUGGING_PROMPT, QUERY_PROMPT,
+                                              TASK_PROMPT)
 from sidekick.logger import logger
-from sidekick.utils import filter_samples, remove_duplicates, csv_parser
+from sidekick.utils import csv_parser, filter_samples, remove_duplicates
 from sqlalchemy import create_engine
 
 
@@ -64,6 +66,13 @@ class SQLGenerator:
         if self.sample_queries_path is not None and Path(self.sample_queries_path).exists():
             logger.info(f"Using samples from path {self.sample_queries_path}")
             new_context_queries = csv_parser(self.sample_queries_path)
+            # cache the samples for future use
+            with open(f"{self.path}/var/lib/tmp/data/queries_cache.json", "w") as f:
+                json.dump(new_context_queries, f, indent=2)
+        elif self.sample_queries_path is None and Path(f"{self.path}/var/lib/tmp/data/queries_cache.json").exists():
+            logger.info(f"Using samples from cache")
+            with open(f"{self.path}/var/lib/tmp/data/queries_cache.json", "r") as f:
+                new_context_queries = json.load(f)
         # Read the history file and update the context queries
         history_file = f"{self.path}/var/lib/tmp/data/history.jsonl"
         try:

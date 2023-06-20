@@ -248,7 +248,9 @@ def query(question: str, table_info_path: str, sample_queries: str):
         else:
             table_info_path = click.prompt("Enter table info path")
 
-    sql_g = SQLGenerator(db_url, api_key, job_path=base_path, data_input_path=table_info_path, samples_queries=sample_queries)
+    sql_g = SQLGenerator(
+        db_url, api_key, job_path=base_path, data_input_path=table_info_path, samples_queries=sample_queries
+    )
     sql_g._tasks = sql_g.generate_tasks(table_names, question)
     click.echo(sql_g._tasks)
 
@@ -263,6 +265,7 @@ def query(question: str, table_info_path: str, sample_queries: str):
     if updated_tasks is not None:
         sql_g._tasks = updated_tasks
     res = sql_g.generate_sql(table_names, question)
+    logger.info(f"Input query: {question}")
     logger.info(f"Generated response:\n\n{res}")
 
     if res is not None:
@@ -279,6 +282,8 @@ def query(question: str, table_info_path: str, sample_queries: str):
             elif res_val.lower() == "r" or res_val.lower() == "regenerate":
                 click.echo("Attempting to regenerate...")
                 res = sql_g.generate_sql(table_names, question)
+                logger.info(f"Input query: {question}")
+                logger.info(f"Generated response:\n\n{res}")
 
         save_sql = click.prompt("Would you like to save the generated SQL (y/n)?")
         if save_sql.lower() == "y" or save_sql.lower() == "yes":
