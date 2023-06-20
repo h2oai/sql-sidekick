@@ -188,7 +188,9 @@ def update_context():
 
 @cli.command()
 @click.option("--question", "-q", help="Database name", prompt="Ask a question")
-def query(question: str):
+@click.option("--table-info-path", "-t", help="Table info path", default=None)
+@click.option("--sample-queries", "-s", help="Samples path", default=None)
+def query(question: str, table_info_path: str, sample_queries: str):
     """Asks question and returns SQL."""
     # Book-keeping
     setup_dir(base_path)
@@ -239,7 +241,14 @@ def query(question: str):
         user_name, passwd, host_name, db_name
     )
 
-    sql_g = SQLGenerator(db_url, api_key, path=base_path)
+    if table_info_path is None:
+        # Search for the file in the default current path, if not present as user to enter the path
+        if Path(f"{base_path}/table_info.jsonl").exists():
+            table_info_path = f"{base_path}/table_info.jsonl"
+        else:
+            table_info_path = click.prompt("Enter table info path")
+
+    sql_g = SQLGenerator(db_url, api_key, job_path=base_path, data_input_path=table_info_path, samples_queries=sample_queries)
     sql_g._tasks = sql_g.generate_tasks(table_names, question)
     click.echo(sql_g._tasks)
 

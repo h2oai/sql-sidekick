@@ -8,24 +8,40 @@ import openai
 import sqlglot
 import toml
 from langchain import OpenAI
-from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
-                         LLMPredictor, ServiceContext, SQLDatabase)
+from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
 from llama_index.indices.struct_store import SQLContextContainerBuilder
-from sidekick.configs.prompt_template import (DEBUGGING_PROMPT, QUERY_PROMPT,
-                                              TASK_PROMPT)
-from sidekick.examples.sample_data import sample_values, samples_queries
+from sidekick.configs.prompt_template import DEBUGGING_PROMPT, QUERY_PROMPT, TASK_PROMPT
 from sidekick.logger import logger
-from sidekick.utils import filter_samples, remove_duplicates
+from sidekick.utils import filter_samples, remove_duplicates, csv_parser
 from sqlalchemy import create_engine
 
 
+def _check_file_info(file_path: str):
+    if file_path is not None and Path(file_path).exists():
+        logger.info(f"Using information info from path {file_path}")
+        return file_path
+    else:
+        logger.info("Required info not found, provide a path for table information and try again")
+        raise FileNotFoundError(f"Table info not found at {file_path}")
+
+
 class SQLGenerator:
-    def __init__(self, db_url: str, openai_key: str = None, path: str = "../var/lib/tmp/data"):
+    def __init__(
+        self,
+        db_url: str,
+        openai_key: str = None,
+        data_input_path: str = "./table_info.jsonl",
+        samples_queries: str = "./samples.csv",
+        job_path: str = "../var/lib/tmp/data",
+    ):
         self.db_url = db_url
         self.engine = create_engine(db_url)
         self.sql_database = SQLDatabase(self.engine)
         self.context_builder = None
-        self.path = path
+        self.data_input_path = _check_file_info(data_input_path)
+        self.sample_queries_path = samples_queries
+        self.path = job_path
+        self._data_info = None
         self._tasks = None
         self.openai_key = openai_key
         self.content_queries = None
@@ -43,8 +59,12 @@ class SQLGenerator:
         return table_schema_index
 
     def update_context_queries(self):
+        # Check if seed samples were provided
+        new_context_queries = []
+        if self.sample_queries_path is not None and Path(self.sample_queries_path).exists():
+            logger.info(f"Using samples from path {self.sample_queries_path}")
+            new_context_queries = csv_parser(self.sample_queries_path)
         # Read the history file and update the context queries
-        new_context_queries = samples_queries
         history_file = f"{self.path}/var/lib/tmp/data/history.jsonl"
         try:
             if Path(history_file).exists():
@@ -133,6 +153,7 @@ class SQLGenerator:
             # Step 1: Given a question, generate tasks to possibly answer the question and persist the result -> tasks.txt
             # Step 2: Append task list to 'query_prompt_template', generate SQL code to answer the question and persist the result -> sql.txt
             context_queries: list = self.update_context_queries()
+            logger.info(f"Number of context queries found: {len(context_queries)}")
 
             # Remove duplicates from the context queries
             m_path = f"{self.path}/var/lib/tmp/.cache/models"
@@ -143,7 +164,17 @@ class SQLGenerator:
             filtered_context = filter_samples(input_question, updated_context, m_path)
             _queries = "\n".join(filtered_context)
             self.content_queries = _queries
-            task_list = self._query_tasks(input_question, sample_values, _queries.lower(), table_names)
+
+            # data info
+            input_file = self.data_input_path
+            data_info = ""
+            with open(input_file, "r") as in_file:
+                for line in in_file:
+                    if line.strip():
+                        data = json.loads(line)
+                        data_info += "\n" + json.dumps(data)
+            self._data_info = data_info
+            task_list = self._query_tasks(input_question, data_info, _queries.lower(), table_names)
             with open(f"{self.path}/var/lib/tmp/data/tasks.txt", "w") as f:
                 f.write(task_list)
             return task_list
@@ -159,7 +190,7 @@ class SQLGenerator:
         # TODO: The need to pass data info again could be eliminated if Task generation becomes more consistent and accurate.
         query_str = QUERY_PROMPT.format(
             _dialect=_dialect,
-            _data_info=sample_values,
+            _data_info=self._data_info,
             _question=input_question.lower(),
             _table_name=table_name,
             _sample_queries=context_queries,

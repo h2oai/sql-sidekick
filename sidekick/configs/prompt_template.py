@@ -43,7 +43,7 @@ QUERY_PROMPT = """
                 # Prefer NOT EXISTS to LEFT JOIN ON null id
                 # Avoid using the WITH statement
                 # When using DESC keep NULLs at the end
-                # If JSONB format found in Table schema, do pattern matching on keywords from the question
+                # If JSONB format found in Table schema, do pattern matching on keywords from the question and use SQL functions such as ->> or ->
                 # Add explanation and reasoning for each SQL query
             """
 

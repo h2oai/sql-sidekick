@@ -88,3 +88,18 @@ def setup_dir(base_path: str):
         p = Path(f"{base_path}/{_dl}")
         if not p.is_dir():
             p.mkdir(parents=True, exist_ok=True)
+
+
+def csv_parser(input_path: str):
+    df = pd.read_csv(input_path)
+    df = df.dropna()
+    df = df.drop_duplicates()
+    df = df.reset_index(drop=True)
+
+    # Convert frame to below format
+    # [
+    # "# query": ""
+    # "# answer": ""
+    # ]
+    res = df.apply(lambda row: f"# query: {row['query']}\n# answer: {row['answer']}",axis=1).to_list()
+    return res
