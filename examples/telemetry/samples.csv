@@ -1,0 +1,27 @@
+query,answer
+Total number of CPUs used?,SELECT sum((payload->'engineEvent'-> 'pausing' -> 'engine'->> 'cpu')::integer) AS total_cpus_used FROM telemetry WHERE payload->'engineEvent'-> 'pausing' -> 'engine'->> 'cpu' IS NOT NULL;
+Find the number of AI units for each user using stream for each resource type (overall),"SELECT user_id, user_name, resource_type, date_trunc('day', ts) as start_day,
+       sum(AI_units) as AI_units FROM (
+      SELECT user_id, user_name, resource_type, ts,
+             extract(epoch from ts - lag(ts) over (partition by user_id, resource_type order by ts)) / 3600 AS AI_units
+      FROM telemetry
+      WHERE stream = 'running'
+     ) sub GROUP BY user_id, user_name, resource_type, start_day
+ORDER BY start_day DESC NULLS LAST;"
+Compute global usage over time,"SELECT
+  ts AS time_interval,
+  GREATEST((GREATEST((ram_gi / 64.0), (cpu / 8.0)) - gpu), 0) + (gpu * 4.0) as ai_units
+FROM (
+    SELECT
+      -- This is a gauge stream, meaning multiple sources are exporting duplicate entries during the same hour interval
+      ts,
+      -- RAM usage in Gi
+      COALESCE(((payload->'usageGauge'->'billingResources'->>'paddedMemoryReservationBytes')::bigint/1024.0/1024.0/1024.0), 0) AS ram_gi,
+      -- CPU usage in vCPU
+      COALESCE(((payload->'usageGauge'->'billingResources'->'paddedCpuReservationMillicpu')::int/1000.0), 0) AS cpu,
+      -- GPU usage in number of GPUs
+      COALESCE(((payload->'usageGauge'->'billingResources'->'gpuCount')::int), 0) AS gpu
+    FROM telemetry
+    WHERE stream = 'gauage_resources'
+) AS internal
+ORDER BY 1, 2 DESC;"
