@@ -1,4 +1,3 @@
-import io
 import json
 import os
 from pathlib import Path
@@ -18,8 +17,9 @@ from sidekick.utils import save_query, setup_dir
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
 env_settings = toml.load(f"{base_path}/sidekick/configs/.env.toml")
+db_dialect = env_settings["DB-DIALECT"]["DB_TYPE"]
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
-__version__ = "0.0.1"
+__version__ = "0.0.3"
 
 
 def color(fore="", back="", text=None):
@@ -62,6 +62,30 @@ def set_loglevel(set_level):
     f.close()
 
 
+def _get_table_info(cache_path: str):
+    # Search for the file in the default current path, if not present ask user to enter the path
+    if Path(f"{cache_path}/table_info.jsonl").exists():
+        table_info_path = f"{cache_path}/table_info.jsonl"
+    else:
+        # Check in table cache before requesting
+        if Path(f"{cache_path}/table_context.json").exists():
+            f = open(f"{cache_path}/table_context.json", "r")
+            table_metadata = json.load(f)
+            if "schema_info_path" in table_metadata:
+                table_info_path = table_metadata["schema_info_path"]
+            else:
+                table_info_path = click.prompt("Enter table info path")
+                table_metadata["schema_info_path"] = table_info_path
+                with open(f"{cache_path}/table_context.json", "a") as outfile:
+                    json.dump(table_metadata, outfile, indent=4, sort_keys=False)
+        else:
+            table_info_path = click.prompt("Enter table info path")
+            table_metadata = {"schema_info_path": table_info_path}
+            with open(f"{cache_path}/table_context.json", "a") as outfile:
+                json.dump(table_metadata, outfile, indent=4, sort_keys=False)
+    return table_info_path
+
+
 @configure.command("db-setup", help="Enter information to configure postgres database locally")
 @click.option("--db_name", "-n", default="querydb", help="Database name", prompt="Enter Database name")
 @click.option("--hostname", "-h", default="localhost", help="Database hostname", prompt="Enter hostname name")
@@ -75,7 +99,8 @@ def set_loglevel(set_level):
     prompt="Enter password",
 )
 @click.option("--port", "-P", default=5432, help="Database port", prompt="Enter port (default 5432)")
-def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: int):
+@click.option("--table-info-path", "-t", help="Table info path", default=None)
+def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: int, table_info_path: str):
     """Creates context for the new Database"""
     click.echo(f" Information supplied:\n {db_name}, {hostname}, {user_name}, {password}, {port}")
     try:
@@ -88,9 +113,9 @@ def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: i
         f = open(f"{base_path}/sidekick/configs/.env.toml", "w")
         toml.dump(env_settings, f)
         f.close()
-
+        path = f"{base_path}/var/lib/tmp/data"
         # For current session
-        db_obj = DBConfig(db_name, hostname, user_name, password, port)
+        db_obj = DBConfig(db_name, hostname, user_name, password, port, base_path=base_path)
         if not db_obj.db_exists():
             db_obj.create_db()
             click.echo("Database created successfully!")
@@ -110,7 +135,11 @@ def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: i
             click.echo(f"Table name: {table_value}")
             # set table name
             db_obj.table_name = table_value.replace(" ", "_")
-            db_obj.create_table()
+
+            if table_info_path is None:
+                table_info_path = _get_table_info(path)
+
+            db_obj.create_table(table_info_path)
 
         # Check if table exists; pending --> and doesn't have any rows
         if db_obj.has_table():
@@ -188,7 +217,9 @@ def update_context():
 
 @cli.command()
 @click.option("--question", "-q", help="Database name", prompt="Ask a question")
-def query(question: str):
+@click.option("--table-info-path", "-t", help="Table info path", default=None)
+@click.option("--sample-queries", "-s", help="Samples path", default=None)
+def query(question: str, table_info_path: str, sample_queries: str):
     """Asks question and returns SQL."""
     # Book-keeping
     setup_dir(base_path)
@@ -198,9 +229,9 @@ def query(question: str):
     table_context_file = f"{path}/table_context.json"
     table_context = json.load(open(table_context_file, "r")) if Path(table_context_file).exists() else {}
     table_names = []
-    if table_context:
-        table_name = table_context.get("tables_in_use", None)
-        table_names = [_t.replace(" ", "_") for _t in table_name]
+    if table_context and "tables_in_use" in table_context:
+        _tables = table_context["tables_in_use"]
+        table_names = [_t.replace(" ", "_") for _t in _tables]
     else:
         # Ask for table name only when more than one table exists.
         table_names = [click.prompt("Which table to use?")]
@@ -235,11 +266,16 @@ def query(question: str):
     passwd = env_settings["LOCAL_DB_CONFIG"]["PASSWORD"]
     db_name = env_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
 
-    db_url = f"postgresql+psycopg2://{user_name}:{passwd}@{host_name}/{db_name}".format(
+    db_url = f"{db_dialect}+psycopg2://{user_name}:{passwd}@{host_name}/{db_name}".format(
         user_name, passwd, host_name, db_name
     )
 
-    sql_g = SQLGenerator(db_url, api_key, path=base_path)
+    if table_info_path is None:
+        table_info_path = _get_table_info(path)
+
+    sql_g = SQLGenerator(
+        db_url, api_key, job_path=base_path, data_input_path=table_info_path, samples_queries=sample_queries
+    )
     sql_g._tasks = sql_g.generate_tasks(table_names, question)
     click.echo(sql_g._tasks)
 
@@ -254,6 +290,7 @@ def query(question: str):
     if updated_tasks is not None:
         sql_g._tasks = updated_tasks
     res = sql_g.generate_sql(table_names, question)
+    logger.info(f"Input query: {question}")
     logger.info(f"Generated response:\n\n{res}")
 
     if res is not None:
@@ -270,6 +307,8 @@ def query(question: str):
             elif res_val.lower() == "r" or res_val.lower() == "regenerate":
                 click.echo("Attempting to regenerate...")
                 res = sql_g.generate_sql(table_names, question)
+                logger.info(f"Input query: {question}")
+                logger.info(f"Generated response:\n\n{res}")
 
         save_sql = click.prompt("Would you like to save the generated SQL (y/n)?")
         if save_sql.lower() == "y" or save_sql.lower() == "yes":
