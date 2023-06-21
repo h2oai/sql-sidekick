@@ -41,15 +41,15 @@ def filter_samples(input_q: str, probable_qs: list, model_path: str, threshold: 
     logger.debug(f"Input questions: {_inq}")
     question_embeddings = generate_sentence_embeddings(model_path, x=[_inq], device="cpu")
 
-    input_xs = [_se.split("# answer")[0].strip().lower() for _se in probable_qs]
-    logger.debug(f"Probable questions: {input_xs}")
-    embeddings = generate_sentence_embeddings(model_path, x=input_xs, device="cpu")
+    input_pqs = [_se.split("# answer")[0].strip().lower() for _se in probable_qs]
+    logger.debug(f"Probable questions: {input_pqs}")
+    embeddings = generate_sentence_embeddings(model_path, x=input_pqs, device="cpu")
     res = []
     for idx, _se in enumerate(embeddings):
         similarities_score = cosine_similarity(
             [_se.astype(float).tolist()], [question_embeddings.astype(float).tolist()[0]]
         )
-        logger.debug(f"Similarity score for: {input_xs[idx]}: {similarities_score[0][0]}")
+        logger.debug(f"Similarity score for: {input_pqs[idx]}: {similarities_score[0][0]}")
         if similarities_score[0][0] > threshold:
             res.append(probable_qs[idx])
     return res
@@ -57,16 +57,19 @@ def filter_samples(input_q: str, probable_qs: list, model_path: str, threshold: 
 
 def remove_duplicates(input_x: list, model_path: str, threshold: float = 0.89):
     # Remove duplicates pairs
-    embeddings = generate_sentence_embeddings(model_path, x=input_x, device="cpu")
-    similarity_scores = cosine_similarity(embeddings)
-    similar_indices = [(x, y) for (x, y) in np.argwhere(similarity_scores > threshold) if x != y]
+    if input_x is None or len(input_x) < 2:
+        res = []
+    else:
+        embeddings = generate_sentence_embeddings(model_path, x=input_x, device="cpu")
+        similarity_scores = cosine_similarity(embeddings)
+        similar_indices = [(x, y) for (x, y) in np.argwhere(similarity_scores > threshold) if x != y]
 
-    # Remove identical pairs e.g. [(0, 3), (3, 0)] -> [(0, 3)]
-    si = [similarity_scores[tpl] for tpl in similar_indices]
-    dup_pairs_idx = np.where(pd.Series(si).duplicated())[0].tolist()
-    remove_vals = [similar_indices[_itm] for _itm in dup_pairs_idx]
-    [similar_indices.remove(_itm) for _itm in remove_vals]
-    res = list(set([item[0] for item in similar_indices]))
+        # Remove identical pairs e.g. [(0, 3), (3, 0)] -> [(0, 3)]
+        si = [similarity_scores[tpl] for tpl in similar_indices]
+        dup_pairs_idx = np.where(pd.Series(si).duplicated())[0].tolist()
+        remove_vals = [similar_indices[_itm] for _itm in dup_pairs_idx]
+        [similar_indices.remove(_itm) for _itm in remove_vals]
+        res = list(set([item[0] for item in similar_indices]))
     return res
 
 
@@ -101,5 +104,5 @@ def csv_parser(input_path: str):
     # "# query": ""
     # "# answer": ""
     # ]
-    res = df.apply(lambda row: f"# query: {row['query']}\n# answer: {row['answer']}",axis=1).to_list()
+    res = df.apply(lambda row: f"# query: {row['query']}\n# answer: {row['answer']}", axis=1).to_list()
     return res
