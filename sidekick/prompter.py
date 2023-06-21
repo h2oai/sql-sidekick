@@ -86,6 +86,24 @@ def _get_table_info(cache_path: str):
     return table_info_path
 
 
+def update_table_info(cache_path: str, table_info_path: str = None, table_name: str = None):
+    if Path(f"{cache_path}/table_context.json").exists():
+        f = open(f"{cache_path}/table_context.json", "r")
+        table_metadata = json.load(f)
+        if table_name:
+            table_metadata["tables_in_use"] = [table_name]
+        if table_info_path:
+            table_metadata["schema_info_path"] = table_info_path
+    else:
+        if table_name:
+            table_metadata = {"tables_in_use": [table_name]}
+        if table_info_path:
+            table_metadata = {"schema_info_path": table_info_path}
+
+    with open(f"{cache_path}/table_context.json", "w") as outfile:
+        json.dump(table_metadata, outfile, indent=4, sort_keys=False)
+
+
 @configure.command("db-setup", help="Enter information to configure postgres database locally")
 @click.option("--db_name", "-n", default="querydb", help="Database name", prompt="Enter Database name")
 @click.option("--hostname", "-h", default="localhost", help="Database hostname", prompt="Enter hostname name")
@@ -130,17 +148,17 @@ def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: i
             else:
                 break
 
+        if table_info_path is None:
+            table_info_path = _get_table_info(path)
+
         if val.lower() == "y" or val.lower() == "yes":
             table_value = input("Enter table name: ")
             click.echo(f"Table name: {table_value}")
             # set table name
             db_obj.table_name = table_value.replace(" ", "_")
-
-            if table_info_path is None:
-                table_info_path = _get_table_info(path)
-
             db_obj.create_table(table_info_path)
 
+        update_table_info(path, table_info_path, db_obj.table_name)
         # Check if table exists; pending --> and doesn't have any rows
         if db_obj.has_table():
             click.echo(f"Checked table {db_obj.table_name} exists in the DB.")

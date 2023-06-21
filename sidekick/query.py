@@ -8,9 +8,11 @@ import openai
 import sqlglot
 import toml
 from langchain import OpenAI
-from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
+from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
+                         LLMPredictor, ServiceContext, SQLDatabase)
 from llama_index.indices.struct_store import SQLContextContainerBuilder
-from sidekick.configs.prompt_template import DEBUGGING_PROMPT, QUERY_PROMPT, TASK_PROMPT
+from sidekick.configs.prompt_template import (DEBUGGING_PROMPT, QUERY_PROMPT,
+                                              TASK_PROMPT)
 from sidekick.logger import logger
 from sidekick.utils import csv_parser, filter_samples, remove_duplicates
 from sqlalchemy import create_engine
@@ -171,6 +173,7 @@ class SQLGenerator:
             filtered_context = (
                 filter_samples(input_question, updated_context, m_path) if len(updated_context) > 1 else updated_context
             )
+            logger.info(f"Number of possible contextual queries to question: {len(filtered_context)}")
             _queries = "\n".join(filtered_context)
             self.content_queries = _queries
 
