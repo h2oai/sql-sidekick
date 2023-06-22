@@ -28,9 +28,9 @@ Welcome to the SQL Sidekick! I am an AI assistant that helps you with SQL
 queries. I can help you with the following:
 
   1. Configure a local database(for schema validation and syntax checking):
-  `sql-sidekick configure db-setup -t "<local_dir_path_to_>/table_info.jsonl`
+  `sql-sidekick configure db-setup -t "<local_dir_path_to_>/table_info.jsonl"` (e.g., format --> https://github.com/h2oai/sql-sidekick/blob/main/examples/telemetry/table_info.jsonl)
 
-  2. Ask a question: `sql-sidekick query -q "avg Gpus" -s "<local_dir_path_to_>/samples.csv"
+  2. Ask a question: `sql-sidekick query -q "avg Gpus" -s "<local_dir_path_to_>/samples.csv"` (e.g., format --> https://github.com/h2oai/sql-sidekick/blob/main/examples/telemetry/samples.csv)
 
   3. Learn contextual query/answer pairs: `sql-sidekick learn add-samples` (optional)
 
