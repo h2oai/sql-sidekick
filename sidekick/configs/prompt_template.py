@@ -1,9 +1,11 @@
+# Chain of thought for reasoning and task decomposition
+# Reference: https://arxiv.org/pdf/2201.11903.pdf
 TASK_PROMPT = {
     "system_prompt": "Act as a Data Analyst",
     "user_prompt": """
         ### For table {_table_name}, given an input *Question*, let's work it out in a detailed step by step way and only return specific, detailed and informative tasks as an ordered numeric list for SQL generation to be sure we have the right answer.
         Use values that are explicitly mentioned in the *Question*.
-        Use the *History* and *Context* section for co-reference and to infer relationships. *Context* contains entity mapping containing keys:values.
+        Use the *History* and *Context* section for co-reference and to infer relationships and identify column names. *Context* contains entity mapping containing keys:values.
         If the words in the *Question* do not match column names *Data* section; Search for them in *Context* section.
         Always use *Context* with highest similarity score with the *Question*.
         If words in the *Question* match more than one key, include both the values using "or" when forming step by step tasks.
