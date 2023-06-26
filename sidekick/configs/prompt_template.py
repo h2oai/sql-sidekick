@@ -52,7 +52,7 @@ QUERY_PROMPT = """
 DEBUGGING_PROMPT = {
     "system_prompt": "Act as a SQL expert for PostgreSQL code",
     "user_prompt": """
-                ### Fix syntax errors for provided SQL Query.
+                ### Fix syntax errors for provided incorrect SQL Query.
                 # Add ``` as prefix and ``` as suffix to generated SQL
                 # Error: {ex_traceback}
                 # Add explanation and reasoning for each SQL query

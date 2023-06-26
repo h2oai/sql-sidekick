@@ -138,7 +138,7 @@ class SQLGenerator:
                 try:
                     # Attempt to heal with simple feedback
                     # Reference: Teaching Large Language Models to Self-Debug, https://arxiv.org/abs/2304.05128
-                    logger.info(f"Attempting to heal ...,\n {se}")
+                    logger.info(f"Attempting to fix syntax error ...,\n {se}")
                     system_prompt = DEBUGGING_PROMPT["system_prompt"]
                     user_prompt = DEBUGGING_PROMPT["user_prompt"].format(ex_traceback=ex_traceback, qry_txt=qry_txt)
                     # Role and content
@@ -193,7 +193,7 @@ class SQLGenerator:
         except Exception as se:
             raise se
 
-    def generate_sql(self, table_name: list, input_question: str, _dialect: str = "postgres"):
+    def generate_sql(self, table_name: list, input_question: str, _dialect: str = "postgres", model_name: str = 'gpt-3.5-turbo-0301'):
         _tasks = self.task_formatter(self._tasks)
         context_file = f"{self.path}/var/lib/tmp/data/context.json"
         additional_context = json.load(open(context_file, "r")) if Path(context_file).exists() else {}
@@ -217,7 +217,7 @@ class SQLGenerator:
         context_container = self.context_builder.build_context_container()
 
         # Reference: https://github.com/jerryjliu/llama_index/issues/987
-        llm_predictor_gpt3 = LLMPredictor(llm=OpenAI(temperature=0.7, model_name="text-davinci-003"))
+        llm_predictor_gpt3 = LLMPredictor(llm=OpenAI(temperature=0.5, model_name=model_name))
         service_context_gpt3 = ServiceContext.from_defaults(llm_predictor=llm_predictor_gpt3, chunk_size_limit=512)
 
         index = GPTSQLStructStoreIndex(

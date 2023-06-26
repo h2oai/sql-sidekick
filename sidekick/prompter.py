@@ -26,7 +26,7 @@ def color(fore="", back="", text=None):
     return f"{fore}{back}{text}{Style.RESET_ALL}"
 
 
-msg = """Welcome to the SQL Sidekick!\nI am AI assistant that helps you with SQL queries.
+msg = """Welcome to the SQL Sidekick!\nI am an AI assistant that helps you with SQL queries.
 I can help you with the following:\n
 1. Configure a local database(for schema validation and syntax checking): `sql-sidekick configure db-setup`.\n
 2. Learn contextual query/answer pairs: `sql-sidekick learn add-samples`.\n
@@ -307,7 +307,9 @@ def query(question: str, table_info_path: str, sample_queries: str):
             click.echo("Skipping edit...")
     if updated_tasks is not None:
         sql_g._tasks = updated_tasks
-    res = sql_g.generate_sql(table_names, question)
+
+    model_name = env_settings["OPENAI"]["MODEL_NAME"]
+    res = sql_g.generate_sql(table_names, question, model_name=model_name)
     logger.info(f"Input query: {question}")
     logger.info(f"Generated response:\n\n{res}")
 
@@ -324,7 +326,7 @@ def query(question: str, table_info_path: str, sample_queries: str):
                 click.echo(f"Updated SQL:\n {updated_sql}")
             elif res_val.lower() == "r" or res_val.lower() == "regenerate":
                 click.echo("Attempting to regenerate...")
-                res = sql_g.generate_sql(table_names, question)
+                res = sql_g.generate_sql(table_names, question, model_name=model_name)
                 logger.info(f"Input query: {question}")
                 logger.info(f"Generated response:\n\n{res}")
 
