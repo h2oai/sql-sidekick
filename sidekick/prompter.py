@@ -162,9 +162,10 @@ def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: i
         # Check if table exists; pending --> and doesn't have any rows
         if db_obj.has_table():
             click.echo(f"Checked table {db_obj.table_name} exists in the DB.")
-            val = input(color(F.GREEN, "", "Would you like to add few sample rows (at-least 3)? (y/n): "))
-            if val.lower() == "y":
-                db_obj.add_samples()
+            val = input(color(F.GREEN, "", "Would you like to add few sample rows (at-least 3)? (y/n):"))
+            if val.lower().strip() == "y" or val.lower().strip() == "yes":
+                val = input("Path to a CSV file to insert data from:")
+                db_obj.add_samples(val)
             else:
                 click.echo("Exiting...")
                 return
@@ -336,6 +337,17 @@ def query(question: str, table_info_path: str, sample_queries: str):
             _val = updated_sql if updated_sql else res
             save_query(base_path, query=question, response=_val)
 
+        exe_sql = click.prompt("Would you like to execute the generated SQL (y/n)?")
+        if exe_sql.lower() == "y" or exe_sql.lower() == "yes":
+            _val = updated_sql if updated_sql else res
+            hostname = env_settings["LOCAL_DB_CONFIG"]["HOST_NAME"]
+            user_name = env_settings["LOCAL_DB_CONFIG"]["USER_NAME"]
+            password = env_settings["LOCAL_DB_CONFIG"]["PASSWORD"]
+            port = env_settings["LOCAL_DB_CONFIG"]["PORT"]
+            db_name = env_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
+
+            db_obj = DBConfig(db_name, hostname, user_name, password, port, base_path=base_path)
+            db_obj.execute_query(query=_val)
 
 if __name__ == "__main__":
     cli()
