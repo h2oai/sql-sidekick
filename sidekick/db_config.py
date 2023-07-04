@@ -6,6 +6,7 @@ import pandas as pd
 import psycopg2 as pg
 import sqlalchemy
 from psycopg2.extras import Json
+from pandasql import sqldf
 from sidekick.logger import logger
 from sqlalchemy import create_engine
 from sqlalchemy_utils import database_exists
@@ -128,7 +129,7 @@ class DBConfig:
         )
         return sqlalchemy.inspect(engine).has_table(self.table_name)
 
-    def add_samples(self, data_csv_path):
+    def add_samples(self, data_csv_path=None):
         conn_str = f"{self.dialect}://{self.user_name}:{self.password}@{self.hostname}:{self.port}/{self.db_name}"
         try:
             df = pd.read_csv(data_csv_path, infer_datetime_format=True)
@@ -152,7 +153,7 @@ class DBConfig:
         finally:
             engine.dispose()
 
-    def execute_query(self, query=None, n_rows=5):
+    def execute_query_db(self, query=None, n_rows=100):
         try:
             if query:
                 # Create an engine
@@ -184,6 +185,5 @@ class DBConfig:
         except Exception as e:
             logger.info(f"Error occurred : {format(e)}")
         finally:
+            connection.close()
             engine.dispose()
-
-

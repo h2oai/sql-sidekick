@@ -12,7 +12,7 @@ from loguru import logger
 from sidekick.db_config import DBConfig
 from sidekick.memory import EntityMemory
 from sidekick.query import SQLGenerator
-from sidekick.utils import save_query, setup_dir
+from sidekick.utils import save_query, setup_dir, extract_table_names, execute_query_pd
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
@@ -49,6 +49,10 @@ def configure():
 
 def enter_table_name():
     val = input(color(F.GREEN, "", "Would you like to create a table for the database? (y/n): "))
+    return val
+
+def enter_file_path(table: str):
+    val = input(color(F.GREEN, "", f"Please input the CSV file path to table: {table} : "))
     return val
 
 
@@ -163,6 +167,7 @@ def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: i
         if db_obj.has_table():
             click.echo(f"Checked table {db_obj.table_name} exists in the DB.")
             val = input(color(F.GREEN, "", "Would you like to add few sample rows (at-least 3)? (y/n):"))
+
             if val.lower().strip() == "y" or val.lower().strip() == "yes":
                 val = input("Path to a CSV file to insert data from:")
                 db_obj.add_samples(val)
@@ -339,15 +344,42 @@ def query(question: str, table_info_path: str, sample_queries: str):
 
         exe_sql = click.prompt("Would you like to execute the generated SQL (y/n)?")
         if exe_sql.lower() == "y" or exe_sql.lower() == "yes":
+            # For the time being, the default option is Pandas, but the user can be asked to select Database or Panadas DF later.
+            option = "pandas" # or DB
             _val = updated_sql if updated_sql else res
-            hostname = env_settings["LOCAL_DB_CONFIG"]["HOST_NAME"]
-            user_name = env_settings["LOCAL_DB_CONFIG"]["USER_NAME"]
-            password = env_settings["LOCAL_DB_CONFIG"]["PASSWORD"]
-            port = env_settings["LOCAL_DB_CONFIG"]["PORT"]
-            db_name = env_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
+            if option == "DB":
 
-            db_obj = DBConfig(db_name, hostname, user_name, password, port, base_path=base_path)
-            db_obj.execute_query(query=_val)
+                hostname = env_settings["LOCAL_DB_CONFIG"]["HOST_NAME"]
+                user_name = env_settings["LOCAL_DB_CONFIG"]["USER_NAME"]
+                password = env_settings["LOCAL_DB_CONFIG"]["PASSWORD"]
+                port = env_settings["LOCAL_DB_CONFIG"]["PORT"]
+                db_name = env_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
+
+                db_obj = DBConfig(db_name, hostname, user_name, password, port, base_path=base_path)
+                db_obj.execute_query(query=_val)
+            elif option == "pandas":
+                tables = extract_table_names(_val)
+                tables_path = dict()
+                for table in tables:
+                    while True:
+                        val = enter_file_path(table)
+                        if not os.path.isfile(val):
+                            click.echo("In-correct Path. Please enter again! Yes(y) or no(n)")
+                        else:
+                            tables_path[table] = val
+                            break
+
+                assert len(tables) == len(tables_path)
+
+                res = execute_query_pd(query=_val, tables_path=tables_path, n_rows=100)
+
+                logger.info("The query results are:")
+                logger.info(res)
+
+            else:
+                click.echo("Exiting...")
+
+
 
 if __name__ == "__main__":
     cli()
