@@ -1,10 +1,12 @@
 # create db with supplied info
 import json
 from pathlib import Path
+import pandas as pd
 
 import psycopg2 as pg
 import sqlalchemy
 from psycopg2.extras import Json
+from pandasql import sqldf
 from sidekick.logger import logger
 from sqlalchemy import create_engine
 from sqlalchemy_utils import database_exists
@@ -127,16 +129,61 @@ class DBConfig:
         )
         return sqlalchemy.inspect(engine).has_table(self.table_name)
 
-    def add_samples(self):
-        # Non-functional for now.
-        conn = pg.connect(
-            database=self.db_name, user=self.user_name, password=self.password, host=self.hostname, port=self.port
-        )
-        # Creating a cursor object using the cursor() method
-        conn.autocommit = True
-        cursor = conn.cursor()
+    def add_samples(self, data_csv_path=None):
+        conn_str = f"{self.dialect}://{self.user_name}:{self.password}@{self.hostname}:{self.port}/{self.db_name}"
+        try:
+            df = pd.read_csv(data_csv_path, infer_datetime_format=True)
+            engine = create_engine(conn_str, isolation_level='AUTOCOMMIT')
 
-        cursor.execute()
+            sample_query = f'SELECT COUNT(*) AS ROWS FROM {self.table_name} LIMIT 1'
+            num_rows_bef = pd.read_sql_query(sample_query, engine)
 
-        # Commit your changes in the database
-        conn.commit()
+            # Write rows to database
+            res = df.to_sql(self.table_name, engine, if_exists='append', index=False)
+
+            # Fetch the number of rows from the table
+            num_rows_aft = pd.read_sql_query(sample_query, engine)
+
+            logger.info(f"Number of rows inserted: {num_rows_aft.iloc[0, 0] - num_rows_bef.iloc[0, 0]}")
+
+            engine.dispose()
+
+        except Exception as e:
+            logger.info(f"Error occurred : {format(e)}")
+        finally:
+            engine.dispose()
+
+    def execute_query_db(self, query=None, n_rows=100):
+        try:
+            if query:
+                # Create an engine
+                conn_str = f"{self.dialect}://{self.user_name}:{self.password}@{self.hostname}:{self.port}/{self.db_name}"
+                engine = create_engine(conn_str)
+
+                # Create a connection
+                connection = engine.connect()
+
+                result = connection.execute(query)
+
+                # Process the query results
+                cnt = 0
+                logger.info("Here are the results from the queries: ")
+                for row in result:
+                    if cnt <= n_rows:
+                        # Access row data using row[column_name]
+                        logger.info(row)
+                        cnt += 1
+                    else:
+                        break
+                # Close the connection
+                connection.close()
+
+                # Close the engine
+                engine.dispose()
+            else:
+                logger.info("Query Empty or None!")
+        except Exception as e:
+            logger.info(f"Error occurred : {format(e)}")
+        finally:
+            connection.close()
+            engine.dispose()
