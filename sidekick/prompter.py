@@ -339,12 +339,6 @@ def query(question: str, table_info_path: str, sample_queries: str):
                 logger.info(f"Input query: {question}")
                 logger.info(f"Generated response:\n\n{res}")
 
-        save_sql = click.prompt("Would you like to save the generated SQL (y/n)?")
-        if save_sql.lower() == "y" or save_sql.lower() == "yes":
-            # Persist for future use
-            _val = updated_sql if updated_sql else res
-            save_query(base_path, query=question, response=_val)
-
         exe_sql = click.prompt("Would you like to execute the generated SQL (y/n)?")
         if exe_sql.lower() == "y" or exe_sql.lower() == "yes":
             # For the time being, the default option is Pandas, but the user can be asked to select Database or pandas DF later.
@@ -358,8 +352,8 @@ def query(question: str, table_info_path: str, sample_queries: str):
                 db_name = env_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
 
                 db_obj = DBConfig(db_name, hostname, user_name, password, port, base_path=base_path)
-                res = db_obj.execute_query_db(query=_val)
-                click.echo(f"The query results are:\n {res}")
+                output_res = db_obj.execute_query_db(query=_val)
+                click.echo(f"The query results are:\n {output_res}")
             elif option == "pandas":
                 tables = extract_table_names(_val)
                 tables_path = dict()
@@ -388,8 +382,14 @@ def query(question: str, table_info_path: str, sample_queries: str):
                     logger.error(f"Error in executing the query: {e}")
                     click.echo("Error in executing the query. Validate generate SQL and try again.")
                     click.echo("No result to display.")
-            else:
-                click.echo("Exiting...")
+
+        save_sql = click.prompt("Would you like to save the generated SQL (y/n)?")
+        if save_sql.lower() == "y" or save_sql.lower() == "yes":
+            # Persist for future use
+            _val = updated_sql if updated_sql else res
+            save_query(base_path, query=question, response=_val)
+        else:
+            click.echo("Exiting...")
 
 
 if __name__ == "__main__":
