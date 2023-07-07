@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sql-sidekick"
-version = "0.0.3"
+version = "0.0.4"
 license = "Proprietary"
 description = "An AI assistant for SQL"
 authors = [
@@ -36,6 +36,8 @@ transformers = "^4.29.0"
 sentence-transformers = "^2.2.2"
 torch = "^2.0.1"
 sqlalchemy-utils = "^0.41.1"
+h2o-wave = "0.26.1"
+pandasql = "0.7.3"
 
 [tool.poetry.scripts]
 sql-sidekick = "sidekick.prompter:cli"

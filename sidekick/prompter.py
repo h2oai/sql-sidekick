@@ -9,17 +9,19 @@ from colorama import Back as B
 from colorama import Fore as F
 from colorama import Style
 from loguru import logger
+from pandasql import sqldf
 from sidekick.db_config import DBConfig
 from sidekick.memory import EntityMemory
 from sidekick.query import SQLGenerator
-from sidekick.utils import save_query, setup_dir, extract_table_names, execute_query_pd
+from sidekick.utils import (execute_query_pd, extract_table_names, save_query,
+                            setup_dir)
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
 env_settings = toml.load(f"{base_path}/sidekick/configs/.env.toml")
 db_dialect = env_settings["DB-DIALECT"]["DB_TYPE"]
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 
 
 def color(fore="", back="", text=None):
@@ -51,8 +53,9 @@ def enter_table_name():
     val = input(color(F.GREEN, "", "Would you like to create a table for the database? (y/n): "))
     return val
 
+
 def enter_file_path(table: str):
-    val = input(color(F.GREEN, "", f"Please input the CSV file path to table: {table} : "))
+    val = input(color(F.GREEN, "", f"Please input the CSV file path to table {table} : "))
     return val
 
 
@@ -80,12 +83,12 @@ def _get_table_info(cache_path: str):
             else:
                 table_info_path = click.prompt("Enter table info path")
                 table_metadata["schema_info_path"] = table_info_path
-                with open(f"{cache_path}/table_context.json", "a") as outfile:
+                with open(f"{cache_path}/table_context.json", "w") as outfile:
                     json.dump(table_metadata, outfile, indent=4, sort_keys=False)
         else:
             table_info_path = click.prompt("Enter table info path")
             table_metadata = {"schema_info_path": table_info_path}
-            with open(f"{cache_path}/table_context.json", "a") as outfile:
+            with open(f"{cache_path}/table_context.json", "w") as outfile:
                 json.dump(table_metadata, outfile, indent=4, sort_keys=False)
     return table_info_path
 
@@ -104,6 +107,7 @@ def update_table_info(cache_path: str, table_info_path: str = None, table_name: 
         if table_info_path:
             table_metadata = {"schema_info_path": table_info_path}
 
+    table_metadata["data_table_map"] = {}
     with open(f"{cache_path}/table_context.json", "w") as outfile:
         json.dump(table_metadata, outfile, indent=4, sort_keys=False)
 
@@ -335,16 +339,10 @@ def query(question: str, table_info_path: str, sample_queries: str):
                 logger.info(f"Input query: {question}")
                 logger.info(f"Generated response:\n\n{res}")
 
-        save_sql = click.prompt("Would you like to save the generated SQL (y/n)?")
-        if save_sql.lower() == "y" or save_sql.lower() == "yes":
-            # Persist for future use
-            _val = updated_sql if updated_sql else res
-            save_query(base_path, query=question, response=_val)
-
         exe_sql = click.prompt("Would you like to execute the generated SQL (y/n)?")
         if exe_sql.lower() == "y" or exe_sql.lower() == "yes":
-            # For the time being, the default option is Pandas, but the user can be asked to select Database or Panadas DF later.
-            option = "pandas" # or DB
+            # For the time being, the default option is Pandas, but the user can be asked to select Database or pandas DF later.
+            option = "DB"  # or DB
             _val = updated_sql if updated_sql else res
             if option == "DB":
                 hostname = env_settings["LOCAL_DB_CONFIG"]["HOST_NAME"]
@@ -354,30 +352,44 @@ def query(question: str, table_info_path: str, sample_queries: str):
                 db_name = env_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
 
                 db_obj = DBConfig(db_name, hostname, user_name, password, port, base_path=base_path)
-                db_obj.execute_query(query=_val)
+                output_res = db_obj.execute_query_db(query=_val)
+                click.echo(f"The query results are:\n {output_res}")
             elif option == "pandas":
                 tables = extract_table_names(_val)
                 tables_path = dict()
-                for table in tables:
-                    while True:
-                        val = enter_file_path(table)
-                        if not os.path.isfile(val):
-                            click.echo("In-correct Path. Please enter again! Yes(y) or no(n)")
-                            # val = enter_file_path(table)
+                if Path(f"{path}/table_context.json").exists():
+                    f = open(f"{path}/table_context.json", "r")
+                    table_metadata = json.load(f)
+                    for table in tables:
+                        # Check if the local table_path exists in the cache
+                        if table not in table_metadata["data_table_map"].keys():
+                            val = enter_file_path(table)
+                            if not os.path.isfile(val):
+                                click.echo("In-correct Path. Please enter again! Yes(y) or no(n)")
+                            else:
+                                tables_path[table] = val
+                                table_metadata["data_table_map"][table] = val
+                                break
                         else:
-                            tables_path[table] = val
-                            break
+                            tables_path[table] = table_metadata["data_table_map"][table]
+                    assert len(tables) == len(tables_path)
+                    with open(f"{path}/table_context.json", "w") as outfile:
+                        json.dump(table_metadata, outfile, indent=4, sort_keys=False)
+                try:
+                    res = execute_query_pd(query=_val, tables_path=tables_path, n_rows=100)
+                    click.echo(f"The query results are:\n {res}")
+                except sqldf.PandaSQLException as e:
+                    logger.error(f"Error in executing the query: {e}")
+                    click.echo("Error in executing the query. Validate generate SQL and try again.")
+                    click.echo("No result to display.")
 
-                assert len(tables) == len(tables_path)
-
-                res = execute_query_pd(query=_val, tables_path=tables_path, n_rows=100)
-
-                logger.info("The query results are:")
-                logger.info(res)
-
-            else:
-                click.echo("Exiting...")
-
+        save_sql = click.prompt("Would you like to save the generated SQL (y/n)?")
+        if save_sql.lower() == "y" or save_sql.lower() == "yes":
+            # Persist for future use
+            _val = updated_sql if updated_sql else res
+            save_query(base_path, query=question, response=_val)
+        else:
+            click.echo("Exiting...")
 
 
 if __name__ == "__main__":

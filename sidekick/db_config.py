@@ -1,12 +1,12 @@
 # create db with supplied info
 import json
 from pathlib import Path
-import pandas as pd
 
+import pandas as pd
 import psycopg2 as pg
 import sqlalchemy
-from psycopg2.extras import Json
 from pandasql import sqldf
+from psycopg2.extras import Json
 from sidekick.logger import logger
 from sqlalchemy import create_engine
 from sqlalchemy_utils import database_exists
@@ -133,19 +133,17 @@ class DBConfig:
         conn_str = f"{self.dialect}://{self.user_name}:{self.password}@{self.hostname}:{self.port}/{self.db_name}"
         try:
             df = pd.read_csv(data_csv_path, infer_datetime_format=True)
-            engine = create_engine(conn_str, isolation_level='AUTOCOMMIT')
+            engine = create_engine(conn_str, isolation_level="AUTOCOMMIT")
 
-            sample_query = f'SELECT COUNT(*) AS ROWS FROM {self.table_name} LIMIT 1'
+            sample_query = f"SELECT COUNT(*) AS ROWS FROM {self.table_name} LIMIT 1"
             num_rows_bef = pd.read_sql_query(sample_query, engine)
 
             # Write rows to database
-            res = df.to_sql(self.table_name, engine, if_exists='append', index=False)
+            df.to_sql(self.table_name, engine, if_exists="append", index=False)
 
             # Fetch the number of rows from the table
             num_rows_aft = pd.read_sql_query(sample_query, engine)
-
             logger.info(f"Number of rows inserted: {num_rows_aft.iloc[0, 0] - num_rows_bef.iloc[0, 0]}")
-
             engine.dispose()
 
         except Exception as e:
@@ -154,24 +152,25 @@ class DBConfig:
             engine.dispose()
 
     def execute_query_db(self, query=None, n_rows=100):
+        output = []
         try:
             if query:
                 # Create an engine
-                conn_str = f"{self.dialect}://{self.user_name}:{self.password}@{self.hostname}:{self.port}/{self.db_name}"
+                conn_str = (
+                    f"{self.dialect}://{self.user_name}:{self.password}@{self.hostname}:{self.port}/{self.db_name}"
+                )
                 engine = create_engine(conn_str)
 
                 # Create a connection
                 connection = engine.connect()
-
                 result = connection.execute(query)
 
                 # Process the query results
                 cnt = 0
-                logger.info("Here are the results from the queries: ")
                 for row in result:
                     if cnt <= n_rows:
                         # Access row data using row[column_name]
-                        logger.info(row)
+                        output.append(row)
                         cnt += 1
                     else:
                         break
@@ -182,6 +181,7 @@ class DBConfig:
                 engine.dispose()
             else:
                 logger.info("Query Empty or None!")
+            return output
         except Exception as e:
             logger.info(f"Error occurred : {format(e)}")
         finally:
