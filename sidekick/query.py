@@ -8,11 +8,9 @@ import openai
 import sqlglot
 import toml
 from langchain import OpenAI
-from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
-                         LLMPredictor, ServiceContext, SQLDatabase)
+from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
 from llama_index.indices.struct_store import SQLContextContainerBuilder
-from sidekick.configs.prompt_template import (DEBUGGING_PROMPT, QUERY_PROMPT,
-                                              TASK_PROMPT)
+from sidekick.configs.prompt_template import DEBUGGING_PROMPT, QUERY_PROMPT, TASK_PROMPT
 from sidekick.logger import logger
 from sidekick.utils import csv_parser, filter_samples, remove_duplicates
 from sqlalchemy import create_engine
@@ -186,14 +184,16 @@ class SQLGenerator:
                         data = json.loads(line)
                         data_info += "\n" + json.dumps(data)
             self._data_info = data_info
-            task_list = self._query_tasks(input_question, data_info, _queries.lower(), table_names)
+            task_list = self._query_tasks(input_question, data_info, _queries, table_names)
             with open(f"{self.path}/var/lib/tmp/data/tasks.txt", "w") as f:
                 f.write(task_list)
             return task_list
         except Exception as se:
             raise se
 
-    def generate_sql(self, table_name: list, input_question: str, _dialect: str = "postgres", model_name: str = 'gpt-3.5-turbo-0301'):
+    def generate_sql(
+        self, table_name: list, input_question: str, _dialect: str = "postgres", model_name: str = "gpt-3.5-turbo-0301"
+    ):
         _tasks = self.task_formatter(self._tasks)
         context_file = f"{self.path}/var/lib/tmp/data/context.json"
         additional_context = json.load(open(context_file, "r")) if Path(context_file).exists() else {}
@@ -203,10 +203,10 @@ class SQLGenerator:
         query_str = QUERY_PROMPT.format(
             _dialect=_dialect,
             _data_info=self._data_info,
-            _question=input_question.lower(),
+            _question=input_question,
             _table_name=table_name,
             _sample_queries=context_queries,
-            _tasks=_tasks.lower(),
+            _tasks=_tasks,
         )
 
         table_context_dict = {str(table_name[0]).lower(): str(additional_context).lower()}
@@ -230,6 +230,8 @@ class SQLGenerator:
                 res = (
                     str(res).split("```", 1)[1].split(";", 1)[0].strip().replace("```", "").replace("sql\n", "").strip()
                 )
+            else:
+                res = str(res).split("Explanation:", 1)[0].strip()
             sqlglot.transpile(res)
         except (sqlglot.errors.ParseError, ValueError, RuntimeError) as e:
             logger.info("We did the best we could, there might be still be some error:\n")

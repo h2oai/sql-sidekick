@@ -1,12 +1,12 @@
 import json
 import os
+import re
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
 import pandas as pd
 from pandasql import sqldf
-import re
 from sentence_transformers import SentenceTransformer
 from sidekick.logger import logger
 from sklearn.metrics.pairwise import cosine_similarity
@@ -109,6 +109,7 @@ def csv_parser(input_path: str):
     res = df.apply(lambda row: f"# query: {row['query']}\n# answer: {row['answer']}", axis=1).to_list()
     return res
 
+
 def extract_table_names(query: str):
     """
     Extracts table names from a SQL query.
@@ -119,16 +120,16 @@ def extract_table_names(query: str):
     Returns:
         list: A list of table names.
     """
-    table_names = re.findall(r'\bFROM\s+(\w+)', query, re.IGNORECASE)
-    table_names += re.findall(r'\bJOIN\s+(\w+)', query, re.IGNORECASE)
-    table_names += re.findall(r'\bUPDATE\s+(\w+)', query, re.IGNORECASE)
-    table_names += re.findall(r'\bINTO\s+(\w+)', query, re.IGNORECASE)
+    table_names = re.findall(r"\bFROM\s+(\w+)", query, re.IGNORECASE)
+    table_names += re.findall(r"\bJOIN\s+(\w+)", query, re.IGNORECASE)
+    table_names += re.findall(r"\bUPDATE\s+(\w+)", query, re.IGNORECASE)
+    table_names += re.findall(r"\bINTO\s+(\w+)", query, re.IGNORECASE)
 
-    # Below keywords may not be relevant for the project but adding for sake for completness
-    table_names += re.findall(r'\bINSERT\s+INTO\s+(\w+)', query, re.IGNORECASE)
-    table_names += re.findall(r'\bDELETE\s+FROM\s+(\w+)', query, re.IGNORECASE)
+    # Below keywords may not be relevant for the project but adding for sake for completeness
+    table_names += re.findall(r"\bINSERT\s+INTO\s+(\w+)", query, re.IGNORECASE)
+    table_names += re.findall(r"\bDELETE\s+FROM\s+(\w+)", query, re.IGNORECASE)
+    return np.unique(table_names).tolist()
 
-    return table_names
 
 def execute_query_pd(query=None, tables_path=None, n_rows=100):
     """
@@ -142,8 +143,9 @@ def execute_query_pd(query=None, tables_path=None, n_rows=100):
         pandas DataFrame: The result of the SQL query.
     """
     for table in tables_path:
-          locals()[f"{table}"] = pd.read_csv(tables_path[table])
+        if not table in locals():
+            # Update the local namespace with the table name, pandas object
+            locals()[f"{table}"] = pd.read_csv(tables_path[table])
 
     res_df = sqldf(query, locals())
-
     return res_df
