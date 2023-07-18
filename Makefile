@@ -9,6 +9,7 @@ setup: download_models ## Setup
 	./.sidekickvenv/bin/python3 -m pip install --upgrade pip
 	./.sidekickvenv/bin/python3 -m pip install wheel
 	./.sidekickvenv/bin/python3 -m pip install -r requirements.txt
+	mkdir -p ./db/sqlite
 
 download_models:
 	mkdir -p ./models/sentence_transformers/sentence-transformers_all-MiniLM-L6-v2

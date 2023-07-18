@@ -23,7 +23,7 @@ class DBConfig:
         base_path,
         schema_info_path=None,
         schema_info=None,
-        dialect="postgresql",
+        dialect="sqlite",
     ) -> None:
         self.db_name = db_name
         self.hostname = hostname
@@ -36,7 +36,10 @@ class DBConfig:
         self._engine = None
         self.dialect = dialect
         self.base_path = base_path
-        self._url = f"{self.dialect}://{self.user_name}:{self.password}@{self.hostname}:{self.port}/"
+        if dialect == "sqlite":
+            self._url = f"sqlite:///{base_path}/db/sqlite/{db_name}.db"
+        else:
+            self._url = f"{self.dialect}://{self.user_name}:{self.password}@{self.hostname}:{self.port}/"
 
     @property
     def table_name(self):
@@ -51,7 +54,10 @@ class DBConfig:
         return self._engine
 
     def db_exists(self):
-        engine = create_engine(f"{self._url}{self.db_name}", echo=True)
+        if self.dialect == "sqlite":
+            engine = create_engine(f"{self._url}", echo=True)
+        else:
+            engine = create_engine(f"{self._url}{self.db_name}", echo=True)
         return database_exists(f"{engine.url}")
 
     def create_db(self):
@@ -59,10 +65,15 @@ class DBConfig:
         self._engine = engine
 
         with engine.connect() as conn:
-            conn.execute("commit")
+            # conn.execute("commit")
             # Do not substitute user-supplied database names here.
-            res = conn.execute(f"CREATE DATABASE {self.db_name}")
-        return res
+            if self.dialect != "sqlite":
+                conn.execute("commit")
+                res = conn.execute(f"CREATE DATABASE {self.db_name}")
+                self._url = f"{self._url}{self.db_name}"
+                return res
+            else:
+                logger.debug("SQLite DB is created when 'engine.connect()' is called")
 
     def _extract_schema_info(self, schema_info_path=None):
         # From jsonl format
@@ -91,7 +102,7 @@ class DBConfig:
 
     def create_table(self, schema_info_path=None, schema_info=None):
         engine = create_engine(
-            f"{self.dialect}://{self.user_name}:{self.password}@{self.hostname}:{self.port}/{self.db_name}"
+            self._url, isolation_level="AUTOCOMMIT"
         )
         self._engine = engine
         if self.schema_info is None:
@@ -119,20 +130,22 @@ class DBConfig:
                 )
                 """
         with engine.connect() as conn:
-            conn.execute("commit")
+            if self.dialect != "sqlite":
+                conn.execute("commit")
             conn.execute(create_syntax)
         return
 
     def has_table(self):
         engine = create_engine(
-            f"{self.dialect}://{self.user_name}:{self.password}@{self.hostname}:{self.port}/{self.db_name}"
+            self._url
         )
+
         return sqlalchemy.inspect(engine).has_table(self.table_name)
 
     def add_samples(self, data_csv_path=None):
-        conn_str = f"{self.dialect}://{self.user_name}:{self.password}@{self.hostname}:{self.port}/{self.db_name}"
+        conn_str = self._url
         try:
-            df = pd.read_csv(data_csv_path, infer_datetime_format=True)
+            df = pd.read_csv(data_csv_path)
             engine = create_engine(conn_str, isolation_level="AUTOCOMMIT")
 
             sample_query = f"SELECT COUNT(*) AS ROWS FROM {self.table_name} LIMIT 1"
@@ -153,12 +166,14 @@ class DBConfig:
 
     def execute_query_db(self, query=None, n_rows=100):
         output = []
+        if self.dialect != "sqlite":
+            conn_str = f"{self._url}{self.db_name}"
+        else:
+            conn_str = self._url
+
         try:
             if query:
                 # Create an engine
-                conn_str = (
-                    f"{self.dialect}://{self.user_name}:{self.password}@{self.hostname}:{self.port}/{self.db_name}"
-                )
                 engine = create_engine(conn_str)
 
                 # Create a connection

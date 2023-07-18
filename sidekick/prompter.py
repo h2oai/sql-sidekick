@@ -112,10 +112,10 @@ def update_table_info(cache_path: str, table_info_path: str = None, table_name: 
         json.dump(table_metadata, outfile, indent=4, sort_keys=False)
 
 
-@configure.command("db-setup", help="Enter information to configure postgres database locally")
+@configure.command("db-setup", help=f"Enter information to configure {db_dialect} database locally")
 @click.option("--db_name", "-n", default="querydb", help="Database name", prompt="Enter Database name")
 @click.option("--hostname", "-h", default="localhost", help="Database hostname", prompt="Enter hostname name")
-@click.option("--user_name", "-u", default="postgres", help="Database username", prompt="Enter username name")
+@click.option("--user_name", "-u", default=f"{db_dialect}", help="Database username", prompt="Enter username name")
 @click.option(
     "--password",
     "-p",
@@ -141,8 +141,11 @@ def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: i
         f.close()
         path = f"{base_path}/var/lib/tmp/data"
         # For current session
-        db_obj = DBConfig(db_name, hostname, user_name, password, port, base_path=base_path)
-        if not db_obj.db_exists():
+        db_obj = DBConfig(db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect)
+        if db_obj.dialect == 'sqlite' and not os.path.isfile(f"{base_path}/db/sqlite/{db_name}.db"):
+            db_obj.create_db()
+            click.echo("Database created successfully!")
+        elif not db_obj.db_exists():
             db_obj.create_db()
             click.echo("Database created successfully!")
         else:
@@ -293,9 +296,12 @@ def query(question: str, table_info_path: str, sample_queries: str):
     passwd = env_settings["LOCAL_DB_CONFIG"]["PASSWORD"]
     db_name = env_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
 
-    db_url = f"{db_dialect}+psycopg2://{user_name}:{passwd}@{host_name}/{db_name}".format(
-        user_name, passwd, host_name, db_name
-    )
+    if db_dialect == "sqlite":
+        db_url = f"sqlite:///{base_path}/db/sqlite/{db_name}.db"
+    else:
+        db_url = f"{db_dialect}+psycopg2://{user_name}:{passwd}@{host_name}/{db_name}".format(
+            user_name, passwd, host_name, db_name
+        )
 
     if table_info_path is None:
         table_info_path = _get_table_info(path)
@@ -318,7 +324,7 @@ def query(question: str, table_info_path: str, sample_queries: str):
         sql_g._tasks = updated_tasks
 
     model_name = env_settings["OPENAI"]["MODEL_NAME"]
-    res = sql_g.generate_sql(table_names, question, model_name=model_name)
+    res = sql_g.generate_sql(table_names, question, model_name=model_name, _dialect=db_dialect)
     logger.info(f"Input query: {question}")
     logger.info(f"Generated response:\n\n{res}")
 
@@ -335,7 +341,7 @@ def query(question: str, table_info_path: str, sample_queries: str):
                 click.echo(f"Updated SQL:\n {updated_sql}")
             elif res_val.lower() == "r" or res_val.lower() == "regenerate":
                 click.echo("Attempting to regenerate...")
-                res = sql_g.generate_sql(table_names, question, model_name=model_name)
+                res = sql_g.generate_sql(table_names, question, model_name=model_name, _dialect=db_dialect)
                 logger.info(f"Input query: {question}")
                 logger.info(f"Generated response:\n\n{res}")
 
@@ -351,7 +357,8 @@ def query(question: str, table_info_path: str, sample_queries: str):
                 port = env_settings["LOCAL_DB_CONFIG"]["PORT"]
                 db_name = env_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
 
-                db_obj = DBConfig(db_name, hostname, user_name, password, port, base_path=base_path)
+                db_obj = DBConfig(db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect)
+
                 output_res = db_obj.execute_query_db(query=_val)
                 click.echo(f"The query results are:\n {output_res}")
             elif option == "pandas":
