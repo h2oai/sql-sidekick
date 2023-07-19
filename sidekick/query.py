@@ -123,7 +123,7 @@ class SQLGenerator:
             res = ex_value.statement if ex_value.statement else None
             return res
 
-    def generate_response(self, context_container, sql_index, input_prompt, attempt_fix_on_error: bool = True):
+    def generate_response(self, context_container, sql_index, input_prompt, attempt_fix_on_error: bool = True, _dialect: str = "sqlite"):
         try:
             response = sql_index.query(input_prompt, sql_context_container=context_container)
             res = response.extra_info["sql_query"]
@@ -137,7 +137,7 @@ class SQLGenerator:
                     # Attempt to heal with simple feedback
                     # Reference: Teaching Large Language Models to Self-Debug, https://arxiv.org/abs/2304.05128
                     logger.info(f"Attempting to fix syntax error ...,\n {se}")
-                    system_prompt = DEBUGGING_PROMPT["system_prompt"]
+                    system_prompt = DEBUGGING_PROMPT["system_prompt"].format(_dialect=_dialect)
                     user_prompt = DEBUGGING_PROMPT["user_prompt"].format(ex_traceback=ex_traceback, qry_txt=qry_txt)
                     # Role and content
                     query_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
@@ -192,7 +192,7 @@ class SQLGenerator:
             raise se
 
     def generate_sql(
-        self, table_name: list, input_question: str, _dialect: str = "postgres", model_name: str = "gpt-3.5-turbo-0301"
+        self, table_name: list, input_question: str, _dialect: str = "sqlite", model_name: str = "gpt-3.5-turbo-0301"
     ):
         _tasks = self.task_formatter(self._tasks)
         context_file = f"{self.path}/var/lib/tmp/data/context.json"
@@ -223,7 +223,7 @@ class SQLGenerator:
         index = GPTSQLStructStoreIndex(
             [], sql_database=self.sql_database, table_name=table_name, service_context=service_context_gpt3
         )
-        res = self.generate_response(context_container, sql_index=index, input_prompt=query_str)
+        res = self.generate_response(context_container, sql_index=index, input_prompt=query_str, _dialect = _dialect)
         try:
             # Check if `SQL` is formatted ---> ``` SQL_text ```
             if "```" in str(res):

@@ -50,7 +50,7 @@ QUERY_PROMPT = """
             """
 
 DEBUGGING_PROMPT = {
-    "system_prompt": "Act as a SQL expert for PostgreSQL code",
+    "system_prompt": "Act as a SQL expert for {_dialect} code",
     "user_prompt": """
                 ### Fix syntax errors for provided incorrect SQL Query.
                 # Add ``` as prefix and ``` as suffix to generated SQL
