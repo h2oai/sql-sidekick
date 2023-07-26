@@ -112,18 +112,6 @@ class DBConfig:
                 # If schema information is not provided, extract from the template.
                 self.schema_info = """,\n""".join(self._extract_schema_info(schema_info_path)).strip()
                 logger.debug(f"Schema info used for creating table:\n {self.schema_info}")
-            # self.schema_info = """
-            #     id uuid PRIMARY KEY,
-            #     ts TIMESTAMP WITH TIME ZONE NOT NULL,
-            #     kind TEXT NOT NULL, -- or int?,
-            #     user_id TEXT,
-            #     user_name TEXT,
-            #     resource_type TEXT NOT NULL, -- or int?,
-            #     resource_id  TEXT,
-            #     stream TEXT NOT NULL,
-            #     source TEXT NOT NULL,
-            #     payload jsonb NOT NULL
-            # """
         create_syntax = f"""
                 CREATE TABLE IF NOT EXISTS {self.table_name} (
                     {self.schema_info}

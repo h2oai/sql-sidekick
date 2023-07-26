@@ -59,3 +59,20 @@ DEBUGGING_PROMPT = {
                 Query:\n {qry_txt}
                 """,
 }
+
+NSQL_QUERY_PROMPT = """
+For SQL TABLE '{table_name}' sample question/answer pairs,\n({sample_queries})
+
+CREATE TABLE '{table_name}'({data_info}
+)
+
+Table '{table_name}' has sample values ({data_info_detailed})
+
+
+
+-- Using valid {_dialect}, answer the following questions with the information for '{table_name}' provided above; for final SQL only use values from the question.
+
+
+-- Using reference for TABLES '{table_name}' {context}; {question_txt}?
+
+SELECT"""

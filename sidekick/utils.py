@@ -95,18 +95,29 @@ def setup_dir(base_path: str):
             p.mkdir(parents=True, exist_ok=True)
 
 
-def csv_parser(input_path: str):
+def read_sample_pairs(input_path: str, model_name: str = "nsql"):
     df = pd.read_csv(input_path)
     df = df.dropna()
     df = df.drop_duplicates()
     df = df.reset_index(drop=True)
 
-    # Convert frame to below format
-    # [
-    # "# query": ""
-    # "# answer": ""
-    # ]
-    res = df.apply(lambda row: f"# query: {row['query']}\n# answer: {row['answer']}", axis=1).to_list()
+    # NSQL format
+    if model_name != 'nsql':
+        # Open AI format
+            # Convert frame to below format
+            # [
+            # "# query": ""
+            # "# answer": ""
+            # ]
+        res = df.apply(lambda row: f"# query: {row['query']}\n# answer: {row['answer']}", axis=1).to_list()
+    else:
+        # Convert frame to below format
+            # [
+            # "Question": <question_text>
+            # "Answer":
+            # <response_text>
+            # ]
+        res = df.apply(lambda row: f"Question: {row['query']}\nAnswer:\n{row['answer']}", axis=1).to_list()
     return res
 
 
