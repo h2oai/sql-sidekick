@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 from typing import List, Optional
+from sidekick.prompter import db_setup_api, query_api
 
 import openai
 import toml
@@ -12,6 +13,16 @@ env_settings = toml.load(f"{base_path}/ui/.app_config.toml")
 ui_title = env_settings["WAVE_UI"]["TITLE"]
 ui_description = env_settings["WAVE_UI"]["SUB_TITLE"]
 
+db_settings = toml.load(f"{base_path}/sidekick/configs/.env.toml")
+db_dialect = db_settings["DB-DIALECT"]["DB_TYPE"]
+host_name = db_settings["LOCAL_DB_CONFIG"]["HOST_NAME"]
+user_name = db_settings["LOCAL_DB_CONFIG"]["USER_NAME"]
+password = db_settings["LOCAL_DB_CONFIG"]["PASSWORD"]
+db_name = db_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
+port = db_settings["LOCAL_DB_CONFIG"]["PORT"]
+table_info_path = f'{base_path}/{db_settings["TABLE_INFO"]["TABLE_INFO_PATH"]}'
+table_samples_path = f'{base_path}/{db_settings["TABLE_INFO"]["TABLE_SAMPLES_PATH"]}'
+table_name = db_settings["TABLE_INFO"]["TABLE_NAME"]
 
 logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s")
 
@@ -62,9 +73,14 @@ async def chatbot(q: Q):
     question = f"{q.args.chatbot}"
     logging.info(f"Question: {question}")
 
-    ######################## TODO: INTEGRATE SQL SIDEKICK HERE ###################
-    # llm_response = sql_sidekick_result(question, q.client.data)
-    llm_response = "This is a test response"
+    if q.args.chatbot.lower() == "db setup":
+        llm_response = db_setup_api(db_name=db_name, hostname=host_name, user_name=user_name, password=password, port=port, table_info_path=table_info_path, table_samples_path=table_samples_path, table_name= table_name)
+    else:
+        llm_response = query_api(question = question,
+                                sample_queries=None,
+                                table_info_path=table_info_path)
+        llm_response = "\n".join(llm_response)
+
     q.page["chat_card"].data += [llm_response, False]
 
 

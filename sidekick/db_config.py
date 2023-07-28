@@ -196,9 +196,11 @@ class DBConfig:
                 engine.dispose()
             else:
                 logger.info("Query Empty or None!")
-            return output
+            return output, None
         except Exception as e:
-            logger.info(f"Error occurred : {format(e)}")
+            err = f"Error occurred : {format(e)}"
+            logger.info(err)
+            return None, err
         finally:
             connection.close()
             engine.dispose()
