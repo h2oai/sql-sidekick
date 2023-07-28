@@ -127,6 +127,9 @@ def update_table_info(cache_path: str, table_info_path: str = None, table_name: 
 @click.option("--port", "-P", default=5432, help="Database port", prompt="Enter port (default 5432)")
 @click.option("--table-info-path", "-t", help="Table info path", default=None)
 def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: int, table_info_path: str):
+    db_setup_api(db_name=db_name, hostname=hostname, user_name=user_name, password=password, port=port, table_info_path=table_info_path, table_samples_path=None, table_name=None, is_command=True)
+
+def db_setup_api(db_name: str, hostname: str, user_name: str, password: str, port: int, table_info_path: str, table_samples_path: str, table_name: str, is_command:bool=False):
     """Creates context for the new Database"""
     click.echo(f" Information supplied:\n {db_name}, {hostname}, {user_name}, {password}, {port}")
     try:
@@ -151,7 +154,7 @@ def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: i
         else:
             click.echo("Database already exists!")
 
-        val = enter_table_name()
+        val = enter_table_name() if is_command else "y"
         while True:
             if val.lower() != "y" and val.lower() != "n":
                 click.echo("In-correct values. Enter Yes(y) or no(n)")
@@ -163,7 +166,7 @@ def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: i
             table_info_path = _get_table_info(path)
 
         if val.lower() == "y" or val.lower() == "yes":
-            table_value = input("Enter table name: ")
+            table_value = input("Enter table name: ") if is_command else table_name
             click.echo(f"Table name: {table_value}")
             # set table name
             db_obj.table_name = table_value.replace(" ", "_")
@@ -173,17 +176,23 @@ def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: i
         # Check if table exists; pending --> and doesn't have any rows
         if db_obj.has_table():
             click.echo(f"Checked table {db_obj.table_name} exists in the DB.")
-            val = input(color(F.GREEN, "", "Would you like to add few sample rows (at-least 3)? (y/n):"))
+            val = input(color(F.GREEN, "", "Would you like to add few sample rows (at-least 3)? (y/n):")) if is_command else "y"
             if val.lower().strip() == "y" or val.lower().strip() == "yes":
-                val = input("Path to a CSV file to insert data from:")
+                val = input("Path to a CSV file to insert data from:") if is_command else table_samples_path
                 db_obj.add_samples(val)
             else:
                 click.echo("Exiting...")
                 return
         else:
-            click.echo("Job done. Ask a question now!")
+            echo_msg = "Job done. Ask a question now!"
+            click.echo(echo_msg)
+
+        return f"Created a Database {db_name}. Inserted sample values from {table_samples_path} into table {table_name}, please ask questions!"
     except Exception as e:
-        click.echo(f"Error creating database. Check configuration parameters.\n: {e}")
+        echo_msg = f"Error creating database. Check configuration parameters.\n: {e}"
+        click.echo(echo_msg)
+        if not is_command:
+            return echo_msg
 
 
 @cli.group("learn")
@@ -250,7 +259,11 @@ def update_context():
 @click.option("--table-info-path", "-t", help="Table info path", default=None)
 @click.option("--sample-queries", "-s", help="Samples path", default=None)
 def query(question: str, table_info_path: str, sample_queries: str):
+    query_api(question= question, table_info_path=table_info_path, sample_queries=sample_queries, is_command=True)
+
+def query_api(question: str, table_info_path: str, sample_queries: str, is_command:bool=False):
     """Asks question and returns SQL."""
+    results = []
     # Book-keeping
     setup_dir(base_path)
 
@@ -273,11 +286,16 @@ def query(question: str, table_info_path: str, sample_queries: str):
     api_key = env_settings["OPENAI"]["OPENAI_API_KEY"]
     if api_key is None or api_key == "":
         if os.getenv("OPENAI_API_KEY") is None or os.getenv("OPENAI_API_KEY") == "":
-            val = input(
-                color(F.GREEN, "", "Looks like API key is not set, would you like to set OPENAI_API_KEY? (y/n):")
-            )
-            if val.lower() == "y":
-                api_key = input(color(F.GREEN, "", "Enter OPENAI_API_KEY :"))
+            if is_command:
+                val = input(
+                    color(F.GREEN, "", "Looks like API key is not set, would you like to set OPENAI_API_KEY? (y/n):")
+                )
+                if val.lower() == "y":
+                    api_key = input(color(F.GREEN, "", "Enter OPENAI_API_KEY :"))
+
+        if api_key is None and is_command:
+            return ["Looks like API key is not set, please set OPENAI_API_KEY!"]
+
         os.environ["OPENAI_API_KEY"] = api_key
         env_settings["OPENAI"]["OPENAI_API_KEY"] = api_key
 
@@ -310,10 +328,11 @@ def query(question: str, table_info_path: str, sample_queries: str):
         db_url, api_key, job_path=base_path, data_input_path=table_info_path, samples_queries=sample_queries
     )
     sql_g._tasks = sql_g.generate_tasks(table_names, question)
+    results.extend(["List of Actions Generated: \n", sql_g._tasks, "\n"])
     click.echo(sql_g._tasks)
 
     updated_tasks = None
-    if sql_g._tasks is not None:
+    if sql_g._tasks is not None and is_command:
         edit_val = click.prompt("Would you like to edit the tasks? (y/n)")
         if edit_val.lower() == "y":
             updated_tasks = click.edit(sql_g._tasks)
@@ -331,23 +350,27 @@ def query(question: str, table_info_path: str, sample_queries: str):
     if res is not None:
         updated_sql = None
         res_val = "e"
-        while res_val.lower() in ["e", "edit", "r", "regenerate"]:
-            res_val = click.prompt(
-                "Would you like to 'edit' or 'regenerate' the SQL? Use 'e' to edit or 'r' to regenerate. "
-                "To skip, enter 's' or 'skip'"
-            )
-            if res_val.lower() == "e" or res_val.lower() == "edit":
-                updated_sql = click.edit(res)
-                click.echo(f"Updated SQL:\n {updated_sql}")
-            elif res_val.lower() == "r" or res_val.lower() == "regenerate":
-                click.echo("Attempting to regenerate...")
-                res = sql_g.generate_sql(table_names, question, model_name=model_name, _dialect=db_dialect)
-                logger.info(f"Input query: {question}")
-                logger.info(f"Generated response:\n\n{res}")
+        if is_command:
+            while res_val.lower() in ["e", "edit", "r", "regenerate"]:
+                res_val = click.prompt(
+                    "Would you like to 'edit' or 'regenerate' the SQL? Use 'e' to edit or 'r' to regenerate. "
+                    "To skip, enter 's' or 'skip'"
+                )
+                if res_val.lower() == "e" or res_val.lower() == "edit":
+                    updated_sql = click.edit(res)
+                    click.echo(f"Updated SQL:\n {updated_sql}")
+                elif res_val.lower() == "r" or res_val.lower() == "regenerate":
+                    click.echo("Attempting to regenerate...")
+                    res = sql_g.generate_sql(table_names, question, model_name=model_name, _dialect=db_dialect)
+                    logger.info(f"Input query: {question}")
+                    logger.info(f"Generated response:\n\n{res}")
 
-        exe_sql = click.prompt("Would you like to execute the generated SQL (y/n)?")
+        results.extend(["Generated Query:\n", res, "\n"])
+
+        exe_sql = click.prompt("Would you like to execute the generated SQL (y/n)?") if is_command else "y"
         if exe_sql.lower() == "y" or exe_sql.lower() == "yes":
             # For the time being, the default option is Pandas, but the user can be asked to select Database or pandas DF later.
+            q_res = None
             option = "DB"  # or DB
             _val = updated_sql if updated_sql else res
             if option == "DB":
@@ -359,8 +382,8 @@ def query(question: str, table_info_path: str, sample_queries: str):
 
                 db_obj = DBConfig(db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect)
 
-                output_res = db_obj.execute_query_db(query=_val)
-                click.echo(f"The query results are:\n {output_res}")
+                q_res, err = db_obj.execute_query_db(query=_val)
+
             elif option == "pandas":
                 tables = extract_table_names(_val)
                 tables_path = dict()
@@ -383,14 +406,22 @@ def query(question: str, table_info_path: str, sample_queries: str):
                     with open(f"{path}/table_context.json", "w") as outfile:
                         json.dump(table_metadata, outfile, indent=4, sort_keys=False)
                 try:
-                    res = execute_query_pd(query=_val, tables_path=tables_path, n_rows=100)
-                    click.echo(f"The query results are:\n {res}")
+                    q_res = execute_query_pd(query=_val, tables_path=tables_path, n_rows=100)
+                    click.echo(f"The query results are:\n {q_res}")
                 except sqldf.PandaSQLException as e:
                     logger.error(f"Error in executing the query: {e}")
-                    click.echo("Error in executing the query. Validate generate SQL and try again.")
+                    click.echo("Error in executing the query. Validate generated SQL and try again.")
                     click.echo("No result to display.")
 
-        save_sql = click.prompt("Would you like to save the generated SQL (y/n)?")
+            results.append("Query Results: \n")
+            if q_res:
+                click.echo(f"The query results are:\n {q_res}")
+                results.extend([str(q_res), "\n"])
+            else:
+                click.echo(f"While executing query:\n {err}")
+                results.extend([str(err), "\n"])
+            # results.extend(["Query Results:", q_res])
+        save_sql = click.prompt("Would you like to save the generated SQL (y/n)?") if is_command else "n"
         if save_sql.lower() == "y" or save_sql.lower() == "yes":
             # Persist for future use
             _val = updated_sql if updated_sql else res
@@ -398,6 +429,7 @@ def query(question: str, table_info_path: str, sample_queries: str):
         else:
             click.echo("Exiting...")
 
+    return results
 
 if __name__ == "__main__":
     cli()
