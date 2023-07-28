@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import openai
 import sqlglot
-import toml
+import random
 import torch
 from langchain import OpenAI
 from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
@@ -50,15 +50,15 @@ class SQLGenerator:
         self.openai_key = openai_key
         self.content_queries = None
 
-    def load_table_info(self):
-        # Read table_info.jsonl
-        table_info_file = f"{self.path}/var/lib/tmp/data/table_context.json"
-    def setup(self):
-
-        # Load the table information
-        self.load_table_info()
-
-
+    def load_column_samples(self, tables: list):
+        # TODO: Maybe we add table name as a member variable
+        #  Load column values if they exists
+        examples = {}
+        for _t in tables:
+            f_p = f"{self.path}/var/lib/tmp/data/{_t}_column_values.json"
+            with open(f_p, "r") as f:
+                examples[_t] = json.load(f)
+        return examples
 
     def build_index(self, persist: bool = True):
         # Below re-assignment of the OPENAI API key is weird but without that, it throws an error.
@@ -206,12 +206,12 @@ class SQLGenerator:
             raise se
 
 
-    def generate_sql(self, table_name: list, input_question: str, _dialect: str = "sqlite", model_name: str = "nsql"):
+    def generate_sql(self, table_name: list, input_question: str, _dialect: str = "sqlite", model_name: str = "h2ogpt-sql"):
         context_file = f"{self.path}/var/lib/tmp/data/context.json"
         additional_context = json.load(open(context_file, "r")) if Path(context_file).exists() else {}
         context_queries = self.content_queries
 
-        if model_name != "nsql":
+        if model_name != "h2ogpt-sql":
             _tasks = self.task_formatter(self._tasks)
 
             # TODO: The need to pass data info again could be eliminated if Task generation becomes more consistent and accurate.
@@ -263,6 +263,7 @@ class SQLGenerator:
             model = AutoModelForCausalLM.from_pretrained("NumbersStation/nsql-6B")
 
             data_samples = context_queries
+            data_samples_list = self.load_column_samples(table_name)
 
             _context = {
             "if patterns like 'current time' or 'now' occurs in question": "always use NOW() - INTERVAL",
@@ -271,8 +272,7 @@ class SQLGenerator:
 
             filtered_context = filter_samples(input_question, probable_qs=list(_context.keys()),
                                 model_path='', threshold=0.845)
-
-            print(f"Filter Context: {filtered_context}")
+            logger.debug(f"Filter Context: {filtered_context}")
 
             contextual_context = []
             for _item in filtered_context:
@@ -280,11 +280,11 @@ class SQLGenerator:
                 if _val:
                     contextual_context.append(f"{_item}: {_val}")
 
-            print("Filtering Question/Query pairs")
+            logger.info("Filtering Question/Query pairs")
             _samples = filter_samples(input_question, probable_qs=context_queries,
                                 model_path='', threshold=0.90)
 
-            # If QnA pairs > 5, we keep only 5 of them for focused context
+            # If QnA pairs > 5, we keep top 5 for focused context
             if len(_samples) > 5:
                 _samples = _samples[0:5][::-1]
             qna_samples = '\n'.join(_samples)
@@ -304,7 +304,18 @@ class SQLGenerator:
                                         sample_queries=qna_samples, context=contextual_context_val,
                                         question_txt=input_question)
 
-            input_ids = tokenizer(query, return_tensors="pt").input_ids
+            inputs = tokenizer(query, return_tensors="pt")
+
+            # Generate SQL
+            random_seed = random.randint(0, 50)
+            torch.manual_seed(random_seed)
+
+            # Greedy search for quick response
+            output = model.generate(**inputs, max_new_tokens=300, temperature=0.5, output_scores=True,
+                                        return_dict_in_generate=True)
+            _res = tokenizer.decode(output[0][0], skip_special_tokens=True)
+            # Below is a pre-caution in-case of an error in table name during generation
+            res = _res.replace('table_name', table_name[0])
         return res
 
     def task_formatter(self, input_task: str):

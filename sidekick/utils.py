@@ -39,7 +39,7 @@ def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, devic
     return all_res
 
 
-def generate_text_embeddings(model_path: str, x, batch_size: int = 32, device: Optional[str] = 'cpu'):
+def generate_text_embeddings(model_path: str, x, batch_size: int = 32, device: Optional[str] = "cpu"):
     # Reference:
     # 1. https://www.sbert.net/docs/pretrained_models.html#sentence-embedding-models
     # 2. Evaluation result: https://www.sbert.net/_static/html/models_en_sentence_embeddings.html
@@ -55,14 +55,13 @@ def generate_text_embeddings(model_path: str, x, batch_size: int = 32, device: O
             os.environ["TORCH_HOME"] = model_path
             model_name_path = "hkunlp/instructor-large"
     sentence_model = INSTRUCTOR(model_name_path, device=device)
-    if device != 'cuda':
+    if device != "cuda":
         # Issue https://github.com/pytorch/pytorch/issues/69364
         # # In the initial experimentation, quantized model is generates slightly better results
-        _model = torch.quantization.quantize_dynamic(
-                sentence_model, {torch.nn.Linear}, dtype=torch.qint8)
+        _model = torch.quantization.quantize_dynamic(sentence_model, {torch.nn.Linear}, dtype=torch.qint8)
     else:
         _model = sentence_model
-    _sentences = [['Represent the Financial question for retrieving duplicate examples: ', _item] for _item in x]
+    _sentences = [["Represent the Financial question for retrieving duplicate examples: ", _item] for _item in x]
 
     res = _model.encode(_sentences)
     del sentence_model
@@ -136,7 +135,7 @@ def read_sample_pairs(input_path: str, model_name: str = "nsql"):
     df = df.reset_index(drop=True)
 
     # NSQL format
-    if model_name != "nsql":
+    if model_name != "h2ogpt-sql":
         # Open AI format
         # Convert frame to below format
         # [
