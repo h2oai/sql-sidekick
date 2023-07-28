@@ -7,6 +7,7 @@ import psycopg2 as pg
 import sqlalchemy
 from pandasql import sqldf
 from psycopg2.extras import Json
+from sidekick.configs.data_template import data_samples_template
 from sidekick.logger import logger
 from sqlalchemy import create_engine
 from sqlalchemy_utils import database_exists
@@ -84,6 +85,7 @@ class DBConfig:
                 with open(table_info_file, "w") as outfile:
                     schema_info_path = json.load(outfile)["schema_info_path"]
         res = []
+        sample_values = []
         try:
             if Path(schema_info_path).exists():
                 with open(schema_info_path, "r") as in_file:
@@ -93,8 +95,21 @@ class DBConfig:
                             if "Column Name" in data and "Column Type" in data:
                                 col_name = data["Column Name"]
                                 col_type = data["Column Type"]
+                                # if column has sample values, save in cache for future use.
+                                if "Sample Values" in data:
+                                    _sample_values = data["Sample Values"]
+                                    _ds = data_samples_template.format(
+                                        column_name=col_name, comma_separated_sample_values=",".join(_sample_values)
+                                    )
+                                    sample_values.append(_ds)
                                 _new_samples = f"{col_name} {col_type}"
                             res.append(_new_samples)
+                if len(sample_values):
+                    # cache it for future use
+                    with open(
+                        f"{self.base_path}/var/lib/tmp/data/{self._table_name}_column_values.json", "w"
+                    ) as outfile:
+                        json.dump(sample_values, outfile, indent=2, sort_keys=False)
         except ValueError as ve:
             logger.error(f"Error in reading table context file: {ve}")
             pass

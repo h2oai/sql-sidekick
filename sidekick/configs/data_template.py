@@ -11,3 +11,5 @@ schema_info_template = {
     "Column Type": "",
     "Sample Values": []
 }
+
+data_samples_template = "Column {column_name} contains values similar to {comma_separated_sample_values}."
