@@ -104,7 +104,7 @@ class DBConfig:
                                     sample_values.append(_ds)
                                 _new_samples = f"{col_name} {col_type}"
                             res.append(_new_samples)
-                if len(sample_values):
+                if len(sample_values) > 0:
                     # cache it for future use
                     with open(
                         f"{self.base_path}/var/lib/tmp/data/{self._table_name}_column_values.json", "w"

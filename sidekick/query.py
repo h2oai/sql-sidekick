@@ -1,18 +1,19 @@
 import json
 import os
+import random
 import sys
 from pathlib import Path
 
 import numpy as np
 import openai
 import sqlglot
-import random
 import torch
 from langchain import OpenAI
 from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
                          LLMPredictor, ServiceContext, SQLDatabase)
 from llama_index.indices.struct_store import SQLContextContainerBuilder
-from sidekick.configs.prompt_template import (DEBUGGING_PROMPT, QUERY_PROMPT, NSQL_QUERY_PROMPT,
+from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
+                                              NSQL_QUERY_PROMPT, QUERY_PROMPT,
                                               TASK_PROMPT)
 from sidekick.logger import logger
 from sidekick.utils import filter_samples, read_sample_pairs, remove_duplicates
@@ -41,6 +42,7 @@ class SQLGenerator:
         self.db_url = db_url
         self.engine = create_engine(db_url)
         self.sql_database = SQLDatabase(self.engine)
+        self.similarity_model = None
         self.context_builder = None
         self.data_input_path = _check_file_info(data_input_path)
         self.sample_queries_path = samples_queries
@@ -62,8 +64,9 @@ class SQLGenerator:
 
     def build_index(self, persist: bool = True):
         # Below re-assignment of the OPENAI API key is weird but without that, it throws an error.
-        os.environ["OPENAI_API_KEY"] = self.openai_key
-        openai.api_key = self.openai_key
+        if self.openai_key:
+            os.environ["OPENAI_API_KEY"] = self.openai_key
+            openai.api_key = self.openai_key
 
         table_schema_index = self.context_builder.derive_index_from_context(
             GPTSimpleVectorIndex,
@@ -137,7 +140,9 @@ class SQLGenerator:
             res = ex_value.statement if ex_value.statement else None
             return res
 
-    def generate_response(self, context_container, sql_index, input_prompt, attempt_fix_on_error: bool = True, _dialect: str = "sqlite"):
+    def generate_response(
+        self, context_container, sql_index, input_prompt, attempt_fix_on_error: bool = True, _dialect: str = "sqlite"
+    ):
         try:
             response = sql_index.query(input_prompt, sql_context_container=context_container)
             res = response.extra_info["sql_query"]
@@ -182,8 +187,10 @@ class SQLGenerator:
             updated_context = np.delete(np.array(context_queries), duplicates_idx).tolist()
 
             # Filter closest samples to the input question, threshold = 0.45
-            filtered_context = (
-                filter_samples(input_question, updated_context, m_path) if len(updated_context) > 1 else updated_context
+            filtered_context, _ = (
+                filter_samples(input_question, updated_context, m_path, threshold=0.9)
+                if len(updated_context) > 1
+                else updated_context
             )
             logger.info(f"Number of possible contextual queries to question: {len(filtered_context)}")
             _queries = "\n".join(filtered_context)
@@ -205,11 +212,15 @@ class SQLGenerator:
         except Exception as se:
             raise se
 
-
-    def generate_sql(self, table_name: list, input_question: str, _dialect: str = "sqlite", model_name: str = "h2ogpt-sql"):
+    def generate_sql(
+        self, table_names: list, input_question: str, _dialect: str = "sqlite", model_name: str = "h2ogpt-sql"
+    ):
         context_file = f"{self.path}/var/lib/tmp/data/context.json"
         additional_context = json.load(open(context_file, "r")) if Path(context_file).exists() else {}
         context_queries = self.content_queries
+
+        table_context_dict = {str(table_names[0]).lower(): str(additional_context).lower()}
+        self.context_builder = SQLContextContainerBuilder(self.sql_database, context_dict=table_context_dict)
 
         if model_name != "h2ogpt-sql":
             _tasks = self.task_formatter(self._tasks)
@@ -219,24 +230,21 @@ class SQLGenerator:
                 _dialect=_dialect,
                 _data_info=self._data_info,
                 _question=input_question,
-                _table_name=table_name,
+                _table_name=table_names,
                 _sample_queries=context_queries,
                 _tasks=_tasks,
             )
-
-            table_context_dict = {str(table_name[0]).lower(): str(additional_context).lower()}
-            self.context_builder = SQLContextContainerBuilder(self.sql_database, context_dict=table_context_dict)
-
-            table_schema_index = self.build_index(persist=False)
-            self.context_builder.query_index_for_context(table_schema_index, query_str, store_context_str=True)
-            context_container = self.context_builder.build_context_container()
 
             # Reference: https://github.com/jerryjliu/llama_index/issues/987
             llm_predictor_gpt3 = LLMPredictor(llm=OpenAI(temperature=0.5, model_name=model_name))
             service_context_gpt3 = ServiceContext.from_defaults(llm_predictor=llm_predictor_gpt3, chunk_size_limit=512)
 
+            table_schema_index = self.build_index(persist=False)
+            self.context_builder.query_index_for_context(table_schema_index, query_str, store_context_str=True)
+            context_container = self.context_builder.build_context_container()
+
             index = GPTSQLStructStoreIndex(
-                [], sql_database=self.sql_database, table_name=table_name, service_context=service_context_gpt3
+                [], sql_database=self.sql_database, table_name=table_names, service_context=service_context_gpt3
             )
             res = self.generate_response(context_container, sql_index=index, input_prompt=query_str)
             try:
@@ -262,16 +270,25 @@ class SQLGenerator:
             tokenizer = AutoTokenizer.from_pretrained("NumbersStation/nsql-6B")
             model = AutoModelForCausalLM.from_pretrained("NumbersStation/nsql-6B")
 
-            data_samples = context_queries
-            data_samples_list = self.load_column_samples(table_name)
+            # TODO Update needed for multiple tables
+            columns_w_type = (
+                self.context_builder.full_context_dict[table_names[0]].split(":")[2].split("and")[0].strip()
+            )
+
+            data_samples_list = self.load_column_samples(table_names)
 
             _context = {
-            "if patterns like 'current time' or 'now' occurs in question": "always use NOW() - INTERVAL",
-            "if patterns like 'total number', or 'List' occurs in question": "always use DISTINCT",
+                "if patterns like 'current time' or 'now' occurs in question": "always use NOW() - INTERVAL",
+                "if patterns like 'total number', or 'List' occurs in question": "always use DISTINCT",
             }
-
-            filtered_context = filter_samples(input_question, probable_qs=list(_context.keys()),
-                                model_path='', threshold=0.845)
+            m_path = f"{self.path}/var/lib/tmp/.cache/models"
+            filtered_context, self.similarity_model = filter_samples(
+                model_obj=self.similarity_model,
+                input_q=input_question,
+                probable_qs=list(_context.keys()),
+                model_path=m_path,
+                threshold=0.90,
+            )
             logger.debug(f"Filter Context: {filtered_context}")
 
             contextual_context = []
@@ -280,42 +297,84 @@ class SQLGenerator:
                 if _val:
                     contextual_context.append(f"{_item}: {_val}")
 
-            logger.info("Filtering Question/Query pairs")
-            _samples = filter_samples(input_question, probable_qs=context_queries,
-                                model_path='', threshold=0.90)
+            logger.info("Filtering Question/Query pairs ...")
+            context_queries: list = self.update_context_queries()
+            logger.info(f"Number of context queries found: {len(context_queries)}")
 
+            # Remove duplicates from the context queries
+            m_path = f"{self.path}/var/lib/tmp/.cache/models"
+            # duplicates_idx = remove_duplicates(context_queries, m_path, similarity_model=self.similarity_model)
+            # updated_context = np.delete(np.array(context_queries), duplicates_idx).tolist()
+
+            # Filter closest samples to the input question, threshold = 0.9
+            filtered_context, _ = (
+                filter_samples(
+                    input_q=input_question,
+                    probable_qs=context_queries,
+                    model_path=m_path,
+                    model_obj=self.similarity_model,
+                    threshold=0.9,
+                )
+                if len(context_queries) > 1
+                else context_queries
+            )
+            logger.info(f"Number of possible contextual queries to question: {len(filtered_context)}")
             # If QnA pairs > 5, we keep top 5 for focused context
-            if len(_samples) > 5:
-                _samples = _samples[0:5][::-1]
-            qna_samples = '\n'.join(_samples)
+            _samples = filtered_context
+            if len(filtered_context) > 5:
+                _samples = filtered_context[0:5][::-1]
+            qna_samples = "\n".join(_samples)
 
-            contextual_context_val = ', '.join(contextual_context)
-            column_names = [str(_c) for _c in self.sql_database.get_column_names(table_name[0])]
+            contextual_context_val = ", ".join(contextual_context)
+            column_names = columns_w_type.strip().split(",")
+            clmn_names = [i.split("(")[0].strip() for i in column_names]
+
+            context_columns = []
             if len(_samples) > 2:
                 # Check for the columns in the QnA samples provided, if exists keep them
-                context_columns = [_c for _c in column_names if _c.lower() in qna_samples.lower()]
+                context_columns = [_c for _c in clmn_names if _c.lower().strip() in qna_samples.lower()]
                 if len(context_columns) > 0:
-                    contextual_data_samples = [_d for _cc in context_columns for _d in data_samples_list if _cc.lower() in _d.lower()]
-                    data_samples = contextual_data_samples
-            relevant_columns = context_columns if len(context_columns) > 0 else column_names
-            _data_info = ', '.join(relevant_columns)
+                    contextual_data_samples = [
+                        _d
+                        for _cc in context_columns
+                        for _d in data_samples_list[table_names[0]]
+                        if _cc.lower() in _d.lower()
+                    ]
+                    data_samples_list = contextual_data_samples
+            relevant_columns = context_columns if len(context_columns) > 0 else clmn_names
+            _column_info = ", ".join(relevant_columns)
 
-            query = NSQL_QUERY_PROMPT.format(table_name=table_name, data_info=_data_info, data_info_detailed=data_samples,
-                                        sample_queries=qna_samples, context=contextual_context_val,
-                                        question_txt=input_question)
+            logger.debug(f"Relevant sample column values: {data_samples_list}")
+            _table_name = ", ".join(table_names)
+            query = NSQL_QUERY_PROMPT.format(
+                table_name=_table_name,
+                column_info=_column_info,
+                data_info_detailed=data_samples_list,
+                sample_queries=qna_samples,
+                context=contextual_context_val,
+                question_txt=input_question,
+            )
 
-            inputs = tokenizer(query, return_tensors="pt")
-
+            logger.debug(f"Query Text:\n {query}")
+            inputs = tokenizer([query], return_tensors="pt")
+            input_length = 1 if model.config.is_encoder_decoder else inputs.input_ids.shape[1]
             # Generate SQL
             random_seed = random.randint(0, 50)
             torch.manual_seed(random_seed)
 
             # Greedy search for quick response
-            output = model.generate(**inputs, max_new_tokens=300, temperature=0.5, output_scores=True,
-                                        return_dict_in_generate=True)
-            _res = tokenizer.decode(output[0][0], skip_special_tokens=True)
+            output = model.generate(
+                **inputs,
+                max_new_tokens=300,
+                temperature=0.5,
+                output_scores=True,
+                return_dict_in_generate=True,
+            )
+
+            generated_tokens = output.sequences[:, input_length:]
+            _res = tokenizer.decode(generated_tokens[0], skip_special_tokens=True)
             # Below is a pre-caution in-case of an error in table name during generation
-            res = _res.replace('table_name', table_name[0])
+            res = "SELECT" + _res.replace("table_name", table_names[0])
         return res
 
     def task_formatter(self, input_task: str):

@@ -13,4 +13,3 @@ setup: download_models ## Setup
 
 download_models:
 	mkdir -p ./models/sentence_transformers/sentence-transformers_all-MiniLM-L6-v2
-	$(sentence_transformer)
