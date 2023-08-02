@@ -38,6 +38,7 @@ torch = "^2.0.1"
 sqlalchemy-utils = "^0.41.1"
 h2o-wave = "0.26.1"
 pandasql = "0.7.3"
+InstructorEmbedding = "^1.0.1"
 
 [tool.poetry.scripts]
 sql-sidekick = "sidekick.prompter:cli"
