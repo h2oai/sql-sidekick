@@ -92,7 +92,7 @@ def filter_samples(input_q: str, probable_qs: list, model_path: str, model_obj=N
             _scores.append(similarities_score[0][0])
 
     sorted_res = sorted(res.items(), key=lambda x: x[1], reverse=True)
-    logger.info(f"Sorted context: {sorted_res}")
+    logger.debug(f"Sorted context: {sorted_res}")
     return list(dict(sorted_res).keys()), model_obj
 
 

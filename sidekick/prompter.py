@@ -285,6 +285,7 @@ def update_context():
 @click.option("--table-info-path", "-t", help="Table info path", default=None)
 @click.option("--sample-queries", "-s", help="Samples path", default=None)
 def query(question: str, table_info_path: str, sample_queries: str):
+    """Asks question and returns SQL."""
     query_api(question=question, table_info_path=table_info_path, sample_queries=sample_queries, is_command=True)
 
 

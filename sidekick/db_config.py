@@ -95,6 +95,8 @@ class DBConfig:
                             if "Column Name" in data and "Column Type" in data:
                                 col_name = data["Column Name"]
                                 col_type = data["Column Type"]
+                                if col_type.lower() == "text":
+                                    col_type = col_type + " COLLATE NOCASE"
                                 # if column has sample values, save in cache for future use.
                                 if "Sample Values" in data:
                                     _sample_values = data["Sample Values"]
@@ -116,9 +118,7 @@ class DBConfig:
         return res
 
     def create_table(self, schema_info_path=None, schema_info=None):
-        engine = create_engine(
-            self._url, isolation_level="AUTOCOMMIT"
-        )
+        engine = create_engine(self._url, isolation_level="AUTOCOMMIT")
         self._engine = engine
         if self.schema_info is None:
             if schema_info is not None:
@@ -139,9 +139,7 @@ class DBConfig:
         return
 
     def has_table(self):
-        engine = create_engine(
-            self._url
-        )
+        engine = create_engine(self._url)
 
         return sqlalchemy.inspect(engine).has_table(self.table_name)
 
@@ -181,6 +179,7 @@ class DBConfig:
 
                 # Create a connection
                 connection = engine.connect()
+                logger.debug(f"Executing query:\n {query}")
                 result = connection.execute(query)
 
                 # Process the query results

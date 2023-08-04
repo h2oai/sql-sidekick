@@ -51,6 +51,8 @@ class SQLGenerator:
         self._tasks = None
         self.openai_key = openai_key
         self.content_queries = None
+        self.model = None  # Used for local LLMs
+        self.tokenizer = None  # Used for local tokenizer
 
     def load_column_samples(self, tables: list):
         # TODO: Maybe we add table name as a member variable
@@ -267,8 +269,12 @@ class SQLGenerator:
                 logger.info(f"Realized query so far:\n {res}")
         else:
             # Load h2oGPT.NSQL model
-            tokenizer = AutoTokenizer.from_pretrained("NumbersStation/nsql-6B")
-            model = AutoModelForCausalLM.from_pretrained("NumbersStation/nsql-6B")
+            device = {"": 0} if torch.cuda.is_available() else "cpu"
+            if self.model is None:
+                self.tokenizer = tokenizer = AutoTokenizer.from_pretrained("NumbersStation/nsql-6B", device_map=device)
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    "NumbersStation/nsql-6B", device_map=device, load_in_8bit=True
+                )
 
             # TODO Update needed for multiple tables
             columns_w_type = (
@@ -321,8 +327,8 @@ class SQLGenerator:
             logger.info(f"Number of possible contextual queries to question: {len(filtered_context)}")
             # If QnA pairs > 5, we keep top 5 for focused context
             _samples = filtered_context
-            if len(filtered_context) > 5:
-                _samples = filtered_context[0:5][::-1]
+            if len(filtered_context) > 3:
+                _samples = filtered_context[0:3][::-1]
             qna_samples = "\n".join(_samples)
 
             contextual_context_val = ", ".join(contextual_context)
@@ -357,14 +363,16 @@ class SQLGenerator:
 
             logger.debug(f"Query Text:\n {query}")
             inputs = tokenizer([query], return_tensors="pt")
-            input_length = 1 if model.config.is_encoder_decoder else inputs.input_ids.shape[1]
+            input_length = 1 if self.model.config.is_encoder_decoder else inputs.input_ids.shape[1]
             # Generate SQL
             random_seed = random.randint(0, 50)
             torch.manual_seed(random_seed)
 
             # Greedy search for quick response
-            output = model.generate(
-                **inputs,
+            self.model.eval()
+            device_type = "cuda" if torch.cuda.is_available() else "cpu"
+            output = self.model.generate(
+                **inputs.to(device_type),
                 max_new_tokens=300,
                 temperature=0.5,
                 output_scores=True,
@@ -372,9 +380,11 @@ class SQLGenerator:
             )
 
             generated_tokens = output.sequences[:, input_length:]
-            _res = tokenizer.decode(generated_tokens[0], skip_special_tokens=True)
+            _res = self.tokenizer.decode(generated_tokens[0], skip_special_tokens=True)
             # Below is a pre-caution in-case of an error in table name during generation
-            res = "SELECT" + _res.replace("table_name", table_names[0])
+            # COLLATE NOCASE is used to ignore case sensitivity, this might be specific to sqlite
+            _temp = _res.replace("table_name", table_names[0]).split(";")[0]
+            res = "SELECT" + _temp + " COLLATE NOCASE;"
         return res
 
     def task_formatter(self, input_task: str):
