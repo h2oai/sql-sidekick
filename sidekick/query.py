@@ -9,12 +9,9 @@ import openai
 import sqlglot
 import torch
 from langchain import OpenAI
-from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
-                         LLMPredictor, ServiceContext, SQLDatabase)
+from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
 from llama_index.indices.struct_store import SQLContextContainerBuilder
-from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
-                                              NSQL_QUERY_PROMPT, QUERY_PROMPT,
-                                              TASK_PROMPT)
+from sidekick.configs.prompt_template import DEBUGGING_PROMPT, NSQL_QUERY_PROMPT, QUERY_PROMPT, TASK_PROMPT
 from sidekick.logger import logger
 from sidekick.utils import filter_samples, read_sample_pairs, remove_duplicates
 from sqlalchemy import create_engine
@@ -271,7 +268,7 @@ class SQLGenerator:
             # Load h2oGPT.NSQL model
             device = {"": 0} if torch.cuda.is_available() else "cpu"
             if self.model is None:
-                self.tokenizer = tokenizer = AutoTokenizer.from_pretrained("NumbersStation/nsql-6B", device_map=device)
+                self.tokenizer = AutoTokenizer.from_pretrained("NumbersStation/nsql-6B", device_map=device)
                 self.model = AutoModelForCausalLM.from_pretrained(
                     "NumbersStation/nsql-6B", device_map=device, load_in_8bit=True
                 )
@@ -362,7 +359,7 @@ class SQLGenerator:
             )
 
             logger.debug(f"Query Text:\n {query}")
-            inputs = tokenizer([query], return_tensors="pt")
+            inputs = self.tokenizer([query], return_tensors="pt")
             input_length = 1 if self.model.config.is_encoder_decoder else inputs.input_ids.shape[1]
             # Generate SQL
             random_seed = random.randint(0, 50)
