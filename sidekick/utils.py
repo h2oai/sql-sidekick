@@ -6,6 +6,8 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
+import torch
+from InstructorEmbedding import INSTRUCTOR
 from pandasql import sqldf
 from sentence_transformers import SentenceTransformer
 from sidekick.logger import logger
@@ -37,32 +39,71 @@ def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, devic
     return all_res
 
 
-def filter_samples(input_q: str, probable_qs: list, model_path: str, threshold: float = 0.45):
+def generate_text_embeddings(model_path: str, x, model_obj=None, batch_size: int = 32, device: Optional[str] = "cpu"):
+    # Reference:
+    # 1. https://www.sbert.net/docs/pretrained_models.html#sentence-embedding-models
+    # Maps sentence & paragraphs to a 384 dimensional dense vector space.
+    model_name_path = f"{model_path}/text_embedding/instructor-large"
+    current_torch_home = os.environ.get("TORCH_HOME", "")
+    if Path(model_name_path).is_dir():
+        is_empty = not any(Path(model_name_path).iterdir())
+        if is_empty:
+            # Download n cache at the specified location
+            os.environ["TORCH_HOME"] = model_path
+            model_name_path = "hkunlp/instructor-large"
+    else:  # if specified path does not exist, download the model
+        # Download n cache at the specified location
+        os.environ["TORCH_HOME"] = model_path
+        model_name_path = "hkunlp/instructor-large"
+    if model_obj is None:
+        sentence_model = INSTRUCTOR(model_name_path, device=device)
+        if "cuda" not in device:
+            # Issue https://github.com/pytorch/pytorch/issues/69364
+            # # In the initial experimentation, quantized model is generates slightly better results
+            logger.debug("Sentence embedding model is quantized ...")
+            model_obj = torch.quantization.quantize_dynamic(sentence_model, {torch.nn.Linear}, dtype=torch.qint8)
+        else:
+            model_obj = sentence_model
+    _sentences = [["Represent the Financial question for retrieving duplicate examples: ", _item] for _item in x]
+
+    res = model_obj.encode(_sentences)
+    os.environ["TORCH_HOME"] = current_torch_home
+    return res, model_obj
+
+
+def filter_samples(input_q: str, probable_qs: list, model_path: str, model_obj=None, threshold: float = 0.45):
     # Only consider the questions, note: this might change in future.
     _inq = ("# query: " + input_q).strip().lower()
     logger.debug(f"Input questions: {_inq}")
-    question_embeddings = generate_sentence_embeddings(model_path, x=[_inq], device="cpu")
+    question_embeddings, model_obj = generate_text_embeddings(model_path, x=[_inq], model_obj=model_obj, device="cpu")
 
     input_pqs = [_se.split("# answer")[0].strip().lower() for _se in probable_qs]
-    logger.debug(f"Probable questions: {input_pqs}")
-    embeddings = generate_sentence_embeddings(model_path, x=input_pqs, device="cpu")
-    res = []
+    logger.debug(f"Probable context: {input_pqs}")
+    embeddings, model_obj = generate_text_embeddings(model_path, x=input_pqs, model_obj=model_obj, device="cpu")
+    res = {}
+    _scores = []
     for idx, _se in enumerate(embeddings):
         similarities_score = cosine_similarity(
             [_se.astype(float).tolist()], [question_embeddings.astype(float).tolist()[0]]
         )
         logger.debug(f"Similarity score for: {input_pqs[idx]}: {similarities_score[0][0]}")
         if similarities_score[0][0] > threshold:
-            res.append(probable_qs[idx])
-    return res
+            res[str(probable_qs[idx])] = similarities_score[0][0]
+            _scores.append(similarities_score[0][0])
+
+    sorted_res = sorted(res.items(), key=lambda x: x[1], reverse=True)
+    logger.debug(f"Sorted context: {sorted_res}")
+    return list(dict(sorted_res).keys()), model_obj
 
 
-def remove_duplicates(input_x: list, model_path: str, threshold: float = 0.89):
+def remove_duplicates(
+    input_x: list, model_path: str, similarity_model=None, threshold: float = 0.989, device: str = "cpu"
+):
     # Remove duplicates pairs
     if input_x is None or len(input_x) < 2:
         res = []
     else:
-        embeddings = generate_sentence_embeddings(model_path, x=input_x, device="cpu")
+        embeddings, _ = generate_text_embeddings(model_path, x=input_x, model_obj=similarity_model, device=device)
         similarity_scores = cosine_similarity(embeddings)
         similar_indices = [(x, y) for (x, y) in np.argwhere(similarity_scores > threshold) if x != y]
 
@@ -95,18 +136,29 @@ def setup_dir(base_path: str):
             p.mkdir(parents=True, exist_ok=True)
 
 
-def csv_parser(input_path: str):
+def read_sample_pairs(input_path: str, model_name: str = "nsql"):
     df = pd.read_csv(input_path)
     df = df.dropna()
     df = df.drop_duplicates()
     df = df.reset_index(drop=True)
 
-    # Convert frame to below format
-    # [
-    # "# query": ""
-    # "# answer": ""
-    # ]
-    res = df.apply(lambda row: f"# query: {row['query']}\n# answer: {row['answer']}", axis=1).to_list()
+    # NSQL format
+    if model_name != "h2ogpt-sql":
+        # Open AI format
+        # Convert frame to below format
+        # [
+        # "# query": ""
+        # "# answer": ""
+        # ]
+        res = df.apply(lambda row: f"# query: {row['query']}\n# answer: {row['answer']}", axis=1).to_list()
+    else:
+        # Convert frame to below format
+        # [
+        # "Question": <question_text>
+        # "Answer":
+        # <response_text>
+        # ]
+        res = df.apply(lambda row: f"Question: {row['query']}\nAnswer:\n{row['answer']}", axis=1).to_list()
     return res
 
 

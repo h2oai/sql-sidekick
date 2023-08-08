@@ -1,16 +1,20 @@
 sentence_transformer = s3cmd get --recursive --skip-existing s3://h2o-model-gym/models/nlp/sentence_trasnsformer/all-MiniLM-L6-v2/ ./models/sentence_transformers/sentence-transformers_all-MiniLM-L6-v2
+demo_data = s3cmd get --recursive --skip-existing s3://h2o-sql-sidekick/demo/ ./examples/demo/
 
-.PHONY: download-models
+.PHONY: download_demo_data
 
-all: download-models
+all: download_demo_data
 
-setup: download_models ## Setup
+setup: download_demo_data ## Setup
 	python3 -m venv .sidekickvenv
 	./.sidekickvenv/bin/python3 -m pip install --upgrade pip
 	./.sidekickvenv/bin/python3 -m pip install wheel
 	./.sidekickvenv/bin/python3 -m pip install -r requirements.txt
 	mkdir -p ./db/sqlite
+	mkdir -p ./examples/demo/
 
 download_models:
 	mkdir -p ./models/sentence_transformers/sentence-transformers_all-MiniLM-L6-v2
-	$(sentence_transformer)
+
+download_demo_data:
+	$(demo_data)

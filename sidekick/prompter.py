@@ -20,6 +20,7 @@ from sidekick.utils import (execute_query_pd, extract_table_names, save_query,
 base_path = (Path(__file__).parent / "../").resolve()
 env_settings = toml.load(f"{base_path}/sidekick/configs/.env.toml")
 db_dialect = env_settings["DB-DIALECT"]["DB_TYPE"]
+model_name = env_settings["MODEL_INFO"]["MODEL_NAME"]
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
 __version__ = "0.0.4"
 
@@ -127,9 +128,30 @@ def update_table_info(cache_path: str, table_info_path: str = None, table_name: 
 @click.option("--port", "-P", default=5432, help="Database port", prompt="Enter port (default 5432)")
 @click.option("--table-info-path", "-t", help="Table info path", default=None)
 def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: int, table_info_path: str):
-    db_setup_api(db_name=db_name, hostname=hostname, user_name=user_name, password=password, port=port, table_info_path=table_info_path, table_samples_path=None, table_name=None, is_command=True)
+    db_setup_api(
+        db_name=db_name,
+        hostname=hostname,
+        user_name=user_name,
+        password=password,
+        port=port,
+        table_info_path=table_info_path,
+        table_samples_path=None,
+        table_name=None,
+        is_command=True,
+    )
 
-def db_setup_api(db_name: str, hostname: str, user_name: str, password: str, port: int, table_info_path: str, table_samples_path: str, table_name: str, is_command:bool=False):
+
+def db_setup_api(
+    db_name: str,
+    hostname: str,
+    user_name: str,
+    password: str,
+    port: int,
+    table_info_path: str,
+    table_samples_path: str,
+    table_name: str,
+    is_command: bool = False,
+):
     """Creates context for the new Database"""
     click.echo(f" Information supplied:\n {db_name}, {hostname}, {user_name}, {password}, {port}")
     try:
@@ -145,7 +167,7 @@ def db_setup_api(db_name: str, hostname: str, user_name: str, password: str, por
         path = f"{base_path}/var/lib/tmp/data"
         # For current session
         db_obj = DBConfig(db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect)
-        if db_obj.dialect == 'sqlite' and not os.path.isfile(f"{base_path}/db/sqlite/{db_name}.db"):
+        if db_obj.dialect == "sqlite" and not os.path.isfile(f"{base_path}/db/sqlite/{db_name}.db"):
             db_obj.create_db()
             click.echo("Database created successfully!")
         elif not db_obj.db_exists():
@@ -176,7 +198,11 @@ def db_setup_api(db_name: str, hostname: str, user_name: str, password: str, por
         # Check if table exists; pending --> and doesn't have any rows
         if db_obj.has_table():
             click.echo(f"Checked table {db_obj.table_name} exists in the DB.")
-            val = input(color(F.GREEN, "", "Would you like to add few sample rows (at-least 3)? (y/n):")) if is_command else "y"
+            val = (
+                input(color(F.GREEN, "", "Would you like to add few sample rows (at-least 3)? (y/n):"))
+                if is_command
+                else "y"
+            )
             if val.lower().strip() == "y" or val.lower().strip() == "yes":
                 val = input("Path to a CSV file to insert data from:") if is_command else table_samples_path
                 db_obj.add_samples(val)
@@ -257,11 +283,13 @@ def update_context():
 @cli.command()
 @click.option("--question", "-q", help="Database name", prompt="Ask a question")
 @click.option("--table-info-path", "-t", help="Table info path", default=None)
-@click.option("--sample-queries", "-s", help="Samples path", default=None)
-def query(question: str, table_info_path: str, sample_queries: str):
-    query_api(question= question, table_info_path=table_info_path, sample_queries=sample_queries, is_command=True)
+@click.option("--sample_qna_path", "-s", help="Samples path", default=None)
+def query(question: str, table_info_path: str, sample_qna_path: str):
+    """Asks question and returns SQL."""
+    query_api(question=question, table_info_path=table_info_path, sample_queries_path=sample_qna_path, is_command=True)
 
-def query_api(question: str, table_info_path: str, sample_queries: str, is_command:bool=False):
+
+def query_api(question: str, table_info_path: str, sample_queries_path: str, is_command: bool = False):
     """Asks question and returns SQL."""
     results = []
     # Book-keeping
@@ -283,27 +311,31 @@ def query_api(question: str, table_info_path: str, sample_queries: str, is_comma
             json.dump(table_context, outfile, indent=4, sort_keys=False)
     logger.info(f"Table in use: {table_names}")
     # Check if .env.toml file exists
-    api_key = env_settings["OPENAI"]["OPENAI_API_KEY"]
-    if api_key is None or api_key == "":
-        if os.getenv("OPENAI_API_KEY") is None or os.getenv("OPENAI_API_KEY") == "":
-            if is_command:
-                val = input(
-                    color(F.GREEN, "", "Looks like API key is not set, would you like to set OPENAI_API_KEY? (y/n):")
-                )
-                if val.lower() == "y":
-                    api_key = input(color(F.GREEN, "", "Enter OPENAI_API_KEY :"))
+    api_key = None
+    if model_name != "h2ogpt-sql":
+        api_key = env_settings["MODEL_INFO"]["OPENAI_API_KEY"]
+        if api_key is None or api_key == "":
+            if os.getenv("OPENAI_API_KEY") is None or os.getenv("OPENAI_API_KEY") == "":
+                if is_command:
+                    val = input(
+                        color(
+                            F.GREEN, "", "Looks like API key is not set, would you like to set OPENAI_API_KEY? (y/n):"
+                        )
+                    )
+                    if val.lower() == "y":
+                        api_key = input(color(F.GREEN, "", "Enter OPENAI_API_KEY :"))
 
-        if api_key is None and is_command:
-            return ["Looks like API key is not set, please set OPENAI_API_KEY!"]
+            if api_key is None and is_command:
+                return ["Looks like API key is not set, please set OPENAI_API_KEY!"]
 
-        os.environ["OPENAI_API_KEY"] = api_key
-        env_settings["OPENAI"]["OPENAI_API_KEY"] = api_key
+            os.environ["OPENAI_API_KEY"] = api_key
+            env_settings["MODEL_INFO"]["OPENAI_API_KEY"] = api_key
 
-        # Update settings file for future use.
-        f = open(f"{base_path}/sidekick/configs/.env.toml", "w")
-        toml.dump(env_settings, f)
-        f.close()
-    openai.api_key = api_key
+            # Update settings file for future use.
+            f = open(f"{base_path}/sidekick/configs/.env.toml", "w")
+            toml.dump(env_settings, f)
+            f.close()
+        openai.api_key = api_key
 
     # Set context
     logger.info("Setting context...")
@@ -325,24 +357,24 @@ def query_api(question: str, table_info_path: str, sample_queries: str, is_comma
         table_info_path = _get_table_info(path)
 
     sql_g = SQLGenerator(
-        db_url, api_key, job_path=base_path, data_input_path=table_info_path, samples_queries=sample_queries
+        db_url, api_key, job_path=base_path, data_input_path=table_info_path, sample_queries_path=sample_queries_path
     )
-    sql_g._tasks = sql_g.generate_tasks(table_names, question)
-    results.extend(["List of Actions Generated: \n", sql_g._tasks, "\n"])
-    click.echo(sql_g._tasks)
+    if "h2ogpt-sql" not in model_name:
+        sql_g._tasks = sql_g.generate_tasks(table_names, question)
+        results.extend(["List of Actions Generated: \n", sql_g._tasks, "\n"])
+        click.echo(sql_g._tasks)
 
-    updated_tasks = None
-    if sql_g._tasks is not None and is_command:
-        edit_val = click.prompt("Would you like to edit the tasks? (y/n)")
-        if edit_val.lower() == "y":
-            updated_tasks = click.edit(sql_g._tasks)
-            click.echo(f"Tasks:\n {updated_tasks}")
-        else:
-            click.echo("Skipping edit...")
-    if updated_tasks is not None:
-        sql_g._tasks = updated_tasks
+        updated_tasks = None
+        if sql_g._tasks is not None and is_command:
+            edit_val = click.prompt("Would you like to edit the tasks? (y/n)")
+            if edit_val.lower() == "y":
+                updated_tasks = click.edit(sql_g._tasks)
+                click.echo(f"Tasks:\n {updated_tasks}")
+            else:
+                click.echo("Skipping edit...")
+        if updated_tasks is not None:
+            sql_g._tasks = updated_tasks
 
-    model_name = env_settings["OPENAI"]["MODEL_NAME"]
     res = sql_g.generate_sql(table_names, question, model_name=model_name, _dialect=db_dialect)
     logger.info(f"Input query: {question}")
     logger.info(f"Generated response:\n\n{res}")
@@ -430,6 +462,7 @@ def query_api(question: str, table_info_path: str, sample_queries: str, is_comma
             click.echo("Exiting...")
 
     return results
+
 
 if __name__ == "__main__":
     cli()

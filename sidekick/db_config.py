@@ -7,6 +7,7 @@ import psycopg2 as pg
 import sqlalchemy
 from pandasql import sqldf
 from psycopg2.extras import Json
+from sidekick.configs.data_template import data_samples_template
 from sidekick.logger import logger
 from sqlalchemy import create_engine
 from sqlalchemy_utils import database_exists
@@ -84,6 +85,7 @@ class DBConfig:
                 with open(table_info_file, "w") as outfile:
                     schema_info_path = json.load(outfile)["schema_info_path"]
         res = []
+        sample_values = []
         try:
             if Path(schema_info_path).exists():
                 with open(schema_info_path, "r") as in_file:
@@ -93,17 +95,30 @@ class DBConfig:
                             if "Column Name" in data and "Column Type" in data:
                                 col_name = data["Column Name"]
                                 col_type = data["Column Type"]
+                                if col_type.lower() == "text":
+                                    col_type = col_type + " COLLATE NOCASE"
+                                # if column has sample values, save in cache for future use.
+                                if "Sample Values" in data:
+                                    _sample_values = data["Sample Values"]
+                                    _ds = data_samples_template.format(
+                                        column_name=col_name, comma_separated_sample_values=",".join(_sample_values)
+                                    )
+                                    sample_values.append(_ds)
                                 _new_samples = f"{col_name} {col_type}"
                             res.append(_new_samples)
+                if len(sample_values) > 0:
+                    # cache it for future use
+                    with open(
+                        f"{self.base_path}/var/lib/tmp/data/{self._table_name}_column_values.json", "w"
+                    ) as outfile:
+                        json.dump(sample_values, outfile, indent=2, sort_keys=False)
         except ValueError as ve:
             logger.error(f"Error in reading table context file: {ve}")
             pass
         return res
 
     def create_table(self, schema_info_path=None, schema_info=None):
-        engine = create_engine(
-            self._url, isolation_level="AUTOCOMMIT"
-        )
+        engine = create_engine(self._url, isolation_level="AUTOCOMMIT")
         self._engine = engine
         if self.schema_info is None:
             if schema_info is not None:
@@ -112,18 +127,6 @@ class DBConfig:
                 # If schema information is not provided, extract from the template.
                 self.schema_info = """,\n""".join(self._extract_schema_info(schema_info_path)).strip()
                 logger.debug(f"Schema info used for creating table:\n {self.schema_info}")
-            # self.schema_info = """
-            #     id uuid PRIMARY KEY,
-            #     ts TIMESTAMP WITH TIME ZONE NOT NULL,
-            #     kind TEXT NOT NULL, -- or int?,
-            #     user_id TEXT,
-            #     user_name TEXT,
-            #     resource_type TEXT NOT NULL, -- or int?,
-            #     resource_id  TEXT,
-            #     stream TEXT NOT NULL,
-            #     source TEXT NOT NULL,
-            #     payload jsonb NOT NULL
-            # """
         create_syntax = f"""
                 CREATE TABLE IF NOT EXISTS {self.table_name} (
                     {self.schema_info}
@@ -136,9 +139,7 @@ class DBConfig:
         return
 
     def has_table(self):
-        engine = create_engine(
-            self._url
-        )
+        engine = create_engine(self._url)
 
         return sqlalchemy.inspect(engine).has_table(self.table_name)
 
@@ -178,6 +179,7 @@ class DBConfig:
 
                 # Create a connection
                 connection = engine.connect()
+                logger.debug(f"Executing query:\n {query}")
                 result = connection.execute(query)
 
                 # Process the query results
