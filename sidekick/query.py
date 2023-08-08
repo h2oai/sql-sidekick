@@ -9,9 +9,12 @@ import openai
 import sqlglot
 import torch
 from langchain import OpenAI
-from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
+from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
+                         LLMPredictor, ServiceContext, SQLDatabase)
 from llama_index.indices.struct_store import SQLContextContainerBuilder
-from sidekick.configs.prompt_template import DEBUGGING_PROMPT, NSQL_QUERY_PROMPT, QUERY_PROMPT, TASK_PROMPT
+from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
+                                              NSQL_QUERY_PROMPT, QUERY_PROMPT,
+                                              TASK_PROMPT)
 from sidekick.logger import logger
 from sidekick.utils import filter_samples, read_sample_pairs, remove_duplicates
 from sqlalchemy import create_engine
@@ -33,7 +36,7 @@ class SQLGenerator:
         db_url: str,
         openai_key: str = None,
         data_input_path: str = "./table_info.jsonl",
-        samples_queries: str = "./samples.csv",
+        sample_queries_path: str = "./samples.csv",
         job_path: str = "../var/lib/tmp/data",
     ):
         self.db_url = db_url
@@ -42,7 +45,7 @@ class SQLGenerator:
         self.similarity_model = None
         self.context_builder = None
         self.data_input_path = _check_file_info(data_input_path)
-        self.sample_queries_path = samples_queries
+        self.sample_queries_path = sample_queries_path
         self.path = job_path
         self._data_info = None
         self._tasks = None
@@ -78,7 +81,7 @@ class SQLGenerator:
         # Check if seed samples were provided
         new_context_queries = []
         if self.sample_queries_path is not None and Path(self.sample_queries_path).exists():
-            logger.info(f"Using samples from path {self.sample_queries_path}")
+            logger.info(f"Using QnA samples from path {self.sample_queries_path}")
             new_context_queries = read_sample_pairs(self.sample_queries_path, "gpt")
             # cache the samples for future use
             with open(f"{self.path}/var/lib/tmp/data/queries_cache.json", "w") as f:
@@ -319,7 +322,7 @@ class SQLGenerator:
                     threshold=0.9,
                 )
                 if len(context_queries) > 1
-                else context_queries
+                else (context_queries, _)
             )
             logger.info(f"Number of possible contextual queries to question: {len(filtered_context)}")
             # If QnA pairs > 5, we keep top 5 for focused context

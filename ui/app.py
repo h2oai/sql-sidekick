@@ -1,11 +1,11 @@
 import logging
 from pathlib import Path
 from typing import List, Optional
-from sidekick.prompter import db_setup_api, query_api
 
 import openai
 import toml
 from h2o_wave import Q, app, data, handle_on, main, on, ui
+from sidekick.prompter import db_setup_api, query_api
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
@@ -20,8 +20,10 @@ user_name = db_settings["LOCAL_DB_CONFIG"]["USER_NAME"]
 password = db_settings["LOCAL_DB_CONFIG"]["PASSWORD"]
 db_name = db_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
 port = db_settings["LOCAL_DB_CONFIG"]["PORT"]
+# Related to the selected table - currently demo
 table_info_path = f'{base_path}/{db_settings["TABLE_INFO"]["TABLE_INFO_PATH"]}'
 table_samples_path = f'{base_path}/{db_settings["TABLE_INFO"]["TABLE_SAMPLES_PATH"]}'
+sample_qna_path = db_settings["TABLE_INFO"]["SAMPLE_QNA_PATH"]
 table_name = db_settings["TABLE_INFO"]["TABLE_NAME"]
 
 logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s")
@@ -74,11 +76,20 @@ async def chatbot(q: Q):
     logging.info(f"Question: {question}")
 
     if q.args.chatbot.lower() == "db setup":
-        llm_response = db_setup_api(db_name=db_name, hostname=host_name, user_name=user_name, password=password, port=port, table_info_path=table_info_path, table_samples_path=table_samples_path, table_name= table_name)
+        llm_response = db_setup_api(
+            db_name=db_name,
+            hostname=host_name,
+            user_name=user_name,
+            password=password,
+            port=port,
+            table_info_path=table_info_path,
+            table_samples_path=table_samples_path,
+            table_name=table_name,
+        )
     else:
-        llm_response = query_api(question = question,
-                                sample_queries=None,
-                                table_info_path=table_info_path)
+        llm_response = query_api(
+            question=question, sample_queries_path=sample_qna_path, table_info_path=table_info_path
+        )
         llm_response = "\n".join(llm_response)
 
     q.page["chat_card"].data += [llm_response, False]

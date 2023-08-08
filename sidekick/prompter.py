@@ -283,13 +283,13 @@ def update_context():
 @cli.command()
 @click.option("--question", "-q", help="Database name", prompt="Ask a question")
 @click.option("--table-info-path", "-t", help="Table info path", default=None)
-@click.option("--sample-queries", "-s", help="Samples path", default=None)
-def query(question: str, table_info_path: str, sample_queries: str):
+@click.option("--sample_qna_path", "-s", help="Samples path", default=None)
+def query(question: str, table_info_path: str, sample_qna_path: str):
     """Asks question and returns SQL."""
-    query_api(question=question, table_info_path=table_info_path, sample_queries=sample_queries, is_command=True)
+    query_api(question=question, table_info_path=table_info_path, sample_queries_path=sample_qna_path, is_command=True)
 
 
-def query_api(question: str, table_info_path: str, sample_queries: str, is_command: bool = False):
+def query_api(question: str, table_info_path: str, sample_queries_path: str, is_command: bool = False):
     """Asks question and returns SQL."""
     results = []
     # Book-keeping
@@ -357,7 +357,7 @@ def query_api(question: str, table_info_path: str, sample_queries: str, is_comma
         table_info_path = _get_table_info(path)
 
     sql_g = SQLGenerator(
-        db_url, api_key, job_path=base_path, data_input_path=table_info_path, samples_queries=sample_queries
+        db_url, api_key, job_path=base_path, data_input_path=table_info_path, sample_queries_path=sample_queries_path
     )
     if "h2ogpt-sql" not in model_name:
         sql_g._tasks = sql_g.generate_tasks(table_names, question)
