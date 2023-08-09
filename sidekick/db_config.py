@@ -101,7 +101,7 @@ class DBConfig:
                                 if "Sample Values" in data:
                                     _sample_values = data["Sample Values"]
                                     _ds = data_samples_template.format(
-                                        column_name=col_name, comma_separated_sample_values=",".join(_sample_values)
+                                        column_name=col_name, comma_separated_sample_values=",".join(str(_sample_val) for _sample_val in _sample_values)
                                     )
                                     sample_values.append(_ds)
                                 _new_samples = f"{col_name} {col_type}"

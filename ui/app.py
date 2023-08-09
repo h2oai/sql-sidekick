@@ -1,4 +1,5 @@
 import logging
+import json
 from pathlib import Path
 from typing import List, Optional
 
@@ -10,24 +11,27 @@ from sidekick.prompter import db_setup_api, query_api
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
 env_settings = toml.load(f"{base_path}/ui/.app_config.toml")
+tmp_path = f"{base_path}/var/lib/tmp"
+
 ui_title = env_settings["WAVE_UI"]["TITLE"]
 ui_description = env_settings["WAVE_UI"]["SUB_TITLE"]
 
-db_settings = toml.load(f"{base_path}/sidekick/configs/.env.toml")
-db_dialect = db_settings["DB-DIALECT"]["DB_TYPE"]
-host_name = db_settings["LOCAL_DB_CONFIG"]["HOST_NAME"]
-user_name = db_settings["LOCAL_DB_CONFIG"]["USER_NAME"]
-password = db_settings["LOCAL_DB_CONFIG"]["PASSWORD"]
-db_name = db_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
-port = db_settings["LOCAL_DB_CONFIG"]["PORT"]
-# Related to the selected table - currently demo
-table_info_path = f'{base_path}/{db_settings["TABLE_INFO"]["TABLE_INFO_PATH"]}'
-table_samples_path = f'{base_path}/{db_settings["TABLE_INFO"]["TABLE_SAMPLES_PATH"]}'
-sample_qna_path = db_settings["TABLE_INFO"]["SAMPLE_QNA_PATH"]
-table_name = db_settings["TABLE_INFO"]["TABLE_NAME"]
+async def user_variable(q:Q):
+    db_settings = toml.load(f"{base_path}/sidekick/configs/.env.toml")
 
-logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s")
+    q.user.db_dialect = db_settings["DB-DIALECT"]["DB_TYPE"]
+    q.user.host_name = db_settings["LOCAL_DB_CONFIG"]["HOST_NAME"]
+    q.user.user_name = db_settings["LOCAL_DB_CONFIG"]["USER_NAME"]
+    q.user.password = db_settings["LOCAL_DB_CONFIG"]["PASSWORD"]
+    q.user.db_name = db_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
+    q.user.port = db_settings["LOCAL_DB_CONFIG"]["PORT"]
 
+    q.user.table_info_path = db_settings["TABLE_INFO"]["TABLE_INFO_PATH"]
+    q.user.table_samples_path = db_settings["TABLE_INFO"]["TABLE_SAMPLES_PATH"]
+    q.user.sample_qna_path = db_settings["TABLE_INFO"]["SAMPLE_QNA_PATH"]
+    q.user.table_name = db_settings["TABLE_INFO"]["TABLE_NAME"]
+
+    logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s")
 
 # Use for page cards that should be removed when navigating away.
 # For pages that should be always present on screen use q.page[key] = ...
@@ -77,23 +81,83 @@ async def chatbot(q: Q):
 
     if q.args.chatbot.lower() == "db setup":
         llm_response = db_setup_api(
-            db_name=db_name,
-            hostname=host_name,
-            user_name=user_name,
-            password=password,
-            port=port,
-            table_info_path=table_info_path,
-            table_samples_path=table_samples_path,
-            table_name=table_name,
+            db_name=q.user.db_name,
+            hostname=q.user.host_name,
+            user_name=q.user.user_name,
+            password=q.user.password,
+            port=q.user.port,
+            table_info_path=q.user.table_info_path,
+            table_samples_path=q.user.table_samples_path,
+            table_name=q.user.table_name
         )
     else:
-        llm_response = query_api(
-            question=question, sample_queries_path=sample_qna_path, table_info_path=table_info_path
-        )
+        llm_response = query_api(question=question,
+                                 sample_queries_path=q.user.sample_qna_path,
+                                 table_info_path=q.user.table_info_path)
         llm_response = "\n".join(llm_response)
 
     q.page["chat_card"].data += [llm_response, False]
 
+@on("file_upload")
+async def fileupload(q: Q):
+    q.page['dataset'].error_bar.visible = False
+    q.page['dataset'].success_bar.visible = False
+
+    q.page["sidebar"].value = "#datasets"
+    usr_info_path = None
+    usr_samples_path = None
+    usr_sample_qa = None
+
+    sample_data = q.args.sample_data
+    sample_schema = q.args.data_schema
+    sample_qa = q.args.sample_qa
+
+    usr_table_name = q.args.table_name
+    # file_type = "csv" if q.args.file_type == "data_samples" else "jsonl"
+
+    if sample_data:
+        usr_samples_path = await q.site.download(sample_data[0], f"{tmp_path}/jobs/{usr_table_name}_table_samples.csv")
+    if sample_schema:
+        usr_info_path = await q.site.download(sample_schema[0], f"{tmp_path}/jobs/{usr_table_name}_table_info.jsonl")
+    if sample_qa:
+        usr_sample_qa = await q.site.download(sample_qa[0], f"{tmp_path}/jobs/{usr_table_name}_sample_qa.csv")
+
+    if sample_data is None or sample_schema is None:
+        q.page['dataset'].error_bar.visible = True
+    else:
+        q.page['dataset'].error_bar.visible = False
+        if Path(f"{tmp_path}/data/tables.json").exists():
+            f = open(f"{tmp_path}/data/tables.json", "r")
+            try:
+                table_metadata = json.load(f)
+                f.close()
+            except json.JSONDecodeError as e:
+                table_metadata = dict()
+
+            table_metadata[usr_table_name] = {"schema_info_path":usr_info_path,
+                                          "samples_path": usr_samples_path,
+                                          "samples_qa": usr_sample_qa}
+
+            with open(f"{tmp_path}/data/tables.json", "w") as outfile:
+                json.dump(table_metadata, outfile, indent=4, sort_keys=False)
+
+
+            q.user.table_name = usr_table_name
+            q.user.table_samples_path = usr_samples_path
+            q.user.table_info_path = usr_info_path
+
+            db_resp = db_setup_api(
+                db_name=q.user.db_name,
+                hostname=q.user.host_name,
+                user_name=q.user.user_name,
+                password=q.user.password,
+                port=q.user.port,
+                table_info_path=q.user.table_info_path,
+                table_samples_path=q.user.table_samples_path,
+                table_name=q.user.table_name
+            )
+            logging.info(f"DB updates: \n {db_resp}")
+            q.page['dataset'].success_bar.visible = True
 
 @on("#datasets")
 async def datasets(q: Q):
@@ -103,26 +167,44 @@ async def datasets(q: Q):
 
     add_card(
         q,
-        "table",
+        "dataset",
         ui.form_card(
             box="vertical",
             items=[
-                ui.table(
-                    name="table",
-                    columns=[
-                        ui.table_column(
-                            name=i,
-                            label=i,
-                            sortable=True,
-                            data_type="string" if q.client.data[i].dtype == "O" else "number",
-                        )
-                        for i in q.client.data.columns
-                    ],
-                    rows=[
-                        ui.table_row(name="row{}".format(idx), cells=[str(i) for i in row])
-                        for idx, row in q.client.data.iterrows()
-                    ],
-                )
+                ui.message_bar(name='error_bar', type='error', text='Please select data & schema files to upload!', visible=False),
+                ui.message_bar(name='success_bar', type='success', text='Files Uploaded Successfully!', visible=False),
+                ui.textbox(name='table_name', label='Table Name', required=True, value='demo'),
+                ui.file_upload(
+                    name='sample_data',
+                    label='Data Samples',
+                    multiple=False,
+                    compact=True,
+                    file_extensions=['csv'],
+                    required=True,
+                    max_file_size=5000,  # Specified in MB.
+                    tooltip="The data describing table schema and sample values, formats allowed are JSONL & CSV respectively!"
+                ),
+                ui.file_upload(
+                    name='data_schema',
+                    label='Data Schema',
+                    multiple=False,
+                    compact=True,
+                    file_extensions=['jsonl'],
+                    required=True,
+                    max_file_size=5000,  # Specified in MB.
+                    tooltip="The data describing table schema and sample values, formats allowed are JSONL & CSV respectively!"
+                ),
+                ui.file_upload(
+                    name='sample_qa',
+                    label='Sample Q&A',
+                    multiple=False,
+                    compact=True,
+                    file_extensions=['csv'],
+                    required=False,
+                    max_file_size=5000,  # Specified in MB.
+                    tooltip="The data describing table schema and sample values, formats allowed are JSONL & CSV respectively!"
+                ),
+                ui.button(name='file_upload', label='Submit', primary=True)
             ],
         ),
     )
@@ -190,7 +272,7 @@ async def init(q: Q) -> None:
                 "Menu",
                 items=[
                     ui.nav_item(name="#chat", label="Chat"),
-                    ui.nav_item(name="#datasets", label="Dataset Snapshot"),
+                    ui.nav_item(name="#datasets", label="Upload"),
                 ],
             ),
             ui.nav_group(
@@ -218,6 +300,8 @@ async def init(q: Q) -> None:
     # q.client.data = get_data()
     # q.client.mapping = get_mapping_dicts(q.client.data)
     # q.client.masked_data =
+
+    await user_variable(q)
 
     # If no active hash present, render chat.
     if q.args["#"] is None:
