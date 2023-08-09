@@ -7,6 +7,7 @@ import openai
 import toml
 from h2o_wave import Q, app, data, handle_on, main, on, ui
 from sidekick.prompter import db_setup_api, query_api
+from sidekick.utils import setup_dir, update_tables
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
@@ -126,38 +127,29 @@ async def fileupload(q: Q):
         q.page['dataset'].error_bar.visible = True
     else:
         q.page['dataset'].error_bar.visible = False
-        if Path(f"{tmp_path}/data/tables.json").exists():
-            f = open(f"{tmp_path}/data/tables.json", "r")
-            try:
-                table_metadata = json.load(f)
-                f.close()
-            except json.JSONDecodeError as e:
-                table_metadata = dict()
 
-            table_metadata[usr_table_name] = {"schema_info_path":usr_info_path,
-                                          "samples_path": usr_samples_path,
-                                          "samples_qa": usr_sample_qa}
+        table_metadata = dict()
+        table_metadata[usr_table_name] = {"schema_info_path":usr_info_path,
+                                    "samples_path": usr_samples_path,
+                                    "samples_qa": usr_sample_qa}
+        update_tables(f"{tmp_path}/data/tables.json", table_metadata)
 
-            with open(f"{tmp_path}/data/tables.json", "w") as outfile:
-                json.dump(table_metadata, outfile, indent=4, sort_keys=False)
+        q.user.table_name = usr_table_name
+        q.user.table_samples_path = usr_samples_path
+        q.user.table_info_path = usr_info_path
 
-
-            q.user.table_name = usr_table_name
-            q.user.table_samples_path = usr_samples_path
-            q.user.table_info_path = usr_info_path
-
-            db_resp = db_setup_api(
-                db_name=q.user.db_name,
-                hostname=q.user.host_name,
-                user_name=q.user.user_name,
-                password=q.user.password,
-                port=q.user.port,
-                table_info_path=q.user.table_info_path,
-                table_samples_path=q.user.table_samples_path,
-                table_name=q.user.table_name
-            )
-            logging.info(f"DB updates: \n {db_resp}")
-            q.page['dataset'].success_bar.visible = True
+        db_resp = db_setup_api(
+            db_name=q.user.db_name,
+            hostname=q.user.host_name,
+            user_name=q.user.user_name,
+            password=q.user.password,
+            port=q.user.port,
+            table_info_path=q.user.table_info_path,
+            table_samples_path=q.user.table_samples_path,
+            table_name=q.user.table_name
+        )
+        logging.info(f"DB updates: \n {db_resp}")
+        q.page['dataset'].success_bar.visible = True
 
 @on("#datasets")
 async def datasets(q: Q):
@@ -313,6 +305,7 @@ async def serve(q: Q):
     # Run only once per client connection.
     if not q.client.initialized:
         q.client.cards = set()
+        setup_dir(base_path)
         await init(q)
         q.client.initialized = True
 

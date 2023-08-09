@@ -127,6 +127,7 @@ def save_query(output_path: str, query, response, extracted_entity: Optional[dic
 def setup_dir(base_path: str):
     dir_list = [
         "var/lib/tmp/data",
+        "var/lib/tmp/jobs",
         "var/lib/tmp/.cache",
         "var/lib/tmp/.cache/models/sentence_transformers/sentence-transformers_all-MiniLM-L6-v2",
     ]
@@ -134,6 +135,32 @@ def setup_dir(base_path: str):
         p = Path(f"{base_path}/{_dl}")
         if not p.is_dir():
             p.mkdir(parents=True, exist_ok=True)
+
+
+def update_tables(json_file_path:str, new_data:dict[str, int]):
+    # Check if the JSON file exists
+    if os.path.exists(json_file_path):
+        try:
+            # Read the existing content from the JSON file
+            with open(json_file_path, 'r') as json_file:
+                existing_data = json.load(json_file)
+            logger.debug("Existing Data:", existing_data)
+        except Exception as e:
+            logger.debug(f"An error occurred while reading: {e}")
+    else:
+        existing_data = {}
+        logger.debug("JSON file doesn't exist. Creating a new one.")
+
+    # Append new data to the existing content
+    existing_data.update(new_data)
+
+    # Write the updated content back to the JSON file
+    try:
+        with open(json_file_path, 'w') as json_file:
+            json.dump(existing_data, json_file, indent=4)
+        logger.debug("Data appended and file updated.")
+    except Exception as e:
+        logger.debug(f"An error occurred while writing: {e}")
 
 
 def read_sample_pairs(input_path: str, model_name: str = "nsql"):
