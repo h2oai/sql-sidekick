@@ -71,15 +71,18 @@ def generate_text_embeddings(model_path: str, x, model_obj=None, batch_size: int
     return res, model_obj
 
 
-def filter_samples(input_q: str, probable_qs: list, model_path: str, model_obj=None, threshold: float = 0.45):
+def filter_samples(
+    input_q: str, probable_qs: list, model_path: str, model_obj=None, threshold: float = 0.80, device="auto"
+):
     # Only consider the questions, note: this might change in future.
     _inq = ("# query: " + input_q).strip().lower()
     logger.debug(f"Input questions: {_inq}")
-    question_embeddings, model_obj = generate_text_embeddings(model_path, x=[_inq], model_obj=model_obj, device="cpu")
+    _device = "cuda" if torch.cuda.is_available() else "cpu" if device == "auto" else device
+    question_embeddings, model_obj = generate_text_embeddings(model_path, x=[_inq], model_obj=model_obj, device=_device)
 
     input_pqs = [_se.split("# answer")[0].strip().lower() for _se in probable_qs]
     logger.debug(f"Probable context: {input_pqs}")
-    embeddings, model_obj = generate_text_embeddings(model_path, x=input_pqs, model_obj=model_obj, device="cpu")
+    embeddings, model_obj = generate_text_embeddings(model_path, x=input_pqs, model_obj=model_obj, device=_device)
     res = {}
     _scores = []
     for idx, _se in enumerate(embeddings):

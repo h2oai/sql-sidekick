@@ -385,7 +385,20 @@ class SQLGenerator:
             # COLLATE NOCASE is used to ignore case sensitivity, this might be specific to sqlite
             _temp = _res.replace("table_name", table_names[0]).split(";")[0]
             res = "SELECT" + _temp + " COLLATE NOCASE;"
-        return res
+
+            # Validate the generate SQL for parsing errors, along with dialect specific validation
+            # Note: Doesn't do well with handling date-time conversions
+            # e.g.
+            # sqlite: SELECT DATETIME(MAX(timestamp), '-5 minute') FROM demo WHERE isin_id = 'VM88109EGG92'
+            # postgres: SELECT MAX(timestamp) - INTERVAL '5 minutes' FROM demo where isin_id='VM88109EGG92'
+            # Reference ticket: https://github.com/tobymao/sqlglot/issues/2011
+            result = res
+            try:
+                result = sqlglot.transpile(res, identify=True, write="sqlite")[0]
+            except (sqlglot.errors.ParseError, ValueError, RuntimeError) as e:
+                logger.info("We did the best we could, there might be still be some error:\n")
+                logger.info(f"Realized query so far:\n {res}")
+        return result
 
     def task_formatter(self, input_task: str):
         # Generated format
