@@ -17,4 +17,5 @@ download_models:
 	mkdir -p ./models/sentence_transformers/sentence-transformers_all-MiniLM-L6-v2
 
 download_demo_data:
+	mkdir -p ./examples/demo/
 	$(demo_data)
