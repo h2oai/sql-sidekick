@@ -140,7 +140,7 @@ def setup_dir(base_path: str):
             p.mkdir(parents=True, exist_ok=True)
 
 
-def update_tables(json_file_path:str, new_data:dict[str, int]):
+def update_tables(json_file_path:str, new_data:dict):
     # Check if the JSON file exists
     if os.path.exists(json_file_path):
         try:
