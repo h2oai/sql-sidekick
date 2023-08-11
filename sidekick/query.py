@@ -9,12 +9,9 @@ import openai
 import sqlglot
 import torch
 from langchain import OpenAI
-from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
-                         LLMPredictor, ServiceContext, SQLDatabase)
+from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
 from llama_index.indices.struct_store import SQLContextContainerBuilder
-from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
-                                              NSQL_QUERY_PROMPT, QUERY_PROMPT,
-                                              TASK_PROMPT)
+from sidekick.configs.prompt_template import DEBUGGING_PROMPT, NSQL_QUERY_PROMPT, QUERY_PROMPT, TASK_PROMPT
 from sidekick.logger import logger
 from sidekick.utils import filter_samples, read_sample_pairs, remove_duplicates
 from sqlalchemy import create_engine
@@ -270,10 +267,12 @@ class SQLGenerator:
         else:
             # Load h2oGPT.NSQL model
             device = {"": 0} if torch.cuda.is_available() else "cpu"
+            # https://github.com/pytorch/pytorch/issues/52291
+            _load_in_8bit = False if "cpu" in device else True
             if self.model is None:
                 self.tokenizer = AutoTokenizer.from_pretrained("NumbersStation/nsql-6B", device_map=device)
                 self.model = AutoModelForCausalLM.from_pretrained(
-                    "NumbersStation/nsql-6B", device_map=device, load_in_8bit=True
+                    "NumbersStation/nsql-6B", device_map=device, load_in_8bit=_load_in_8bit
                 )
 
             # TODO Update needed for multiple tables
@@ -322,7 +321,8 @@ class SQLGenerator:
                     threshold=0.9,
                 )
                 if len(context_queries) > 1
-                else (context_queries, _)
+                else context_queries,
+                None,
             )
             logger.info(f"Number of possible contextual queries to question: {len(filtered_context)}")
             # If QnA pairs > 5, we keep top 5 for focused context
