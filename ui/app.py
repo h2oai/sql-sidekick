@@ -1,5 +1,5 @@
-import logging
 import json
+import logging
 from pathlib import Path
 from typing import List, Optional
 
@@ -17,7 +17,8 @@ tmp_path = f"{base_path}/var/lib/tmp"
 ui_title = env_settings["WAVE_UI"]["TITLE"]
 ui_description = env_settings["WAVE_UI"]["SUB_TITLE"]
 
-async def user_variable(q:Q):
+
+async def user_variable(q: Q):
     db_settings = toml.load(f"{base_path}/sidekick/configs/.env.toml")
 
     q.user.db_dialect = db_settings["DB-DIALECT"]["DB_TYPE"]
@@ -33,6 +34,7 @@ async def user_variable(q:Q):
     q.user.table_name = db_settings["TABLE_INFO"]["TABLE_NAME"]
 
     logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s")
+
 
 # Use for page cards that should be removed when navigating away.
 # For pages that should be always present on screen use q.page[key] = ...
@@ -89,20 +91,21 @@ async def chatbot(q: Q):
             port=q.user.port,
             table_info_path=q.user.table_info_path,
             table_samples_path=q.user.table_samples_path,
-            table_name=q.user.table_name
+            table_name=q.user.table_name,
         )
     else:
-        llm_response = query_api(question=question,
-                                 sample_queries_path=q.user.sample_qna_path,
-                                 table_info_path=q.user.table_info_path)
+        llm_response = query_api(
+            question=question, sample_queries_path=q.user.sample_qna_path, table_info_path=q.user.table_info_path
+        )
         llm_response = "\n".join(llm_response)
 
     q.page["chat_card"].data += [llm_response, False]
 
+
 @on("file_upload")
 async def fileupload(q: Q):
-    q.page['dataset'].error_bar.visible = False
-    q.page['dataset'].success_bar.visible = False
+    q.page["dataset"].error_bar.visible = False
+    q.page["dataset"].success_bar.visible = False
 
     q.page["sidebar"].value = "#datasets"
     usr_info_path = None
@@ -124,19 +127,22 @@ async def fileupload(q: Q):
         usr_sample_qa = await q.site.download(sample_qa[0], f"{tmp_path}/jobs/{usr_table_name}_sample_qa.csv")
 
     if sample_data is None or sample_schema is None:
-        q.page['dataset'].error_bar.visible = True
+        q.page["dataset"].error_bar.visible = True
     else:
-        q.page['dataset'].error_bar.visible = False
+        q.page["dataset"].error_bar.visible = False
 
         table_metadata = dict()
-        table_metadata[usr_table_name] = {"schema_info_path":usr_info_path,
-                                    "samples_path": usr_samples_path,
-                                    "samples_qa": usr_sample_qa}
+        table_metadata[usr_table_name] = {
+            "schema_info_path": usr_info_path,
+            "samples_path": usr_samples_path,
+            "samples_qa": usr_sample_qa,
+        }
         update_tables(f"{tmp_path}/data/tables.json", table_metadata)
 
         q.user.table_name = usr_table_name
         q.user.table_samples_path = usr_samples_path
         q.user.table_info_path = usr_info_path
+        q.user.sample_qna_path = usr_sample_qa
 
         db_resp = db_setup_api(
             db_name=q.user.db_name,
@@ -146,10 +152,11 @@ async def fileupload(q: Q):
             port=q.user.port,
             table_info_path=q.user.table_info_path,
             table_samples_path=q.user.table_samples_path,
-            table_name=q.user.table_name
+            table_name=q.user.table_name,
         )
         logging.info(f"DB updates: \n {db_resp}")
-        q.page['dataset'].success_bar.visible = True
+        q.page["dataset"].success_bar.visible = True
+
 
 @on("#datasets")
 async def datasets(q: Q):
@@ -163,40 +170,42 @@ async def datasets(q: Q):
         ui.form_card(
             box="vertical",
             items=[
-                ui.message_bar(name='error_bar', type='error', text='Please select data & schema files to upload!', visible=False),
-                ui.message_bar(name='success_bar', type='success', text='Files Uploaded Successfully!', visible=False),
-                ui.textbox(name='table_name', label='Table Name', required=True, value='demo'),
+                ui.message_bar(
+                    name="error_bar", type="error", text="Please select data & schema files to upload!", visible=False
+                ),
+                ui.message_bar(name="success_bar", type="success", text="Files Uploaded Successfully!", visible=False),
+                ui.textbox(name="table_name", label="Table Name", required=True, value="demo"),
                 ui.file_upload(
-                    name='sample_data',
-                    label='Data Samples',
+                    name="sample_data",
+                    label="Data Samples",
                     multiple=False,
                     compact=True,
-                    file_extensions=['csv'],
+                    file_extensions=["csv"],
                     required=True,
                     max_file_size=5000,  # Specified in MB.
-                    tooltip="The data describing table schema and sample values, formats allowed are JSONL & CSV respectively!"
+                    tooltip="The data describing table schema and sample values, formats allowed are JSONL & CSV respectively!",
                 ),
                 ui.file_upload(
-                    name='data_schema',
-                    label='Data Schema',
+                    name="data_schema",
+                    label="Data Schema",
                     multiple=False,
                     compact=True,
-                    file_extensions=['jsonl'],
+                    file_extensions=["jsonl"],
                     required=True,
                     max_file_size=5000,  # Specified in MB.
-                    tooltip="The data describing table schema and sample values, formats allowed are JSONL & CSV respectively!"
+                    tooltip="The data describing table schema and sample values, formats allowed are JSONL & CSV respectively!",
                 ),
                 ui.file_upload(
-                    name='sample_qa',
-                    label='Sample Q&A',
+                    name="sample_qa",
+                    label="Sample Q&A",
                     multiple=False,
                     compact=True,
-                    file_extensions=['csv'],
+                    file_extensions=["csv"],
                     required=False,
                     max_file_size=5000,  # Specified in MB.
-                    tooltip="The data describing table schema and sample values, formats allowed are JSONL & CSV respectively!"
+                    tooltip="The data describing table schema and sample values, formats allowed are JSONL & CSV respectively!",
                 ),
-                ui.button(name='file_upload', label='Submit', primary=True)
+                ui.button(name="file_upload", label="Submit", primary=True),
             ],
         ),
     )

@@ -79,7 +79,7 @@ class SQLGenerator:
         new_context_queries = []
         if self.sample_queries_path is not None and Path(self.sample_queries_path).exists():
             logger.info(f"Using QnA samples from path {self.sample_queries_path}")
-            new_context_queries = read_sample_pairs(self.sample_queries_path, "gpt")
+            new_context_queries = read_sample_pairs(self.sample_queries_path, "h2ogpt-sql")
             # cache the samples for future use
             with open(f"{self.path}/var/lib/tmp/data/queries_cache.json", "w") as f:
                 json.dump(new_context_queries, f, indent=2)
@@ -321,14 +321,14 @@ class SQLGenerator:
                     threshold=0.9,
                 )
                 if len(context_queries) > 1
-                else context_queries,
-                None,
+                else (context_queries, None)
             )
             logger.info(f"Number of possible contextual queries to question: {len(filtered_context)}")
             # If QnA pairs > 5, we keep top 5 for focused context
             _samples = filtered_context
             if len(filtered_context) > 3:
                 _samples = filtered_context[0:3][::-1]
+
             qna_samples = "\n".join(_samples)
 
             contextual_context_val = ", ".join(contextual_context)
@@ -364,6 +364,7 @@ class SQLGenerator:
             logger.debug(f"Query Text:\n {query}")
             inputs = self.tokenizer([query], return_tensors="pt")
             input_length = 1 if self.model.config.is_encoder_decoder else inputs.input_ids.shape[1]
+            logger.info(f"Context length: {input_length}")
             # Generate SQL
             random_seed = random.randint(0, 50)
             torch.manual_seed(random_seed)

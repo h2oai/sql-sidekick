@@ -166,7 +166,7 @@ def update_tables(json_file_path:str, new_data:dict):
         logger.debug(f"An error occurred while writing: {e}")
 
 
-def read_sample_pairs(input_path: str, model_name: str = "nsql"):
+def read_sample_pairs(input_path: str, model_name: str = "h2ogpt-sql"):
     df = pd.read_csv(input_path)
     df = df.dropna()
     df = df.drop_duplicates()
