@@ -160,8 +160,11 @@ def db_setup_api(
         env_settings["LOCAL_DB_CONFIG"]["PASSWORD"] = password
         env_settings["LOCAL_DB_CONFIG"]["PORT"] = port
         env_settings["LOCAL_DB_CONFIG"]["DB_NAME"] = db_name
-        env_settings["TABLE_INFO"]["TABLE_INFO_PATH"] = table_info_path
-        env_settings["TABLE_INFO"]["TABLE_SAMPLES_PATH"] = table_samples_path
+
+        # To-DO
+        # --- Need to remove the below keys from ENV toml --- #
+        # env_settings["TABLE_INFO"]["TABLE_INFO_PATH"] = table_info_path
+        # env_settings["TABLE_INFO"]["TABLE_SAMPLES_PATH"] = table_samples_path
 
         # Update settings file for future use.
         f = open(f"{base_path}/sidekick/configs/.env.toml", "w")
