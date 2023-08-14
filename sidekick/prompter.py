@@ -292,10 +292,10 @@ def update_context():
 @click.option("--sample_qna_path", "-s", help="Samples path", default=None)
 def query(question: str, table_info_path: str, sample_qna_path: str):
     """Asks question and returns SQL."""
-    query_api(question=question, table_info_path=table_info_path, sample_queries_path=sample_qna_path, is_command=True)
+    query_api(question=question, table_info_path=table_info_path, sample_queries_path=sample_qna_path, table_name=None, is_command=True)
 
 
-def query_api(question: str, table_info_path: str, sample_queries_path: str, is_command: bool = False):
+def query_api(question: str, table_info_path: str, sample_queries_path: str, table_name:str, is_command: bool = False):
     """Asks question and returns SQL."""
     results = []
     # Book-keeping
@@ -307,7 +307,9 @@ def query_api(question: str, table_info_path: str, sample_queries_path: str, is_
     table_context = json.load(open(table_context_file, "r")) if Path(table_context_file).exists() else {}
     table_names = []
 
-    if table_context and "tables_in_use" in table_context:
+    if table_name is not None:
+        table_names = [table_name]
+    elif table_context and "tables_in_use" in table_context:
         _tables = table_context["tables_in_use"]
         table_names = [_t.replace(" ", "_") for _t in _tables]
     else:
