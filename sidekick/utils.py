@@ -231,3 +231,19 @@ def execute_query_pd(query=None, tables_path=None, n_rows=100):
 
     res_df = sqldf(query, locals())
     return res_df
+
+
+def get_table_keys(file_path:str, table_key:str):
+    res = []
+    if not os.path.exists(file_path):
+        logger.debug(f"File '{file_path}' does not exist.")
+        return res, dict()
+
+    with open(file_path, 'r') as json_file:
+        data = json.load(json_file)
+        if isinstance(data, dict):
+            res = list(data.keys())
+    if table_key:
+        return None, data[table_key]
+    else:
+        return res, data

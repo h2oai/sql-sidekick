@@ -7,7 +7,7 @@ import openai
 import toml
 from h2o_wave import Q, app, data, handle_on, main, on, ui
 from sidekick.prompter import db_setup_api, query_api
-from sidekick.utils import setup_dir, update_tables
+from sidekick.utils import setup_dir, update_tables, get_table_keys
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
@@ -28,10 +28,13 @@ async def user_variable(q: Q):
     q.user.db_name = db_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
     q.user.port = db_settings["LOCAL_DB_CONFIG"]["PORT"]
 
-    q.user.table_info_path = db_settings["TABLE_INFO"]["TABLE_INFO_PATH"]
-    q.user.table_samples_path = db_settings["TABLE_INFO"]["TABLE_SAMPLES_PATH"]
-    q.user.sample_qna_path = db_settings["TABLE_INFO"]["SAMPLE_QNA_PATH"]
-    q.user.table_name = db_settings["TABLE_INFO"]["TABLE_NAME"]
+    tables, tables_info = get_table_keys(f"{tmp_path}/data/tables.json", None)
+    table_info = tables_info[tables[0]] if len(tables) > 0 else None
+
+    q.user.table_info_path = table_info["schema_info_path"] if len(tables) > 0 else None
+    q.user.table_samples_path = table_info["samples_path"] if len(tables) > 0 else None
+    q.user.sample_qna_path = table_info["samples_qa"] if len(tables) > 0 else None
+    q.user.table_name = tables[0] if len(tables) > 0 else None
 
     logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s")
 
@@ -59,7 +62,20 @@ async def chat(q: Q):
     q.page["sidebar"].value = "#chat"
     clear_cards(q)  # When routing, drop all the cards except of the main ones (header, sidebar, meta).
 
+    table_names = []
+    tables, _ = get_table_keys(f"{tmp_path}/data/tables.json", None)
+    for table in tables:
+        table_names.append(ui.choice(table, f'Table: {table}'))
+
     add_card(q, "background_card", ui.form_card(box="horizontal", items=[ui.text("Ask your questions:")]))
+
+    add_card(q, "select_tables", ui.form_card(
+        box="vertical", items=[
+                ui.dropdown(name='table_dropdown', label='Table', required=True, choices=table_names, value=q.user.table_name if q.user.table_name else None),
+                ui.button(name='submit_table', label='Submit', primary=True)
+            ]
+        )
+    )
     add_card(
         q,
         "chat_card",
@@ -78,6 +94,11 @@ async def chatbot(q: Q):
 
     # Append user message.
     q.page["chat_card"].data += [q.args.chatbot, True]
+
+    if q.page["select_tables"].table_dropdown.value is None or q.user.table_name is None:
+        q.page["chat_card"].data += ["Please select a table to continue!", False]
+        return
+
     # Append bot response.
     question = f"{q.args.chatbot}"
     logging.info(f"Question: {question}")
@@ -95,7 +116,10 @@ async def chatbot(q: Q):
         )
     else:
         llm_response = query_api(
-            question=question, sample_queries_path=q.user.sample_qna_path, table_info_path=q.user.table_info_path
+            question=question,
+            sample_queries_path=q.user.sample_qna_path,
+            table_info_path=q.user.table_info_path,
+            table_name=q.user.table_name
         )
         llm_response = "\n".join(llm_response)
 
@@ -106,6 +130,9 @@ async def chatbot(q: Q):
 async def fileupload(q: Q):
     q.page["dataset"].error_bar.visible = False
     q.page["dataset"].success_bar.visible = False
+    q.page["dataset"].progress_bar.visible = True
+
+    await q.page.save()
 
     q.page["sidebar"].value = "#datasets"
     usr_info_path = None
@@ -117,18 +144,18 @@ async def fileupload(q: Q):
     sample_qa = q.args.sample_qa
 
     usr_table_name = q.args.table_name
-    # file_type = "csv" if q.args.file_type == "data_samples" else "jsonl"
 
-    if sample_data:
-        usr_samples_path = await q.site.download(sample_data[0], f"{tmp_path}/jobs/{usr_table_name}_table_samples.csv")
-    if sample_schema:
-        usr_info_path = await q.site.download(sample_schema[0], f"{tmp_path}/jobs/{usr_table_name}_table_info.jsonl")
-    if sample_qa:
-        usr_sample_qa = await q.site.download(sample_qa[0], f"{tmp_path}/jobs/{usr_table_name}_sample_qa.csv")
-
-    if sample_data is None or sample_schema is None:
+    if sample_data is None or sample_schema is None or usr_table_name is None or usr_table_name.strip() == "":
         q.page["dataset"].error_bar.visible = True
+        q.page["dataset"].progress_bar.visible = False
     else:
+        if sample_data:
+            usr_samples_path = await q.site.download(sample_data[0], f"{tmp_path}/jobs/{usr_table_name}_table_samples.csv")
+        if sample_schema:
+            usr_info_path = await q.site.download(sample_schema[0], f"{tmp_path}/jobs/{usr_table_name}_table_info.jsonl")
+        if sample_qa:
+            usr_sample_qa = await q.site.download(sample_qa[0], f"{tmp_path}/jobs/{usr_table_name}_sample_qa.csv")
+
         q.page["dataset"].error_bar.visible = False
 
         table_metadata = dict()
@@ -155,6 +182,7 @@ async def fileupload(q: Q):
             table_name=q.user.table_name,
         )
         logging.info(f"DB updates: \n {db_resp}")
+        q.page["dataset"].progress_bar.visible = False
         q.page["dataset"].success_bar.visible = True
 
 
@@ -171,10 +199,10 @@ async def datasets(q: Q):
             box="vertical",
             items=[
                 ui.message_bar(
-                    name="error_bar", type="error", text="Please select data & schema files to upload!", visible=False
+                    name="error_bar", type="error", text="Please input table name, data & schema files to upload!", visible=False
                 ),
                 ui.message_bar(name="success_bar", type="success", text="Files Uploaded Successfully!", visible=False),
-                ui.textbox(name="table_name", label="Table Name", required=True, value="demo"),
+                ui.textbox(name="table_name", label="Table Name", required=True),
                 ui.file_upload(
                     name="sample_data",
                     label="Data Samples",
@@ -205,6 +233,7 @@ async def datasets(q: Q):
                     max_file_size=5000,  # Specified in MB.
                     tooltip="The data describing table schema and sample values, formats allowed are JSONL & CSV respectively!",
                 ),
+                ui.progress(name='progress_bar', width='100%', label='Uploading datasets and creating tables!', visible=False),
                 ui.button(name="file_upload", label="Submit", primary=True),
             ],
         ),
@@ -223,6 +252,22 @@ async def handle_page4(q: Q):
     # When routing, drop all the cards except of the main ones (header, sidebar, meta).
     # Since this page is interactive, we want to update its card instead of recreating it every time, so ignore 'form' card on drop.
     clear_cards(q, ["form"])
+
+
+@on("submit_table")
+async def submit_table(q: Q):
+    table_key = q.args.table_dropdown
+    if table_key:
+        _, table_info = get_table_keys(f"{tmp_path}/data/tables.json", table_key)
+
+        q.user.table_info_path = table_info["schema_info_path"]
+        q.user.table_samples_path = table_info["samples_path"]
+        q.user.sample_qna_path = table_info["samples_qa"]
+        q.user.table_name = table_key
+
+        q.page["select_tables"].table_dropdown.value = table_key
+    else:
+        q.page["select_tables"].table_dropdown.value = q.user.table_name
 
 
 async def init(q: Q) -> None:
