@@ -103,10 +103,11 @@ def update_table_info(cache_path: str, table_info_path: str = None, table_name: 
         if table_info_path:
             table_metadata["schema_info_path"] = table_info_path
     else:
+        table_metadata = dict()
         if table_name:
-            table_metadata = {"tables_in_use": [table_name]}
+            table_metadata["tables_in_use"] = [table_name]
         if table_info_path:
-            table_metadata = {"schema_info_path": table_info_path}
+            table_metadata["schema_info_path"] = table_info_path
 
     table_metadata["data_table_map"] = {}
     with open(f"{cache_path}/table_context.json", "w") as outfile:
