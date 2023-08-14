@@ -385,7 +385,7 @@ class SQLGenerator:
             # Below is a pre-caution in-case of an error in table name during generation
             # COLLATE NOCASE is used to ignore case sensitivity, this might be specific to sqlite
             _temp = _res.replace("table_name", table_names[0]).split(";")[0]
-            res = "SELECT" + _temp + " COLLATE NOCASE;"
+            res = "SELECT" + _temp + ";"
 
             # Validate the generate SQL for parsing errors, along with dialect specific validation
             # Note: Doesn't do well with handling date-time conversions
