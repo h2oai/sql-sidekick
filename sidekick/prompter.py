@@ -155,6 +155,8 @@ def db_setup_api(
     """Creates context for the new Database"""
     click.echo(f" Information supplied:\n {db_name}, {hostname}, {user_name}, {password}, {port}")
     try:
+        res = None
+        err = None
         env_settings["LOCAL_DB_CONFIG"]["HOST_NAME"] = hostname
         env_settings["LOCAL_DB_CONFIG"]["USER_NAME"] = user_name
         env_settings["LOCAL_DB_CONFIG"]["PASSWORD"] = password
@@ -173,15 +175,18 @@ def db_setup_api(
         path = f"{base_path}/var/lib/tmp/data"
         # For current session
         db_obj = DBConfig(db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect)
+
+        # Create Database
         if db_obj.dialect == "sqlite" and not os.path.isfile(f"{base_path}/db/sqlite/{db_name}.db"):
-            db_obj.create_db()
+            res, err = db_obj.create_db()
             click.echo("Database created successfully!")
         elif not db_obj.db_exists():
-            db_obj.create_db()
+            res, err = db_obj.create_db()
             click.echo("Database created successfully!")
         else:
             click.echo("Database already exists!")
 
+        # Create Table in DB
         val = enter_table_name() if is_command else "y"
         while True:
             if val.lower() != "y" and val.lower() != "n":
@@ -198,10 +203,11 @@ def db_setup_api(
             click.echo(f"Table name: {table_value}")
             # set table name
             db_obj.table_name = table_value.replace(" ", "_")
-            db_obj.create_table(table_info_path)
+            res, err = db_obj.create_table(table_info_path)
 
         update_table_info(path, table_info_path, db_obj.table_name)
         # Check if table exists; pending --> and doesn't have any rows
+        # Add rows to table
         if db_obj.has_table():
             click.echo(f"Checked table {db_obj.table_name} exists in the DB.")
             val = (
@@ -211,7 +217,7 @@ def db_setup_api(
             )
             if val.lower().strip() == "y" or val.lower().strip() == "yes":
                 val = input("Path to a CSV file to insert data from:") if is_command else table_samples_path
-                db_obj.add_samples(val)
+                res, err = db_obj.add_samples(val)
             else:
                 click.echo("Exiting...")
                 return
@@ -219,7 +225,10 @@ def db_setup_api(
             echo_msg = "Job done. Ask a question now!"
             click.echo(echo_msg)
 
-        return f"Created a Database {db_name}. Inserted sample values from {table_samples_path} into table {table_name}, please ask questions!"
+        if err is None:
+            return f"Created a Database {db_name}. Inserted sample values from {table_samples_path} into table {table_name}, please ask questions!", None
+        else:
+            return None, err
     except Exception as e:
         echo_msg = f"Error creating database. Check configuration parameters.\n: {e}"
         click.echo(echo_msg)
@@ -298,6 +307,7 @@ def query(question: str, table_info_path: str, sample_qna_path: str):
 def query_api(question: str, table_info_path: str, sample_queries_path: str, is_command: bool = False):
     """Asks question and returns SQL."""
     results = []
+    err = None
     # Book-keeping
     setup_dir(base_path)
 
@@ -333,7 +343,7 @@ def query_api(question: str, table_info_path: str, sample_queries_path: str, is_
                         api_key = input(color(F.GREEN, "", "Enter OPENAI_API_KEY :"))
 
             if api_key is None and is_command:
-                return ["Looks like API key is not set, please set OPENAI_API_KEY!"]
+                return ["Looks like API key is not set, please set OPENAI_API_KEY!"], err
 
             os.environ["OPENAI_API_KEY"] = api_key
             env_settings["MODEL_INFO"]["OPENAI_API_KEY"] = api_key
@@ -361,7 +371,7 @@ def query_api(question: str, table_info_path: str, sample_queries_path: str, is_
         )
 
     if table_info_path is None:
-        table_info_path = _get_table_info(path)
+        table_info_path = _get_table_info(path, is_command)
 
     sql_g = SQLGenerator(
         db_url, api_key, job_path=base_path, data_input_path=table_info_path, sample_queries_path=sample_queries_path
@@ -468,7 +478,7 @@ def query_api(question: str, table_info_path: str, sample_queries_path: str, is_
         else:
             click.echo("Exiting...")
 
-    return results
+    return results, err
 
 
 if __name__ == "__main__":

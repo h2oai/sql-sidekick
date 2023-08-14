@@ -39,10 +39,7 @@ def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, devic
     return all_res
 
 
-def generate_text_embeddings(model_path: str, x, model_obj=None, batch_size: int = 32, device: Optional[str] = "cpu"):
-    # Reference:
-    # 1. https://www.sbert.net/docs/pretrained_models.html#sentence-embedding-models
-    # Maps sentence & paragraphs to a 384 dimensional dense vector space.
+def load_embedding_model(model_path: str, device: str):
     model_name_path = f"{model_path}/text_embedding/instructor-large"
     current_torch_home = os.environ.get("TORCH_HOME", "")
     if Path(model_name_path).is_dir():
@@ -55,19 +52,33 @@ def generate_text_embeddings(model_path: str, x, model_obj=None, batch_size: int
         # Download n cache at the specified location
         os.environ["TORCH_HOME"] = model_path
         model_name_path = "hkunlp/instructor-large"
+
+    sentence_model = INSTRUCTOR(model_name_path, device=device)
+    if "cuda" not in device:
+        # Issue https://github.com/pytorch/pytorch/issues/69364
+        # # In the initial experimentation, quantized model is generates slightly better results
+        logger.debug("Sentence embedding model is quantized ...")
+        model_obj = torch.quantization.quantize_dynamic(sentence_model, {torch.nn.Linear}, dtype=torch.qint8)
+    else:
+        model_obj = sentence_model
+
+    # Why are we setting torch home back to the current_torch_home
+    os.environ["TORCH_HOME"] = current_torch_home
+
+    return model_obj, model_name_path
+
+
+def generate_text_embeddings(model_path: str, x, model_obj=None, batch_size: int = 32, device: Optional[str] = "cpu"):
+    # Reference:
+    # 1. https://www.sbert.net/docs/pretrained_models.html#sentence-embedding-models
+    # Maps sentence & paragraphs to a 384 dimensional dense vector space.
     if model_obj is None:
-        sentence_model = INSTRUCTOR(model_name_path, device=device)
-        if "cuda" not in device:
-            # Issue https://github.com/pytorch/pytorch/issues/69364
-            # # In the initial experimentation, quantized model is generates slightly better results
-            logger.debug("Sentence embedding model is quantized ...")
-            model_obj = torch.quantization.quantize_dynamic(sentence_model, {torch.nn.Linear}, dtype=torch.qint8)
-        else:
-            model_obj = sentence_model
+        model_obj, model_name_path = load_embedding_model(model_path, device)
+
     _sentences = [["Represent the Financial question for retrieving duplicate examples: ", _item] for _item in x]
 
     res = model_obj.encode(_sentences)
-    os.environ["TORCH_HOME"] = current_torch_home
+
     return res, model_obj
 
 

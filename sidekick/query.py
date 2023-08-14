@@ -13,7 +13,7 @@ from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredict
 from llama_index.indices.struct_store import SQLContextContainerBuilder
 from sidekick.configs.prompt_template import DEBUGGING_PROMPT, NSQL_QUERY_PROMPT, QUERY_PROMPT, TASK_PROMPT
 from sidekick.logger import logger
-from sidekick.utils import filter_samples, read_sample_pairs, remove_duplicates
+from sidekick.utils import filter_samples, read_sample_pairs, remove_duplicates, load_embedding_model
 from sqlalchemy import create_engine
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -28,6 +28,36 @@ def _check_file_info(file_path: str):
 
 
 class SQLGenerator:
+    _instance = None
+
+    def __new__(
+        cls,
+        db_url: str,
+        openai_key: str = None,
+        data_input_path: str = "./table_info.jsonl",
+        sample_queries_path: str = "./samples.csv",
+        job_path: str = "../var/lib/tmp/data",
+        device: str = "cpu"
+    ):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+
+            # Load h2oGPT.NSQL model
+            device = {"": 0} if torch.cuda.is_available() else "cpu" if device == "auto" else device
+            # https://github.com/pytorch/pytorch/issues/52291
+            _load_in_8bit = False if "cpu" in device else True
+
+            cls._instance.model = AutoModelForCausalLM.from_pretrained(
+                    "NumbersStation/nsql-6B", device_map=device, load_in_8bit=_load_in_8bit
+                )
+            cls._instance.tokenizer = AutoTokenizer.from_pretrained("NumbersStation/nsql-6B", device_map=device)
+
+            model_embed_path = f"{job_path}/var/lib/tmp/.cache/models"
+            device = "cuda" if torch.cuda.is_available() else "cpu" if device == "auto" else device
+            cls._instance.similarity_model, _ = load_embedding_model(model_path=model_embed_path, device=device)
+
+        return cls._instance
+
     def __init__(
         self,
         db_url: str,
@@ -35,11 +65,11 @@ class SQLGenerator:
         data_input_path: str = "./table_info.jsonl",
         sample_queries_path: str = "./samples.csv",
         job_path: str = "../var/lib/tmp/data",
+        device: str = "cpu"
     ):
         self.db_url = db_url
         self.engine = create_engine(db_url)
         self.sql_database = SQLDatabase(self.engine)
-        self.similarity_model = None
         self.context_builder = None
         self.data_input_path = _check_file_info(data_input_path)
         self.sample_queries_path = sample_queries_path
@@ -48,8 +78,10 @@ class SQLGenerator:
         self._tasks = None
         self.openai_key = openai_key
         self.content_queries = None
-        self.model = None  # Used for local LLMs
-        self.tokenizer = None  # Used for local tokenizer
+        # Intiated only once!
+        # self.model = None  # Used for local LLMs
+        # self.tokenizer = None  # Used for local tokenizer
+        # self.similarity_model = None
 
     def load_column_samples(self, tables: list):
         # TODO: Maybe we add table name as a member variable
@@ -385,7 +417,7 @@ class SQLGenerator:
             # Below is a pre-caution in-case of an error in table name during generation
             # COLLATE NOCASE is used to ignore case sensitivity, this might be specific to sqlite
             _temp = _res.replace("table_name", table_names[0]).split(";")[0]
-            res = "SELECT" + _temp + " COLLATE NOCASE;"
+            res = "SELECT" + _temp + ";"
 
             # Validate the generate SQL for parsing errors, along with dialect specific validation
             # Note: Doesn't do well with handling date-time conversions

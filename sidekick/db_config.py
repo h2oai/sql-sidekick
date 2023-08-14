@@ -11,6 +11,7 @@ from sidekick.configs.data_template import data_samples_template
 from sidekick.logger import logger
 from sqlalchemy import create_engine
 from sqlalchemy_utils import database_exists
+from sqlalchemy.exc import SQLAlchemyError
 
 
 class DBConfig:
@@ -64,17 +65,25 @@ class DBConfig:
     def create_db(self):
         engine = create_engine(self._url)
         self._engine = engine
+        try:
+            with engine.connect() as conn:
+                # conn.execute("commit")
+                # Do not substitute user-supplied database names here.
+                if self.dialect != "sqlite":
+                    conn.execute("commit")
+                    res = conn.execute(f"CREATE DATABASE {self.db_name}")
+                    self._url = f"{self._url}{self.db_name}"
+                    return res, None
+                else:
+                    logger.debug("SQLite DB is created when 'engine.connect()' is called")
 
-        with engine.connect() as conn:
-            # conn.execute("commit")
-            # Do not substitute user-supplied database names here.
-            if self.dialect != "sqlite":
-                conn.execute("commit")
-                res = conn.execute(f"CREATE DATABASE {self.db_name}")
-                self._url = f"{self._url}{self.db_name}"
-                return res
-            else:
-                logger.debug("SQLite DB is created when 'engine.connect()' is called")
+            return "Created DB", None
+        except SQLAlchemyError as sqla_error:
+            logger.debug("SQLAlchemy error:", sqla_error)
+            return None, sqla_error
+        except Exception as error:
+            logger.debug("Error Occurred:", error)
+            return None, error
 
     def _extract_schema_info(self, schema_info_path=None):
         # From jsonl format
@@ -118,25 +127,33 @@ class DBConfig:
         return res
 
     def create_table(self, schema_info_path=None, schema_info=None):
-        engine = create_engine(self._url, isolation_level="AUTOCOMMIT")
-        self._engine = engine
-        if self.schema_info is None:
-            if schema_info is not None:
-                self.schema_info = schema_info
-            else:
-                # If schema information is not provided, extract from the template.
-                self.schema_info = """,\n""".join(self._extract_schema_info(schema_info_path)).strip()
-                logger.debug(f"Schema info used for creating table:\n {self.schema_info}")
-        create_syntax = f"""
-                CREATE TABLE IF NOT EXISTS {self.table_name} (
-                    {self.schema_info}
-                )
-                """
-        with engine.connect() as conn:
-            if self.dialect != "sqlite":
-                conn.execute("commit")
-            conn.execute(create_syntax)
-        return
+        try:
+            engine = create_engine(self._url, isolation_level="AUTOCOMMIT")
+            self._engine = engine
+            if self.schema_info is None:
+                if schema_info is not None:
+                    self.schema_info = schema_info
+                else:
+                    # If schema information is not provided, extract from the template.
+                    self.schema_info = """,\n""".join(self._extract_schema_info(schema_info_path)).strip()
+                    logger.debug(f"Schema info used for creating table:\n {self.schema_info}")
+            create_syntax = f"""
+                    CREATE TABLE IF NOT EXISTS {self.table_name} (
+                        {self.schema_info}
+                    )
+                    """
+            with engine.connect() as conn:
+                if self.dialect != "sqlite":
+                    conn.execute("commit")
+                conn.execute(create_syntax)
+
+            return self.table_name, None
+        except SQLAlchemyError as sqla_error:
+            logger.debug("SQLAlchemy error:", sqla_error)
+            return None, sqla_error
+        except Exception as error:
+            logger.debug("Error Occurred:", error)
+            return None, error
 
     def has_table(self):
         engine = create_engine(self._url)
@@ -157,13 +174,19 @@ class DBConfig:
 
             # Fetch the number of rows from the table
             num_rows_aft = pd.read_sql_query(sample_query, engine)
-            logger.info(f"Number of rows inserted: {num_rows_aft.iloc[0, 0] - num_rows_bef.iloc[0, 0]}")
+            num_inserted = num_rows_aft.iloc[0, 0] - num_rows_bef.iloc[0, 0]
+            logger.info(f"Number of rows inserted: {num_inserted}")
             engine.dispose()
-
-        except Exception as e:
-            logger.info(f"Error occurred : {format(e)}")
+            return num_inserted, None
+        except SQLAlchemyError as sqla_error:
+            logger.debug("SQLAlchemy error:", sqla_error)
+            return None, sqla_error
+        except Exception as error:
+            logger.debug("Error Occurred:", error)
+            return None, error
         finally:
-            engine.dispose()
+            if engine:
+                engine.dispose()
 
     def execute_query_db(self, query=None, n_rows=100):
         output = []
