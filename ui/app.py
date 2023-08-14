@@ -116,7 +116,10 @@ async def chatbot(q: Q):
         )
     else:
         llm_response, err = query_api(
-            question=question, sample_queries_path=q.user.sample_qna_path, table_info_path=q.user.table_info_path
+            question=question,
+            sample_queries_path=q.user.sample_qna_path,
+            table_info_path=q.user.table_info_path,
+            table_name=q.user.table_name
         )
         llm_response = "\n".join(llm_response)
 
@@ -255,14 +258,17 @@ async def handle_page4(q: Q):
 @on("submit_table")
 async def submit_table(q: Q):
     table_key = q.args.table_dropdown
-    _, table_info = get_table_keys(f"{tmp_path}/data/tables.json", table_key)
+    if table_key:
+        _, table_info = get_table_keys(f"{tmp_path}/data/tables.json", table_key)
 
-    q.user.table_info_path = table_info["schema_info_path"]
-    q.user.table_samples_path = table_info["samples_path"]
-    q.user.sample_qna_path = table_info["samples_qa"]
-    q.user.table_name = table_key
+        q.user.table_info_path = table_info["schema_info_path"]
+        q.user.table_samples_path = table_info["samples_path"]
+        q.user.sample_qna_path = table_info["samples_qa"]
+        q.user.table_name = table_key
 
-    q.page["select_tables"].table_dropdown.value = table_key
+        q.page["select_tables"].table_dropdown.value = table_key
+    else:
+        q.page["select_tables"].table_dropdown.value = q.user.table_name
 
 
 async def init(q: Q) -> None:
