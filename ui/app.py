@@ -149,6 +149,7 @@ async def fileupload(q: Q):
         q.page["dataset"].error_bar.visible = True
         q.page["dataset"].progress_bar.visible = False
     else:
+        usr_table_name = usr_table_name.lower()
         if sample_data:
             usr_samples_path = await q.site.download(sample_data[0], f"{tmp_path}/jobs/{usr_table_name}_table_samples.csv")
         if sample_schema:
