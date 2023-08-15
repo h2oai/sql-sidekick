@@ -12,6 +12,7 @@ from pandasql import sqldf
 from sentence_transformers import SentenceTransformer
 from sidekick.logger import logger
 from sklearn.metrics.pairwise import cosine_similarity
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, device: Optional[str] = None):
@@ -40,7 +41,7 @@ def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, devic
 
 
 def load_embedding_model(model_path: str, device: str):
-    model_name_path = f"{model_path}/text_embedding/instructor-large"
+    model_name_path = f"{model_path}/sentence_transformers/hkunlp_instructor-large"
     current_torch_home = os.environ.get("TORCH_HOME", "")
     if Path(model_name_path).is_dir():
         is_empty = not any(Path(model_name_path).iterdir())
@@ -258,3 +259,15 @@ def get_table_keys(file_path:str, table_key:str):
         return None, data[table_key]
     else:
         return res, data
+
+
+def load_causal_lm_model(model_name: str,  device: str, load_in_8bit: bool):
+    try:
+
+        tokenizer = AutoTokenizer.from_pretrained(model_name, device_map=device)
+        model = AutoModelForCausalLM.from_pretrained(model_name, device_map=device, load_in_8bit=load_in_8bit)
+
+        return model, tokenizer
+    except Exception as e:
+        logger.info(f"An error occurred while loading the model: {e}")
+        return None, None

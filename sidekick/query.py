@@ -13,7 +13,7 @@ from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredict
 from llama_index.indices.struct_store import SQLContextContainerBuilder
 from sidekick.configs.prompt_template import DEBUGGING_PROMPT, NSQL_QUERY_PROMPT, QUERY_PROMPT, TASK_PROMPT
 from sidekick.logger import logger
-from sidekick.utils import filter_samples, read_sample_pairs, remove_duplicates, load_embedding_model
+from sidekick.utils import filter_samples, read_sample_pairs, remove_duplicates, load_embedding_model, load_causal_lm_model
 from sqlalchemy import create_engine
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -44,13 +44,11 @@ class SQLGenerator:
 
             # Load h2oGPT.NSQL model
             device = {"": 0} if torch.cuda.is_available() else "cpu" if device == "auto" else device
-            # https://github.com/pytorch/pytorch/issues/52291
             _load_in_8bit = False if "cpu" in device else True
 
-            cls._instance.model = AutoModelForCausalLM.from_pretrained(
-                    "NumbersStation/nsql-6B", device_map=device, load_in_8bit=_load_in_8bit
-                )
-            cls._instance.tokenizer = AutoTokenizer.from_pretrained("NumbersStation/nsql-6B", device_map=device)
+            cls._instance.model, cls._instance.tokenizer = load_causal_lm_model("NumbersStation/nsql-6B",
+                                                                                device=device,
+                                                                                load_in_8bit=_load_in_8bit)
 
             model_embed_path = f"{job_path}/var/lib/tmp/.cache/models"
             device = "cuda" if torch.cuda.is_available() else "cpu" if device == "auto" else device
@@ -297,11 +295,12 @@ class SQLGenerator:
                 logger.info("We did the best we could, there might be still be some error:\n")
                 logger.info(f"Realized query so far:\n {res}")
         else:
-            # Load h2oGPT.NSQL model
-            device = {"": 0} if torch.cuda.is_available() else "cpu"
-            # https://github.com/pytorch/pytorch/issues/52291
-            _load_in_8bit = False if "cpu" in device else True
             if self.model is None:
+                # Load h2oGPT.NSQL if not initialized self.model is None
+                device = {"": 0} if torch.cuda.is_available() else "cpu"
+                # https://github.com/pytorch/pytorch/issues/52291
+                _load_in_8bit = False if "cpu" in device else True
+
                 self.tokenizer = AutoTokenizer.from_pretrained("NumbersStation/nsql-6B", device_map=device)
                 self.model = AutoModelForCausalLM.from_pretrained(
                     "NumbersStation/nsql-6B", device_map=device, load_in_8bit=_load_in_8bit

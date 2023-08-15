@@ -77,7 +77,7 @@ class DBConfig:
                 else:
                     logger.debug("SQLite DB is created when 'engine.connect()' is called")
 
-            return "Created DB", None
+            return True, None
         except SQLAlchemyError as sqla_error:
             logger.debug("SQLAlchemy error:", sqla_error)
             return None, sqla_error

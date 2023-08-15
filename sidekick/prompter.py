@@ -302,13 +302,13 @@ def update_context():
 @click.option("--sample_qna_path", "-s", help="Samples path", default=None)
 def query(question: str, table_info_path: str, sample_qna_path: str):
     """Asks question and returns SQL."""
-    query_api(question=question, table_info_path=table_info_path, sample_queries_path=sample_qna_path, is_command=True)
+    query_api(question=question, table_info_path=table_info_path, sample_queries_path=sample_qna_path, table_name=None, is_command=True)
 
 
-def query_api(question: str, table_info_path: str, sample_queries_path: str, is_command: bool = False):
+def query_api(question: str, table_info_path: str, sample_queries_path: str, table_name:str, is_command: bool = False):
     """Asks question and returns SQL."""
     results = []
-    err = None
+    err = None  # TODO - Need to handle errors if occurred
     # Book-keeping
     setup_dir(base_path)
 
@@ -374,7 +374,7 @@ def query_api(question: str, table_info_path: str, sample_queries_path: str, is_
         )
 
     if table_info_path is None:
-        table_info_path = _get_table_info(path, is_command)
+        table_info_path = _get_table_info(path)
 
     sql_g = SQLGenerator(
         db_url, api_key, job_path=base_path, data_input_path=table_info_path, sample_queries_path=sample_queries_path
