@@ -301,6 +301,8 @@ class SQLGenerator:
                 _val = _context.get(_item, None)
                 if _val:
                     contextual_context.append(f"{_item}: {_val}")
+            # Caution:
+            contextual_context.append(f"Always use: LIMIT 100 with SELECT")
 
             logger.info("Filtering Question/Query pairs ...")
             context_queries: list = self.update_context_queries()
@@ -352,6 +354,7 @@ class SQLGenerator:
 
             logger.debug(f"Relevant sample column values: {data_samples_list}")
             _table_name = ", ".join(table_names)
+
             query = NSQL_QUERY_PROMPT.format(
                 table_name=_table_name,
                 column_info=_column_info,
@@ -365,6 +368,27 @@ class SQLGenerator:
             inputs = self.tokenizer([query], return_tensors="pt")
             input_length = 1 if self.model.config.is_encoder_decoder else inputs.input_ids.shape[1]
             logger.info(f"Context length: {input_length}")
+
+            # Handle limited context length
+            # Currently, conservative approach: remove column description from the prompt, if input_length > (2048-300)
+            # Others to try:
+            # 1. Move to a model with larger context length
+            # 2. Possibly use a different tokenizer for chunking
+            # 3. Maybe positional interpolation --> https://arxiv.org/abs/2306.15595
+            if int(input_length) > 1748:
+                logger.info("Input length is greater than 1748, removing column description from the prompt")
+                query = NSQL_QUERY_PROMPT.format(
+                    table_name=_table_name,
+                    column_info=_column_info,
+                    data_info_detailed="",
+                    sample_queries=qna_samples,
+                    context=contextual_context_val,
+                    question_txt=input_question,
+                )
+                logger.debug(f"Adjusted query Text:\n {query}")
+                inputs = self.tokenizer([query], return_tensors="pt")
+                input_length = 1 if self.model.config.is_encoder_decoder else inputs.input_ids.shape[1]
+                logger.info(f"Adjusted context length: {input_length}")
             # Generate SQL
             random_seed = random.randint(0, 50)
             torch.manual_seed(random_seed)
