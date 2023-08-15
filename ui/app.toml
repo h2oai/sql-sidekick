@@ -1,0 +1,24 @@
+[App]
+name = "ai.h2o.wave.sql-sidekick"
+title = "SQL-Sidekick"
+description = "QnA with tabular data using NLI (Demo-ware for experimentation)"
+LongDescription = "about.md"
+Category = "Data Science"
+Tags = ["DATA_SCIENCE", "MACHINE_LEARNING", "NLP"]
+Version = "0.0.5"
+
+[Runtime]
+MemoryLimit = "64Gi"
+MemoryReservation = "16Gi"
+module = "start"
+VolumeMount = "/meta_data"
+VolumeSize = "100Gi"
+ResourceVolumeSize = "64Gi"
+GPUCount = 1
+RuntimeVersion = "ub2004_cuda114_cudnn8_py38_wlatest"
+RoutingMode = "BASE_URL"
+EnableOIDC = true
+
+[[Env]]
+Name = "H2O_WAVE_MAX_REQUEST_SIZE"
+Value = "20M"
