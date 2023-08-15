@@ -318,7 +318,9 @@ def query_api(question: str, table_info_path: str, sample_queries_path: str, is_
     table_context = json.load(open(table_context_file, "r")) if Path(table_context_file).exists() else {}
     table_names = []
 
-    if table_context and "tables_in_use" in table_context:
+    if table_name is not None:
+        table_names = [table_name]
+    elif table_context and "tables_in_use" in table_context:
         _tables = table_context["tables_in_use"]
         table_names = [_t.replace(" ", "_") for _t in _tables]
     else:
