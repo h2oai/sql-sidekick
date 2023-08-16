@@ -6,10 +6,6 @@ question_query_samples = """
 }
 """
 
-schema_info_template = {
-    "Column Name": "",
-    "Column Type": "",
-    "Sample Values": []
-}
+schema_info_template = {"Column Name": "", "Column Type": "", "Sample Values": []}
 
-data_samples_template = "Column {column_name} contains values similar to {comma_separated_sample_values}."
+data_samples_template = "'{column_name}' contains values similar to {comma_separated_sample_values}."
