@@ -11,7 +11,7 @@ from sidekick.utils import setup_dir, update_tables, get_table_keys
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
-env_settings = toml.load(f"{base_path}/ui/.app_config.toml")
+env_settings = toml.load(f"{base_path}/ui/app_config.toml")
 tmp_path = f"{base_path}/var/lib/tmp"
 
 ui_title = env_settings["WAVE_UI"]["TITLE"]
@@ -19,7 +19,7 @@ ui_description = env_settings["WAVE_UI"]["SUB_TITLE"]
 
 
 async def user_variable(q: Q):
-    db_settings = toml.load(f"{base_path}/sidekick/configs/.env.toml")
+    db_settings = toml.load(f"{base_path}/sidekick/configs/env.toml")
 
     q.user.db_dialect = db_settings["DB-DIALECT"]["DB_TYPE"]
     q.user.host_name = db_settings["LOCAL_DB_CONFIG"]["HOST_NAME"]
@@ -65,16 +65,26 @@ async def chat(q: Q):
     table_names = []
     tables, _ = get_table_keys(f"{tmp_path}/data/tables.json", None)
     for table in tables:
-        table_names.append(ui.choice(table, f'Table: {table}'))
+        table_names.append(ui.choice(table, f"Table: {table}"))
 
     add_card(q, "background_card", ui.form_card(box="horizontal", items=[ui.text("Ask your questions:")]))
 
-    add_card(q, "select_tables", ui.form_card(
-        box="vertical", items=[
-                ui.dropdown(name='table_dropdown', label='Table', required=True, choices=table_names, value=q.user.table_name if q.user.table_name else None),
-                ui.button(name='submit_table', label='Submit', primary=True)
-            ]
-        )
+    add_card(
+        q,
+        "select_tables",
+        ui.form_card(
+            box="vertical",
+            items=[
+                ui.dropdown(
+                    name="table_dropdown",
+                    label="Table",
+                    required=True,
+                    choices=table_names,
+                    value=q.user.table_name if q.user.table_name else None,
+                ),
+                ui.button(name="submit_table", label="Submit", primary=True),
+            ],
+        ),
     )
     add_card(
         q,
@@ -119,7 +129,7 @@ async def chatbot(q: Q):
             question=question,
             sample_queries_path=q.user.sample_qna_path,
             table_info_path=q.user.table_info_path,
-            table_name=q.user.table_name
+            table_name=q.user.table_name,
         )
         llm_response = "\n".join(llm_response)
 
@@ -151,9 +161,13 @@ async def fileupload(q: Q):
     else:
         usr_table_name = usr_table_name.lower()
         if sample_data:
-            usr_samples_path = await q.site.download(sample_data[0], f"{tmp_path}/jobs/{usr_table_name}_table_samples.csv")
+            usr_samples_path = await q.site.download(
+                sample_data[0], f"{tmp_path}/jobs/{usr_table_name}_table_samples.csv"
+            )
         if sample_schema:
-            usr_info_path = await q.site.download(sample_schema[0], f"{tmp_path}/jobs/{usr_table_name}_table_info.jsonl")
+            usr_info_path = await q.site.download(
+                sample_schema[0], f"{tmp_path}/jobs/{usr_table_name}_table_info.jsonl"
+            )
         if sample_qa:
             usr_sample_qa = await q.site.download(sample_qa[0], f"{tmp_path}/jobs/{usr_table_name}_sample_qa.csv")
 
@@ -200,7 +214,10 @@ async def datasets(q: Q):
             box="vertical",
             items=[
                 ui.message_bar(
-                    name="error_bar", type="error", text="Please input table name, data & schema files to upload!", visible=False
+                    name="error_bar",
+                    type="error",
+                    text="Please input table name, data & schema files to upload!",
+                    visible=False,
                 ),
                 ui.message_bar(name="success_bar", type="success", text="Files Uploaded Successfully!", visible=False),
                 ui.textbox(name="table_name", label="Table Name", required=True),
@@ -234,7 +251,9 @@ async def datasets(q: Q):
                     max_file_size=5000,  # Specified in MB.
                     tooltip="The data describing table schema and sample values, formats allowed are JSONL & CSV respectively!",
                 ),
-                ui.progress(name='progress_bar', width='100%', label='Uploading datasets and creating tables!', visible=False),
+                ui.progress(
+                    name="progress_bar", width="100%", label="Uploading datasets and creating tables!", visible=False
+                ),
                 ui.button(name="file_upload", label="Submit", primary=True),
             ],
         ),
@@ -355,7 +374,11 @@ async def init(q: Q) -> None:
         await chat(q)
 
 
-@app("/")
+def on_shutdown():
+    logging.debug("App stopped. Goodbye!")
+
+
+@app("/", on_shutdown=on_shutdown)
 async def serve(q: Q):
     # Run only once per client connection.
     if not q.client.initialized:

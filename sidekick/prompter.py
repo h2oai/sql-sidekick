@@ -18,7 +18,7 @@ from sidekick.utils import (execute_query_pd, extract_table_names, save_query,
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
-env_settings = toml.load(f"{base_path}/sidekick/configs/.env.toml")
+env_settings = toml.load(f"{base_path}/sidekick/configs/env.toml")
 db_dialect = env_settings["DB-DIALECT"]["DB_TYPE"]
 model_name = env_settings["MODEL_INFO"]["MODEL_NAME"]
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
@@ -65,7 +65,7 @@ def enter_file_path(table: str):
 def set_loglevel(set_level):
     env_settings["LOGGING"]["LOG-LEVEL"] = set_level
     # Update settings file for future use.
-    f = open(f"{base_path}/sidekick/configs/.env.toml", "w")
+    f = open(f"{base_path}/sidekick/configs/env.toml", "w")
     toml.dump(env_settings, f)
     f.close()
 
@@ -168,7 +168,7 @@ def db_setup_api(
         # env_settings["TABLE_INFO"]["TABLE_SAMPLES_PATH"] = table_samples_path
 
         # Update settings file for future use.
-        f = open(f"{base_path}/sidekick/configs/.env.toml", "w")
+        f = open(f"{base_path}/sidekick/configs/env.toml", "w")
         toml.dump(env_settings, f)
         f.close()
         path = f"{base_path}/var/lib/tmp/data"
@@ -320,7 +320,7 @@ def query_api(question: str, table_info_path: str, sample_queries_path: str, tab
         with open(f"{path}/table_context.json", "w") as outfile:
             json.dump(table_context, outfile, indent=4, sort_keys=False)
     logger.info(f"Table in use: {table_names}")
-    # Check if .env.toml file exists
+    # Check if env.toml file exists
     api_key = None
     if model_name != "h2ogpt-sql":
         api_key = env_settings["MODEL_INFO"]["OPENAI_API_KEY"]
@@ -342,7 +342,7 @@ def query_api(question: str, table_info_path: str, sample_queries_path: str, tab
             env_settings["MODEL_INFO"]["OPENAI_API_KEY"] = api_key
 
             # Update settings file for future use.
-            f = open(f"{base_path}/sidekick/configs/.env.toml", "w")
+            f = open(f"{base_path}/sidekick/configs/env.toml", "w")
             toml.dump(env_settings, f)
             f.close()
         openai.api_key = api_key
@@ -350,7 +350,7 @@ def query_api(question: str, table_info_path: str, sample_queries_path: str, tab
     # Set context
     logger.info("Setting context...")
     logger.info(f"Question: {question}")
-    # Get updated info from .env.toml
+    # Get updated info from env.toml
     host_name = env_settings["LOCAL_DB_CONFIG"]["HOST_NAME"]
     user_name = env_settings["LOCAL_DB_CONFIG"]["USER_NAME"]
     passwd = env_settings["LOCAL_DB_CONFIG"]["PASSWORD"]
