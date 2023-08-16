@@ -19,3 +19,6 @@ download_models:
 download_demo_data:
 	mkdir -p ./examples/demo/
 	$(demo_data)
+
+cloud_bundle:
+	h2o bundle -L debug 2>&1 | tee -a h2o-bundle.log

@@ -1,0 +1,16 @@
+.DS_Store
+venv/
+.sidekickvenv/
+var/
+.git/
+.idea/
+*/__pycache__/
+scripts/
+setup_cythonize/
+.sh
+build/
+dist/
+tests/
+ci/
+examples/
+.log

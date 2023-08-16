@@ -301,8 +301,6 @@ class SQLGenerator:
                 _val = _context.get(_item, None)
                 if _val:
                     contextual_context.append(f"{_item}: {_val}")
-            # Caution:
-            contextual_context.append(f"Always use: LIMIT 100 with SELECT")
 
             logger.info("Filtering Question/Query pairs ...")
             context_queries: list = self.update_context_queries()
@@ -409,7 +407,10 @@ class SQLGenerator:
             # Below is a pre-caution in-case of an error in table name during generation
             # COLLATE NOCASE is used to ignore case sensitivity, this might be specific to sqlite
             _temp = _res.replace("table_name", table_names[0]).split(";")[0]
-            res = "SELECT" + _temp + ";"
+            if "LIMIT".lower() not in _temp.lower():
+                res = "SELECT" + _temp + "LIMIT 100;"
+            else:
+                res = "SELECT" + _temp + ";"
 
             # Validate the generate SQL for parsing errors, along with dialect specific validation
             # Note: Doesn't do well with handling date-time conversions
