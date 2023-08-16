@@ -2,7 +2,7 @@
 
 **Target Audience:** Data (Machine Learning) Scientists, Citizen Data Scientists, Data Engineers Managers and Business Analysts
 
-**Actively Being Maintained:** Yes (Demo release: _In active RnD)
+**Actively Being Maintained:** Yes (Demo release: _In active RnD_)
 
 **Last Updated:** August, 2023
 
