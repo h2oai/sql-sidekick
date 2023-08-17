@@ -13,18 +13,16 @@ from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredict
 from llama_index.indices.struct_store import SQLContextContainerBuilder
 from sidekick.configs.prompt_template import DEBUGGING_PROMPT, NSQL_QUERY_PROMPT, QUERY_PROMPT, TASK_PROMPT
 from sidekick.logger import logger
-from sidekick.utils import filter_samples, read_sample_pairs, remove_duplicates, load_embedding_model, load_causal_lm_model
+from sidekick.utils import (
+    filter_samples,
+    load_causal_lm_model,
+    load_embedding_model,
+    read_sample_pairs,
+    remove_duplicates,
+    _check_file_info,
+)
 from sqlalchemy import create_engine
 from transformers import AutoModelForCausalLM, AutoTokenizer
-
-
-def _check_file_info(file_path: str):
-    if file_path is not None and Path(file_path).exists():
-        logger.info(f"Using information info from path {file_path}")
-        return file_path
-    else:
-        logger.info("Required info not found, provide a path for table information and try again")
-        raise FileNotFoundError(f"Table info not found at {file_path}")
 
 
 class SQLGenerator:
@@ -34,36 +32,30 @@ class SQLGenerator:
         cls,
         db_url: str,
         openai_key: str = None,
+        model_name="NumbersStation/nsql-llama-2-7B",
         data_input_path: str = "./table_info.jsonl",
         sample_queries_path: str = "./samples.csv",
         job_path: str = "../var/lib/tmp/data",
-        device: str = "cpu"
+        device: str = "cpu",
     ):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
 
-            # Load h2oGPT.NSQL model
-            device = {"": 0} if torch.cuda.is_available() else "cpu" if device == "auto" else device
-            _load_in_8bit = False if "cpu" in device else True
-
-            cls._instance.model, cls._instance.tokenizer = load_causal_lm_model("NumbersStation/nsql-6B",
-                                                                                device=device,
-                                                                                load_in_8bit=_load_in_8bit)
-
+            cls._instance.model, cls._instance.tokenizer = load_causal_lm_model(model_name, device=device)
             model_embed_path = f"{job_path}/var/lib/tmp/.cache/models"
             device = "cuda" if torch.cuda.is_available() else "cpu" if device == "auto" else device
             cls._instance.similarity_model, _ = load_embedding_model(model_path=model_embed_path, device=device)
-
         return cls._instance
 
     def __init__(
         self,
         db_url: str,
         openai_key: str = None,
+        model_name="NumbersStation/nsql-llama-2-7B",
         data_input_path: str = "./table_info.jsonl",
         sample_queries_path: str = "./samples.csv",
         job_path: str = "../var/lib/tmp/data",
-        device: str = "cpu"
+        device: str = "cpu",
     ):
         self.db_url = db_url
         self.engine = create_engine(db_url)
@@ -76,10 +68,6 @@ class SQLGenerator:
         self._tasks = None
         self.openai_key = openai_key
         self.content_queries = None
-        # Intiated only once!
-        # self.model = None  # Used for local LLMs
-        # self.tokenizer = None  # Used for local tokenizer
-        # self.similarity_model = None
 
     def load_column_samples(self, tables: list):
         # TODO: Maybe we add table name as a member variable
@@ -300,10 +288,9 @@ class SQLGenerator:
                 device = {"": 0} if torch.cuda.is_available() else "cpu"
                 # https://github.com/pytorch/pytorch/issues/52291
                 _load_in_8bit = False if "cpu" in device else True
-
-                self.tokenizer = AutoTokenizer.from_pretrained("NumbersStation/nsql-6B", device_map=device)
+                self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, device_map=device)
                 self.model = AutoModelForCausalLM.from_pretrained(
-                    "NumbersStation/nsql-6B", device_map=device, load_in_8bit=_load_in_8bit
+                    self.model_name, device_map=device, load_in_8bit=_load_in_8bit
                 )
 
             # TODO Update needed for multiple tables

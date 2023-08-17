@@ -152,12 +152,12 @@ def setup_dir(base_path: str):
             p.mkdir(parents=True, exist_ok=True)
 
 
-def update_tables(json_file_path:str, new_data:dict):
+def update_tables(json_file_path: str, new_data: dict):
     # Check if the JSON file exists
     if os.path.exists(json_file_path):
         try:
             # Read the existing content from the JSON file
-            with open(json_file_path, 'r') as json_file:
+            with open(json_file_path, "r") as json_file:
                 existing_data = json.load(json_file)
             logger.debug("Existing Data:", existing_data)
         except Exception as e:
@@ -171,7 +171,7 @@ def update_tables(json_file_path:str, new_data:dict):
 
     # Write the updated content back to the JSON file
     try:
-        with open(json_file_path, 'w') as json_file:
+        with open(json_file_path, "w") as json_file:
             json.dump(existing_data, json_file, indent=4)
         logger.debug("Data appended and file updated.")
     except Exception as e:
@@ -245,13 +245,13 @@ def execute_query_pd(query=None, tables_path=None, n_rows=100):
     return res_df
 
 
-def get_table_keys(file_path:str, table_key:str):
+def get_table_keys(file_path: str, table_key: str):
     res = []
     if not os.path.exists(file_path):
         logger.debug(f"File '{file_path}' does not exist.")
         return res, dict()
 
-    with open(file_path, 'r') as json_file:
+    with open(file_path, "r") as json_file:
         data = json.load(json_file)
         if isinstance(data, dict):
             res = list(data.keys())
@@ -261,13 +261,27 @@ def get_table_keys(file_path:str, table_key:str):
         return res, data
 
 
-def load_causal_lm_model(model_name: str,  device: str, load_in_8bit: bool):
+def load_causal_lm_model(model_name: str, device: str, load_in_8bit: bool = True):
     try:
-
+        # Load h2oGPT.NSQL model
+        device = {"": 0} if torch.cuda.is_available() else "cpu" if device == "auto" else device
+        if load_in_8bit:
+            _load_in_8bit = False if "cpu" in device else True
+        else:
+            _load_in_8bit = False
         tokenizer = AutoTokenizer.from_pretrained(model_name, device_map=device)
-        model = AutoModelForCausalLM.from_pretrained(model_name, device_map=device, load_in_8bit=load_in_8bit)
+        model = AutoModelForCausalLM.from_pretrained(model_name, device_map=device, load_in_8bit=_load_in_8bit)
 
         return model, tokenizer
     except Exception as e:
         logger.info(f"An error occurred while loading the model: {e}")
         return None, None
+
+
+def _check_file_info(file_path: str):
+    if file_path is not None and Path(file_path).exists():
+        logger.info(f"Using information info from path {file_path}")
+        return file_path
+    else:
+        logger.info("Required info not found, provide a path for table information and try again")
+        raise FileNotFoundError(f"Table info not found at {file_path}")

@@ -337,8 +337,8 @@ async def init(q: Q) -> None:
             ui.nav_group(
                 "Menu",
                 items=[
-                    ui.nav_item(name="#chat", label="Chat"),
                     ui.nav_item(name="#datasets", label="Upload"),
+                    ui.nav_item(name="#chat", label="Chat")
                 ],
             ),
             ui.nav_group(
