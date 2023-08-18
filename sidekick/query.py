@@ -36,16 +36,18 @@ class SQLGenerator:
         model_name="NumbersStation/nsql-llama-2-7B",
         data_input_path: str = "./table_info.jsonl",
         sample_queries_path: str = "./samples.csv",
-        job_path: str = "../var/lib/tmp/data",
+        job_path: str = "./",
         device: str = "cpu",
     ):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
 
-            cls._instance.model, cls._instance.tokenizer = load_causal_lm_model(model_name, device=device)
-            model_embed_path = f"{job_path}/var/lib/tmp/.cache/models"
+            cls._instance.model, cls._instance.tokenizer = load_causal_lm_model(
+                model_name, cache_path=job_path, device=device
+            )
+            model_embed_path = f"{job_path}/models/sentence_transformers"
             device = "cuda" if torch.cuda.is_available() else "cpu" if device == "auto" else device
-            cls._instance.similarity_model, _ = load_embedding_model(model_path=model_embed_path, device=device)
+            cls._instance.similarity_model = load_embedding_model(model_path=model_embed_path, device=device)
         return cls._instance
 
     def __init__(
@@ -55,7 +57,7 @@ class SQLGenerator:
         model_name="NumbersStation/nsql-llama-2-7B",
         data_input_path: str = "./table_info.jsonl",
         sample_queries_path: str = "./samples.csv",
-        job_path: str = "../var/lib/tmp/data",
+        job_path: str = "./",
         device: str = "cpu",
     ):
         self.db_url = db_url
@@ -203,12 +205,12 @@ class SQLGenerator:
             logger.info(f"Number of context queries found: {len(context_queries)}")
 
             # Remove duplicates from the context queries
-            m_path = f"{self.path}/var/lib/tmp/.cache/models"
+            m_path = f"{self.path}/models/sentence_transformers/"
             duplicates_idx = remove_duplicates(context_queries, m_path)
             updated_context = np.delete(np.array(context_queries), duplicates_idx).tolist()
 
             # Filter closest samples to the input question, threshold = 0.45
-            filtered_context, _ = (
+            filtered_context = (
                 filter_samples(input_question, updated_context, m_path, threshold=0.9)
                 if len(updated_context) > 1
                 else updated_context
@@ -234,7 +236,12 @@ class SQLGenerator:
             raise se
 
     def generate_sql(
-        self, table_names: list, input_question: str, _dialect: str = "sqlite", model_name: str = "h2ogpt-sql", is_regenerate:bool = False
+        self,
+        table_names: list,
+        input_question: str,
+        _dialect: str = "sqlite",
+        model_name: str = "h2ogpt-sql",
+        is_regenerate: bool = False,
     ):
         context_file = f"{self.path}/var/lib/tmp/data/context.json"
         additional_context = json.load(open(context_file, "r")) if Path(context_file).exists() else {}
@@ -308,8 +315,8 @@ class SQLGenerator:
                 "if patterns like 'current time' or 'now' occurs in question": "always use NOW() - INTERVAL",
                 "if patterns like 'total number', or 'List' occurs in question": "always use DISTINCT",
             }
-            m_path = f"{self.path}/var/lib/tmp/.cache/models"
-            filtered_context, self.similarity_model = filter_samples(
+            m_path = f"{self.path}/models/sentence_transformers/"
+            filtered_context = filter_samples(
                 model_obj=self.similarity_model,
                 input_q=input_question,
                 probable_qs=list(_context.keys()),
@@ -329,12 +336,12 @@ class SQLGenerator:
             logger.info(f"Number of context queries found: {len(context_queries)}")
 
             # Remove duplicates from the context queries
-            m_path = f"{self.path}/var/lib/tmp/.cache/models"
+            m_path = f"{self.path}/models/sentence_transformers/"
             # duplicates_idx = remove_duplicates(context_queries, m_path, similarity_model=self.similarity_model)
             # updated_context = np.delete(np.array(context_queries), duplicates_idx).tolist()
 
             # Filter closest samples to the input question, threshold = 0.9
-            filtered_context, _ = (
+            filtered_context = (
                 filter_samples(
                     input_q=input_question,
                     probable_qs=context_queries,
@@ -343,7 +350,7 @@ class SQLGenerator:
                     threshold=0.9,
                 )
                 if len(context_queries) > 1
-                else (context_queries, None)
+                else context_queries
             )
             logger.info(f"Number of possible contextual queries to question: {len(filtered_context)}")
             # If QnA pairs > 5, we keep top 5 for focused context
@@ -427,17 +434,23 @@ class SQLGenerator:
 
                 generated_tokens = output.sequences[:, input_length:][0]
             else:
-                output_re = self.model.generate(**inputs.to(device_type),
-                                             max_new_tokens=300,
-                                             temperature=0.5,
-                                             top_k=10,
-                                             top_p=0.95,
-                                             num_beams=5,
-                                             num_beam_groups=5,
-                                             num_return_sequences=5,
-                                             output_scores=True,
-                                             diversity_penalty=1.0,
-                                             return_dict_in_generate=True)
+                self.model.eval()
+                random_seed = random.randint(0, 50)
+                torch.manual_seed(random_seed)
+                random_temperature = round(random.uniform(0.5, 0.75), 2)
+                output_re = self.model.generate(
+                    **inputs.to(device_type),
+                    max_new_tokens=300,
+                    temperature=random_temperature,
+                    top_k=10,
+                    top_p=0.95,
+                    num_beams=5,
+                    num_beam_groups=5,
+                    num_return_sequences=5,
+                    output_scores=True,
+                    diversity_penalty=1.0,
+                    return_dict_in_generate=True,
+                )
 
                 transition_scores = self.model.compute_transition_scores(
                     output_re.sequences, output_re.scores, output_re.beam_indices, normalize_logits=False
@@ -452,8 +465,8 @@ class SQLGenerator:
 
                 # Converting logit scores to prob scores
                 probabilities_scores = F.softmax(reconstructed_scores, dim=-1)
-                out_ind = torch.argmax(probabilities_scores)
-                output = output_re.sequences[out_ind]
+                out_idx = torch.argmax(probabilities_scores)
+                output = output_re.sequences[out_idx]
 
                 generated_tokens = output[input_length:]
 

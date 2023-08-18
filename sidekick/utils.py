@@ -1,3 +1,4 @@
+import glob
 import json
 import os
 import re
@@ -41,20 +42,9 @@ def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, devic
 
 
 def load_embedding_model(model_path: str, device: str):
-    model_name_path = f"{model_path}/sentence_transformers/hkunlp_instructor-large"
-    current_torch_home = os.environ.get("TORCH_HOME", "")
-    if Path(model_name_path).is_dir():
-        is_empty = not any(Path(model_name_path).iterdir())
-        if is_empty:
-            # Download n cache at the specified location
-            os.environ["TORCH_HOME"] = model_path
-            model_name_path = "hkunlp/instructor-large"
-    else:  # if specified path does not exist, download the model
-        # Download n cache at the specified location
-        os.environ["TORCH_HOME"] = model_path
-        model_name_path = "hkunlp/instructor-large"
+    model_name_path = glob.glob(f"{model_path}/models--hkunlp--instructor-large/snapshots/*/")[0]
 
-    sentence_model = INSTRUCTOR(model_name_path, device=device)
+    sentence_model = INSTRUCTOR(model_name_path, cache_folder=model_path, device=device)
     if "cuda" not in device:
         # Issue https://github.com/pytorch/pytorch/issues/69364
         # # In the initial experimentation, quantized model is generates slightly better results
@@ -62,11 +52,7 @@ def load_embedding_model(model_path: str, device: str):
         model_obj = torch.quantization.quantize_dynamic(sentence_model, {torch.nn.Linear}, dtype=torch.qint8)
     else:
         model_obj = sentence_model
-
-    # Why are we setting torch home back to the current_torch_home
-    os.environ["TORCH_HOME"] = current_torch_home
-
-    return model_obj, model_name_path
+    return model_obj
 
 
 def generate_text_embeddings(model_path: str, x, model_obj=None, batch_size: int = 32, device: Optional[str] = "cpu"):
@@ -74,13 +60,12 @@ def generate_text_embeddings(model_path: str, x, model_obj=None, batch_size: int
     # 1. https://www.sbert.net/docs/pretrained_models.html#sentence-embedding-models
     # Maps sentence & paragraphs to a 384 dimensional dense vector space.
     if model_obj is None:
-        model_obj, model_name_path = load_embedding_model(model_path, device)
+        model_obj = load_embedding_model(model_path, device)
 
     _sentences = [["Represent the Financial question for retrieving duplicate examples: ", _item] for _item in x]
 
     res = model_obj.encode(_sentences)
-
-    return res, model_obj
+    return res
 
 
 def filter_samples(
@@ -90,11 +75,11 @@ def filter_samples(
     _inq = ("# query: " + input_q).strip().lower()
     logger.debug(f"Input questions: {_inq}")
     _device = "cuda" if torch.cuda.is_available() else "cpu" if device == "auto" else device
-    question_embeddings, model_obj = generate_text_embeddings(model_path, x=[_inq], model_obj=model_obj, device=_device)
+    question_embeddings = generate_text_embeddings(model_path, x=[_inq], model_obj=model_obj, device=_device)
 
     input_pqs = [_se.split("# answer")[0].strip().lower() for _se in probable_qs]
     logger.debug(f"Probable context: {input_pqs}")
-    embeddings, model_obj = generate_text_embeddings(model_path, x=input_pqs, model_obj=model_obj, device=_device)
+    embeddings = generate_text_embeddings(model_path, x=input_pqs, model_obj=model_obj, device=_device)
     res = {}
     _scores = []
     for idx, _se in enumerate(embeddings):
@@ -108,7 +93,7 @@ def filter_samples(
 
     sorted_res = sorted(res.items(), key=lambda x: x[1], reverse=True)
     logger.debug(f"Sorted context: {sorted_res}")
-    return list(dict(sorted_res).keys()), model_obj
+    return list(dict(sorted_res).keys())
 
 
 def remove_duplicates(
@@ -140,12 +125,7 @@ def save_query(output_path: str, query, response, extracted_entity: Optional[dic
 
 
 def setup_dir(base_path: str):
-    dir_list = [
-        "var/lib/tmp/data",
-        "var/lib/tmp/jobs",
-        "var/lib/tmp/.cache",
-        "var/lib/tmp/.cache/models/sentence_transformers/sentence-transformers_all-MiniLM-L6-v2",
-    ]
+    dir_list = ["var/lib/tmp/data", "var/lib/tmp/jobs", "var/lib/tmp/.cache"]
     for _dl in dir_list:
         p = Path(f"{base_path}/{_dl}")
         if not p.is_dir():
@@ -261,7 +241,7 @@ def get_table_keys(file_path:str, table_key:str):
         return res, data
 
 
-def load_causal_lm_model(model_name: str, device: str, load_in_8bit: bool = True):
+def load_causal_lm_model(model_name: str, cache_path: str, device: str, load_in_8bit: bool = True):
     try:
         # Load h2oGPT.NSQL model
         device = {"": 0} if torch.cuda.is_available() else "cpu" if device == "auto" else device
@@ -269,8 +249,11 @@ def load_causal_lm_model(model_name: str, device: str, load_in_8bit: bool = True
             _load_in_8bit = False if "cpu" in device else True
         else:
             _load_in_8bit = False
-        tokenizer = AutoTokenizer.from_pretrained(model_name, device_map=device)
-        model = AutoModelForCausalLM.from_pretrained(model_name, device_map=device, load_in_8bit=_load_in_8bit)
+        cache_path = f"{cache_path}/models/"
+        tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=cache_path, device_map=device)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name, cache_dir=cache_path, device_map=device, load_in_8bit=_load_in_8bit
+        )
 
         return model, tokenizer
     except Exception as e:
@@ -285,3 +268,13 @@ def _check_file_info(file_path: str):
     else:
         logger.info("Required info not found, provide a path for table information and try again")
         raise FileNotFoundError(f"Table info not found at {file_path}")
+
+
+def make_dir(path: str):
+    try:
+        os.makedirs(path)
+    except OSError as exc:
+        if exc.errno == errno.EXIST and os.path.isdir(path):
+            pass
+        else:
+            raise Exception("Error reported while creating default directory path.")

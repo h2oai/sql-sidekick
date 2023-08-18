@@ -240,16 +240,6 @@ async def datasets(q: Q):
                 ui.message_bar(name="success_bar", type="success", text="Files Uploaded Successfully!", visible=False),
                 ui.textbox(name="table_name", label="Table Name", required=True),
                 ui.file_upload(
-                    name="sample_data",
-                    label="Data Samples",
-                    multiple=False,
-                    compact=True,
-                    file_extensions=["csv"],
-                    required=True,
-                    max_file_size=5000,  # Specified in MB.
-                    tooltip="The data describing table schema and sample values, formats allowed are JSONL & CSV respectively!",
-                ),
-                ui.file_upload(
                     name="data_schema",
                     label="Data Schema",
                     multiple=False,
@@ -266,6 +256,16 @@ async def datasets(q: Q):
                     compact=True,
                     file_extensions=["csv"],
                     required=False,
+                    max_file_size=5000,  # Specified in MB.
+                    tooltip="The data describing table schema and sample values, formats allowed are JSONL & CSV respectively!",
+                ),
+                ui.file_upload(
+                    name="sample_data",
+                    label="Data Samples",
+                    multiple=False,
+                    compact=True,
+                    file_extensions=["csv"],
+                    required=True,
                     max_file_size=5000,  # Specified in MB.
                     tooltip="The data describing table schema and sample values, formats allowed are JSONL & CSV respectively!",
                 ),
@@ -309,6 +309,8 @@ async def submit_table(q: Q):
 
 
 async def init(q: Q) -> None:
+    q.client.timezone = "UTC"
+    username, profile_pic = q.auth.username, q.app.persona_path
     q.page["meta"] = ui.meta_card(
         box="",
         layouts=[
@@ -354,10 +356,7 @@ async def init(q: Q) -> None:
         items=[
             ui.nav_group(
                 "Menu",
-                items=[
-                    ui.nav_item(name="#datasets", label="Upload"),
-                    ui.nav_item(name="#chat", label="Chat")
-                ],
+                items=[ui.nav_item(name="#datasets", label="Upload"), ui.nav_item(name="#chat", label="Chat")],
             ),
             ui.nav_group(
                 "Help",
@@ -369,21 +368,15 @@ async def init(q: Q) -> None:
         ],
         secondary_items=[
             ui.persona(
-                title="John Doe",
-                subtitle="Developer",
-                size="s",
-                image="https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&h=750&w=1260",
+                title=username,
+                size="xs",
+                image=profile_pic,
             ),
         ],
     )
 
     # Connect to LLM
     openai.api_key = ""
-
-    ######################## COMMENTED OUT FOR NOW ###################
-    # q.client.data = get_data()
-    # q.client.mapping = get_mapping_dicts(q.client.data)
-    # q.client.masked_data =
 
     await user_variable(q)
     await client_variable(q)
