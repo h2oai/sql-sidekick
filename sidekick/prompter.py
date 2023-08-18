@@ -305,7 +305,7 @@ def query(question: str, table_info_path: str, sample_qna_path: str):
     query_api(question=question, table_info_path=table_info_path, sample_queries_path=sample_qna_path, table_name=None, is_command=True)
 
 
-def query_api(question: str, table_info_path: str, sample_queries_path: str, table_name:str, is_command: bool = False):
+def query_api(question: str, table_info_path: str, sample_queries_path: str, table_name:str, is_regenerate: bool = False, is_command: bool = False):
     """Asks question and returns SQL."""
     results = []
     err = None  # TODO - Need to handle errors if occurred
@@ -395,7 +395,7 @@ def query_api(question: str, table_info_path: str, sample_queries_path: str, tab
         if updated_tasks is not None:
             sql_g._tasks = updated_tasks
 
-    res = sql_g.generate_sql(table_names, question, model_name=model_name, _dialect=db_dialect)
+    res = sql_g.generate_sql(table_names, question, model_name=model_name, _dialect=db_dialect, is_regenerate=is_regenerate)
     logger.info(f"Input query: {question}")
     logger.info(f"Generated response:\n\n{res}")
 
@@ -413,7 +413,7 @@ def query_api(question: str, table_info_path: str, sample_queries_path: str, tab
                     click.echo(f"Updated SQL:\n {updated_sql}")
                 elif res_val.lower() == "r" or res_val.lower() == "regenerate":
                     click.echo("Attempting to regenerate...")
-                    res = sql_g.generate_sql(table_names, question, model_name=model_name, _dialect=db_dialect)
+                    res = sql_g.generate_sql(table_names, question, model_name=model_name, _dialect=db_dialect, is_regenerate=True)
                     logger.info(f"Input query: {question}")
                     logger.info(f"Generated response:\n\n{res}")
 

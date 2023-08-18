@@ -40,19 +40,20 @@ def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, devic
     return all_res
 
 
-def load_embedding_model(model_path: str, device: str):
-    model_name_path = f"{model_path}/sentence_transformers/hkunlp_instructor-large"
+def load_embedding_model(embed_model: str, model_path: str, device: str):
+    sub_path = "_".join(embed_model.split("/"))
+    model_name_path = f"{model_path}/sentence_transformers/{sub_path}"
     current_torch_home = os.environ.get("TORCH_HOME", "")
     if Path(model_name_path).is_dir():
         is_empty = not any(Path(model_name_path).iterdir())
         if is_empty:
             # Download n cache at the specified location
             os.environ["TORCH_HOME"] = model_path
-            model_name_path = "hkunlp/instructor-large"
+            model_name_path = embed_model
     else:  # if specified path does not exist, download the model
         # Download n cache at the specified location
         os.environ["TORCH_HOME"] = model_path
-        model_name_path = "hkunlp/instructor-large"
+        model_name_path = embed_model
 
     sentence_model = INSTRUCTOR(model_name_path, device=device)
     if "cuda" not in device:

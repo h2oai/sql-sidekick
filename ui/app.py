@@ -39,6 +39,10 @@ async def user_variable(q: Q):
     logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s")
 
 
+async def client_variable(q: Q):
+    q.client.query = None
+
+
 # Use for page cards that should be removed when navigating away.
 # For pages that should be always present on screen use q.page[key] = ...
 def add_card(q, name, card) -> None:
@@ -124,7 +128,21 @@ async def chatbot(q: Q):
             table_samples_path=q.user.table_samples_path,
             table_name=q.user.table_name,
         )
+    elif q.args.chatbot.lower() == "regenerate":
+        if q.client.query is not None and q.client.query.strip() != "":
+            llm_response, err = query_api(
+                question=q.client.query,
+                sample_queries_path=q.user.sample_qna_path,
+                table_info_path=q.user.table_info_path,
+                table_name=q.user.table_name,
+                is_regenerate=True,
+            )
+            llm_response = "\n".join(llm_response)
+        else:
+            llm_response, err = ("Sure, I can generate a new response for you. However, in order to assist you "
+                                 "effectively could you please provide me with your question?"), None
     else:
+        q.client.query = question
         llm_response, err = query_api(
             question=question,
             sample_queries_path=q.user.sample_qna_path,
@@ -368,7 +386,7 @@ async def init(q: Q) -> None:
     # q.client.masked_data =
 
     await user_variable(q)
-
+    await client_variable(q)
     # If no active hash present, render chat.
     if q.args["#"] is None:
         await chat(q)
