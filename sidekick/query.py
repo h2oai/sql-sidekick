@@ -8,6 +8,7 @@ import numpy as np
 import openai
 import sqlglot
 import torch
+import torch.nn.functional as F
 from langchain import OpenAI
 from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
 from llama_index.indices.struct_store import SQLContextContainerBuilder
@@ -68,6 +69,9 @@ class SQLGenerator:
         self._tasks = None
         self.openai_key = openai_key
         self.content_queries = None
+
+    def clear(self):
+        SQLGenerator._instance = None
 
     def load_column_samples(self, tables: list):
         # TODO: Maybe we add table name as a member variable
@@ -230,7 +234,7 @@ class SQLGenerator:
             raise se
 
     def generate_sql(
-        self, table_names: list, input_question: str, _dialect: str = "sqlite", model_name: str = "h2ogpt-sql"
+        self, table_names: list, input_question: str, _dialect: str = "sqlite", model_name: str = "h2ogpt-sql", is_regenerate:bool = False
     ):
         context_file = f"{self.path}/var/lib/tmp/data/context.json"
         additional_context = json.load(open(context_file, "r")) if Path(context_file).exists() else {}
@@ -412,24 +416,56 @@ class SQLGenerator:
             # Greedy search for quick response
             self.model.eval()
             device_type = "cuda" if torch.cuda.is_available() else "cpu"
-            output = self.model.generate(
-                **inputs.to(device_type),
-                max_new_tokens=300,
-                temperature=0.5,
-                output_scores=True,
-                return_dict_in_generate=True,
-            )
+            if not is_regenerate:
+                output = self.model.generate(
+                    **inputs.to(device_type),
+                    max_new_tokens=300,
+                    temperature=0.5,
+                    output_scores=True,
+                    return_dict_in_generate=True,
+                )
 
-            generated_tokens = output.sequences[:, input_length:]
-            _res = self.tokenizer.decode(generated_tokens[0], skip_special_tokens=True)
+                generated_tokens = output.sequences[:, input_length:][0]
+            else:
+                output_re = self.model.generate(**inputs.to(device_type),
+                                             max_new_tokens=300,
+                                             temperature=0.5,
+                                             top_k=10,
+                                             top_p=0.95,
+                                             num_beams=5,
+                                             num_beam_groups=5,
+                                             num_return_sequences=5,
+                                             output_scores=True,
+                                             diversity_penalty=1.0,
+                                             return_dict_in_generate=True)
+
+                transition_scores = self.model.compute_transition_scores(
+                    output_re.sequences, output_re.scores, output_re.beam_indices, normalize_logits=False
+                )
+                # Create a boolean tensor where elements are True if the corresponding element in transition_scores is less than 0
+                mask = transition_scores < 0
+                # Sum the True values along axis 1
+                counts = torch.sum(mask, dim=1)
+                output_length = inputs.input_ids.shape[1] + counts
+                length_penalty = self.model.generation_config.length_penalty
+                reconstructed_scores = transition_scores.sum(axis=1) / (output_length**length_penalty)
+
+                # Converting logit scores to prob scores
+                probabilities_scores = F.softmax(reconstructed_scores, dim=-1)
+                out_ind = torch.argmax(probabilities_scores)
+                output = output_re.sequences[out_ind]
+
+                generated_tokens = output[input_length:]
+
+            _res = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
             # Below is a pre-caution in-case of an error in table name during generation
             # COLLATE NOCASE is used to ignore case sensitivity, this might be specific to sqlite
             _temp = _res.replace("table_name", table_names[0]).split(";")[0]
 
             if "LIMIT".lower() not in _temp.lower():
-                res = "SELECT" + _temp + "LIMIT 100;"
+                res = "SELECT " + _temp.strip() + " LIMIT 100;"
             else:
-                res = "SELECT" + _temp + ";"
+                res = "SELECT " + _temp.strip() + ";"
 
             # Validate the generate SQL for parsing errors, along with dialect specific validation
             # Note: Doesn't do well with handling date-time conversions

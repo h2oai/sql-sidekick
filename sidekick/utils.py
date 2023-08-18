@@ -152,7 +152,7 @@ def setup_dir(base_path: str):
             p.mkdir(parents=True, exist_ok=True)
 
 
-def update_tables(json_file_path: str, new_data: dict):
+def update_tables(json_file_path:str, new_data:dict):
     # Check if the JSON file exists
     if os.path.exists(json_file_path):
         try:
@@ -245,7 +245,7 @@ def execute_query_pd(query=None, tables_path=None, n_rows=100):
     return res_df
 
 
-def get_table_keys(file_path: str, table_key: str):
+def get_table_keys(file_path:str, table_key:str):
     res = []
     if not os.path.exists(file_path):
         logger.debug(f"File '{file_path}' does not exist.")
