@@ -10,18 +10,16 @@ import sqlglot
 import torch
 import torch.nn.functional as F
 from langchain import OpenAI
-from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
+from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
+                         LLMPredictor, ServiceContext, SQLDatabase)
 from llama_index.indices.struct_store import SQLContextContainerBuilder
-from sidekick.configs.prompt_template import DEBUGGING_PROMPT, NSQL_QUERY_PROMPT, QUERY_PROMPT, TASK_PROMPT
+from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
+                                              NSQL_QUERY_PROMPT, QUERY_PROMPT,
+                                              TASK_PROMPT)
 from sidekick.logger import logger
-from sidekick.utils import (
-    filter_samples,
-    load_causal_lm_model,
-    load_embedding_model,
-    read_sample_pairs,
-    remove_duplicates,
-    _check_file_info,
-)
+from sidekick.utils import (_check_file_info, filter_samples,
+                            load_causal_lm_model, load_embedding_model,
+                            read_sample_pairs, remove_duplicates)
 from sqlalchemy import create_engine
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -402,7 +400,7 @@ class SQLGenerator:
             # 1. Move to a model with larger context length
             # 2. Possibly use a different tokenizer for chunking
             # 3. Maybe positional interpolation --> https://arxiv.org/abs/2306.15595
-            if int(input_length) > 1748:
+            if int(input_length) > 4000:
                 logger.info("Input length is greater than 1748, removing column description from the prompt")
                 query = NSQL_QUERY_PROMPT.format(
                     table_name=_table_name,
@@ -469,6 +467,16 @@ class SQLGenerator:
                 output = output_re.sequences[out_idx]
 
                 generated_tokens = output[input_length:]
+
+                logger.info(f"Generated options:\n")
+                for idx, _out in enumerate(output_re.sequences):
+                    res = self.tokenizer.decode(_out[input_length:], skip_special_tokens=True)
+                    result = res.replace("table_name", _table_name)
+                    if "LIMIT".lower() not in result.lower():
+                        res = "SELECT " + result.strip() + " LIMIT 100;"
+                    else:
+                        res = "SELECT " + result.strip() + ";"
+                    logger.info(f"Option: {idx+1}:\n{res}\nprobability: {probabilities_scores[idx]}")
 
             _res = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
             # Below is a pre-caution in-case of an error in table name during generation
