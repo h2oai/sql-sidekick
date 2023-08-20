@@ -7,7 +7,7 @@ import openai
 import toml
 from h2o_wave import Q, app, data, handle_on, main, on, ui
 from sidekick.prompter import db_setup_api, query_api
-from sidekick.utils import setup_dir, update_tables, get_table_keys
+from sidekick.utils import get_table_keys, setup_dir, update_tables
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
@@ -130,20 +130,27 @@ async def chatbot(q: Q):
         )
     elif q.args.chatbot.lower() == "regenerate":
         if q.client.query is not None and q.client.query.strip() != "":
-            llm_response, err = query_api(
+            llm_response, alt_response, err = query_api(
                 question=q.client.query,
                 sample_queries_path=q.user.sample_qna_path,
                 table_info_path=q.user.table_info_path,
                 table_name=q.user.table_name,
                 is_regenerate=True,
             )
-            llm_response = "\n".join(llm_response)
+            response = "\n".join(llm_response)
+            if alt_response:
+                llm_response = response + "\n\n" + "**Alternate options:**\n" + "\n".join(alt_response)
+                logging.info(f"Regenerate response: {llm_response}")
+            else:
+                llm_response = response
         else:
-            llm_response, err = ("Sure, I can generate a new response for you. However, in order to assist you "
-                                 "effectively could you please provide me with your question?"), None
+            llm_response, err = (
+                "Sure, I can generate a new response for you. However, in order to assist you "
+                "effectively could you please provide me with your question?"
+            ), None
     else:
         q.client.query = question
-        llm_response, err = query_api(
+        llm_response, alt_response, err = query_api(
             question=question,
             sample_queries_path=q.user.sample_qna_path,
             table_info_path=q.user.table_info_path,

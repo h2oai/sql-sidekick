@@ -13,7 +13,8 @@ from pandasql import sqldf
 from sidekick.db_config import DBConfig
 from sidekick.memory import EntityMemory
 from sidekick.query import SQLGenerator
-from sidekick.utils import execute_query_pd, extract_table_names, save_query, setup_dir
+from sidekick.utils import (execute_query_pd, extract_table_names, save_query,
+                            setup_dir)
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
@@ -410,7 +411,7 @@ def query_api(
         if updated_tasks is not None:
             sql_g._tasks = updated_tasks
 
-    res = sql_g.generate_sql(
+    res, alt_res = sql_g.generate_sql(
         table_names, question, model_name=model_name, _dialect=db_dialect, is_regenerate=is_regenerate
     )
     logger.info(f"Input query: {question}")
@@ -430,13 +431,14 @@ def query_api(
                     click.echo(f"Updated SQL:\n {updated_sql}")
                 elif res_val.lower() == "r" or res_val.lower() == "regenerate":
                     click.echo("Attempting to regenerate...")
-                    res = sql_g.generate_sql(
-                        table_names, question, model_name=model_name, _dialect=db_dialect, is_regenerate=True
+                    res, alt_res = sql_g.generate_sql(
+                        table_names, question, model_name=model_name, _dialect=db_dialect, is_regenerate=is_regenerate
                     )
                     logger.info(f"Input query: {question}")
                     logger.info(f"Generated response:\n\n{res}")
 
-        results.extend(["Generated Query:\n", res, "\n"])
+        results.extend(["**Generated Query:**\n", res, "\n"])
+        logger.info(f"Alternate responses:\n\n{alt_res}")
 
         exe_sql = click.prompt("Would you like to execute the generated SQL (y/n)?") if is_command else "y"
         if exe_sql.lower() == "y" or exe_sql.lower() == "yes":
@@ -484,14 +486,14 @@ def query_api(
                     click.echo("Error in executing the query. Validate generated SQL and try again.")
                     click.echo("No result to display.")
 
-            results.append("Query Results: \n")
+            results.append("**Query Results:** \n")
             if q_res:
                 click.echo(f"The query results are:\n {q_res}")
                 results.extend([str(q_res), "\n"])
             else:
                 click.echo(f"While executing query:\n {err}")
                 results.extend([str(err), "\n"])
-            # results.extend(["Query Results:", q_res])
+
         save_sql = click.prompt("Would you like to save the generated SQL (y/n)?") if is_command else "n"
         if save_sql.lower() == "y" or save_sql.lower() == "yes":
             # Persist for future use
@@ -500,7 +502,7 @@ def query_api(
         else:
             click.echo("Exiting...")
 
-    return results, err
+    return results, alt_res, err
 
 
 if __name__ == "__main__":

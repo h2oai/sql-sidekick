@@ -421,6 +421,8 @@ class SQLGenerator:
             # Greedy search for quick response
             self.model.eval()
             device_type = "cuda" if torch.cuda.is_available() else "cpu"
+
+            alternate_queries = []
             if not is_regenerate:
                 output = self.model.generate(
                     **inputs.to(device_type),
@@ -476,7 +478,9 @@ class SQLGenerator:
                         res = "SELECT " + result.strip() + " LIMIT 100;"
                     else:
                         res = "SELECT " + result.strip() + ";"
-                    logger.info(f"Option: {idx+1}:\n{res}\nprobability: {probabilities_scores[idx]}")
+                    alt_res = f"Option {idx+1}: (_probability_: {probabilities_scores[idx]})\n{res}"
+                    alternate_queries.append(alt_res)
+                    logger.info(alt_res)
 
             _res = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
             # Below is a pre-caution in-case of an error in table name during generation
@@ -500,7 +504,7 @@ class SQLGenerator:
             except (sqlglot.errors.ParseError, ValueError, RuntimeError) as e:
                 logger.info("We did the best we could, there might be still be some error:\n")
                 logger.info(f"Realized query so far:\n {res}")
-        return result
+        return result, alternate_queries
 
     def task_formatter(self, input_task: str):
         # Generated format
