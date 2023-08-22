@@ -393,7 +393,12 @@ def query_api(
         table_info_path = _get_table_info(path)
 
     sql_g = SQLGenerator(
-        db_url, api_key, job_path=base_path, data_input_path=table_info_path, sample_queries_path=sample_queries_path
+        db_url,
+        api_key,
+        job_path=base_path,
+        data_input_path=table_info_path,
+        sample_queries_path=sample_queries_path,
+        regenerate=is_regenerate,
     )
     if "h2ogpt-sql" not in model_name:
         sql_g._tasks = sql_g.generate_tasks(table_names, question)

@@ -13,7 +13,8 @@ from pandasql import sqldf
 from sentence_transformers import SentenceTransformer
 from sidekick.logger import logger
 from sklearn.metrics.pairwise import cosine_similarity
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
+from accelerate import init_empty_weights, infer_auto_device_map
 
 
 def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, device: Optional[str] = None):
@@ -125,14 +126,14 @@ def save_query(output_path: str, query, response, extracted_entity: Optional[dic
 
 
 def setup_dir(base_path: str):
-    dir_list = ["var/lib/tmp/data", "var/lib/tmp/jobs", "var/lib/tmp/.cache"]
+    dir_list = ["var/lib/tmp/data", "var/lib/tmp/jobs", "var/lib/tmp/.cache", "models/weights"]
     for _dl in dir_list:
         p = Path(f"{base_path}/{_dl}")
         if not p.is_dir():
             p.mkdir(parents=True, exist_ok=True)
 
 
-def update_tables(json_file_path:str, new_data:dict):
+def update_tables(json_file_path: str, new_data: dict):
     # Check if the JSON file exists
     if os.path.exists(json_file_path):
         try:
@@ -225,7 +226,7 @@ def execute_query_pd(query=None, tables_path=None, n_rows=100):
     return res_df
 
 
-def get_table_keys(file_path:str, table_key:str):
+def get_table_keys(file_path: str, table_key: str):
     res = []
     if not os.path.exists(file_path):
         logger.debug(f"File '{file_path}' does not exist.")
@@ -241,20 +242,63 @@ def get_table_keys(file_path:str, table_key:str):
         return res, data
 
 
-def load_causal_lm_model(model_name: str, cache_path: str, device: str, load_in_8bit: bool = True):
+def offload_state():
+    free_in_GB = int(torch.cuda.mem_get_info()[0] / 1024**3)
+    total_memory = int(torch.cuda.get_device_properties(0).total_memory / 1024**3)
+    logger.info(f"Total Memory: {total_memory}")
+    logger.info(f"Free GPU memory: {free_in_GB}GB")
+    off_load = True
+    if int(free_in_GB) >= int(0.45 * total_memory):
+        off_load = False
+    return off_load
+
+
+def load_causal_lm_model(
+    model_name: str, cache_path: str, device: str, load_in_8bit: bool = True, off_load: bool = False
+):
     try:
         # Load h2oGPT.NSQL model
         device = {"": 0} if torch.cuda.is_available() else "cpu" if device == "auto" else device
+        free_in_GB = int(torch.cuda.mem_get_info()[0] / 1024**3)
+        total_memory = int(torch.cuda.get_device_properties(0).total_memory / 1024**3)
+        n_gpus = torch.cuda.device_count()
+
+        # 22GB (Least requirement on GPU) is a magic number for the current model size.
+        if off_load and total_memory < 22:
+            # TODO: Performance when offloading to CPU.
+            max_memory = f"{4}GB"
+            max_memory = {i: max_memory for i in range(n_gpus)}
+            logger.info(f"Max Memory: {max_memory}")
+            config = AutoConfig.from_pretrained(model_name, cache_dir=cache_path, offload_folder=cache_path)
+
+            model = AutoModelForCausalLM.from_config(config)
+            device = infer_auto_device_map(model, max_memory=max_memory)
+            device["lm_head"] = 0
+            _offload_state_dict = True
+            _llm_int8_enable_fp32_cpu_offload = True
+        else:
+            max_memory = f"{int(free_in_GB)-2}GB"
+            max_memory = {i: max_memory for i in range(n_gpus)}
+            _offload_state_dict = False
+            _llm_int8_enable_fp32_cpu_offload = False
+
         if load_in_8bit:
             _load_in_8bit = False if "cpu" in device else True
         else:
             _load_in_8bit = False
-        cache_path = f"{cache_path}/models/"
+        logger.debug(f"Current device config: {device}")
+
         tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=cache_path, device_map=device)
         model = AutoModelForCausalLM.from_pretrained(
-            model_name, cache_dir=cache_path, device_map=device, load_in_8bit=_load_in_8bit
+            model_name,
+            cache_dir=cache_path,
+            device_map=device,
+            load_in_8bit=_load_in_8bit,
+            llm_int8_enable_fp32_cpu_offload=_offload_state_dict,
+            offload_state_dict=_llm_int8_enable_fp32_cpu_offload,
+            max_memory=max_memory,
+            offload_folder=f"{cache_path}/weights/",
         )
-
         return model, tokenizer
     except Exception as e:
         logger.info(f"An error occurred while loading the model: {e}")

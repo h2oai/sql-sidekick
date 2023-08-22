@@ -10,16 +10,19 @@ import sqlglot
 import torch
 import torch.nn.functional as F
 from langchain import OpenAI
-from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
-                         LLMPredictor, ServiceContext, SQLDatabase)
+from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
 from llama_index.indices.struct_store import SQLContextContainerBuilder
-from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
-                                              NSQL_QUERY_PROMPT, QUERY_PROMPT,
-                                              TASK_PROMPT)
+from sidekick.configs.prompt_template import DEBUGGING_PROMPT, NSQL_QUERY_PROMPT, QUERY_PROMPT, TASK_PROMPT
 from sidekick.logger import logger
-from sidekick.utils import (_check_file_info, filter_samples,
-                            load_causal_lm_model, load_embedding_model,
-                            read_sample_pairs, remove_duplicates)
+from sidekick.utils import (
+    _check_file_info,
+    filter_samples,
+    load_causal_lm_model,
+    load_embedding_model,
+    read_sample_pairs,
+    remove_duplicates,
+    offload_state,
+)
 from sqlalchemy import create_engine
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -35,13 +38,17 @@ class SQLGenerator:
         data_input_path: str = "./table_info.jsonl",
         sample_queries_path: str = "./samples.csv",
         job_path: str = "./",
-        device: str = "cpu",
+        device: str = "auto",
+        regenerate: bool = False
     ):
+        offloading = offload_state()
+        if offloading and regenerate:
+            cls._instance = None
+            logger.info(f"Offloading state : {offloading}")
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-
             cls._instance.model, cls._instance.tokenizer = load_causal_lm_model(
-                model_name, cache_path=job_path, device=device
+                model_name, cache_path=f"{job_path}/models/", device=device, off_load=offloading
             )
             model_embed_path = f"{job_path}/models/sentence_transformers"
             device = "cuda" if torch.cuda.is_available() else "cpu" if device == "auto" else device
@@ -57,6 +64,7 @@ class SQLGenerator:
         sample_queries_path: str = "./samples.csv",
         job_path: str = "./",
         device: str = "cpu",
+        regenerate: bool = False
     ):
         self.db_url = db_url
         self.engine = create_engine(db_url)
@@ -67,6 +75,7 @@ class SQLGenerator:
         self.path = job_path
         self._data_info = None
         self._tasks = None
+        self.model_name = model_name
         self.openai_key = openai_key
         self.content_queries = None
 
@@ -294,12 +303,13 @@ class SQLGenerator:
         else:
             if self.model is None:
                 # Load h2oGPT.NSQL if not initialized self.model is None
-                device = {"": 0} if torch.cuda.is_available() else "cpu"
                 # https://github.com/pytorch/pytorch/issues/52291
-                _load_in_8bit = False if "cpu" in device else True
-                self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, device_map=device)
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    self.model_name, device_map=device, load_in_8bit=_load_in_8bit
+                offloading = offload_state()
+                if offloading:
+                    self.clear()
+                logger.info(f"Offloading state: {offloading}")
+                self.model, self.tokenizer = load_causal_lm_model(
+                    self.model_name, cache_path=f"{self.path}/models/", device="auto", off_load=offloading
                 )
 
             # TODO Update needed for multiple tables
@@ -448,6 +458,7 @@ class SQLGenerator:
                     num_beam_groups=5,
                     num_return_sequences=5,
                     output_scores=True,
+                    do_sample=False,
                     diversity_penalty=1.0,
                     return_dict_in_generate=True,
                 )
