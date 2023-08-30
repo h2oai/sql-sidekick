@@ -1,5 +1,6 @@
 import json
 import os
+import gc
 import random
 import sys
 from pathlib import Path
@@ -21,7 +22,7 @@ from sidekick.utils import (
     load_embedding_model,
     read_sample_pairs,
     remove_duplicates,
-    offload_state,
+    is_resource_low,
 )
 from sqlalchemy import create_engine
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -39,16 +40,23 @@ class SQLGenerator:
         sample_queries_path: str = "./samples.csv",
         job_path: str = "./",
         device: str = "auto",
-        regenerate: bool = False
+        is_regenerate: bool = False,
     ):
-        offloading = offload_state()
-        if offloading and regenerate:
+        offloading = is_resource_low()
+        if offloading and is_regenerate:
+            del cls._instance
             cls._instance = None
-            logger.info(f"Offloading state : {offloading}")
+            gc.collect()
+            torch.cuda.empty_cache()
+            logger.info(f"Low memory: {offloading}/ Model re-initialization: True")
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance.model, cls._instance.tokenizer = load_causal_lm_model(
-                model_name, cache_path=f"{job_path}/models/", device=device, off_load=offloading
+                model_name,
+                cache_path=f"{job_path}/models/",
+                device=device,
+                off_load=offloading,
+                re_generate=is_regenerate,
             )
             model_embed_path = f"{job_path}/models/sentence_transformers"
             device = "cuda" if torch.cuda.is_available() else "cpu" if device == "auto" else device
@@ -64,7 +72,7 @@ class SQLGenerator:
         sample_queries_path: str = "./samples.csv",
         job_path: str = "./",
         device: str = "cpu",
-        regenerate: bool = False
+        is_regenerate: bool = False,
     ):
         self.db_url = db_url
         self.engine = create_engine(db_url)
@@ -80,6 +88,7 @@ class SQLGenerator:
         self.content_queries = None
 
     def clear(self):
+        del SQLGenerator._instance
         SQLGenerator._instance = None
 
     def load_column_samples(self, tables: list):
@@ -301,17 +310,6 @@ class SQLGenerator:
                 logger.info("We did the best we could, there might be still be some error:\n")
                 logger.info(f"Realized query so far:\n {res}")
         else:
-            if self.model is None:
-                # Load h2oGPT.NSQL if not initialized self.model is None
-                # https://github.com/pytorch/pytorch/issues/52291
-                offloading = offload_state()
-                if offloading:
-                    self.clear()
-                logger.info(f"Offloading state: {offloading}")
-                self.model, self.tokenizer = load_causal_lm_model(
-                    self.model_name, cache_path=f"{self.path}/models/", device="auto", off_load=offloading
-                )
-
             # TODO Update needed for multiple tables
             columns_w_type = (
                 self.context_builder.full_context_dict[table_names[0]].split(":")[2].split("and")[0].strip()
@@ -439,12 +437,13 @@ class SQLGenerator:
                     max_new_tokens=300,
                     temperature=0.5,
                     output_scores=True,
+                    do_sample=True,
                     return_dict_in_generate=True,
                 )
 
                 generated_tokens = output.sequences[:, input_length:][0]
             else:
-                self.model.eval()
+                logger.info("Regeneration requested on previous query ...")
                 random_seed = random.randint(0, 50)
                 torch.manual_seed(random_seed)
                 random_temperature = round(random.uniform(0.5, 0.75), 2)
@@ -452,7 +451,7 @@ class SQLGenerator:
                     **inputs.to(device_type),
                     max_new_tokens=300,
                     temperature=random_temperature,
-                    top_k=10,
+                    top_k=5,
                     top_p=0.95,
                     num_beams=5,
                     num_beam_groups=5,
@@ -489,7 +488,7 @@ class SQLGenerator:
                         res = "SELECT " + result.strip() + " LIMIT 100;"
                     else:
                         res = "SELECT " + result.strip() + ";"
-                    alt_res = f"Option {idx+1}: (_probability_: {probabilities_scores[idx]})\n{res}"
+                    alt_res = f"Option {idx+1}: (_probability_: {probabilities_scores[idx]})\n{res}\n"
                     alternate_queries.append(alt_res)
                     logger.info(alt_res)
 
