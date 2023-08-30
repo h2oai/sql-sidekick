@@ -1,3 +1,4 @@
+import gc
 import json
 import logging
 from pathlib import Path
@@ -5,7 +6,9 @@ from typing import List, Optional
 
 import openai
 import toml
+import torch
 from h2o_wave import Q, app, data, handle_on, main, on, ui
+from h2o_wave.core import expando_to_dict
 from sidekick.prompter import db_setup_api, query_api
 from sidekick.utils import get_table_keys, setup_dir, update_tables
 
@@ -97,6 +100,7 @@ async def chat(q: Q):
             box=ui.box("vertical", height="500px"),
             name="chatbot",
             data=data(fields="content from_user", t="list", size=-50),
+            commands=[ui.command(name=f"regenerate_event", icon="RepeatAll", caption="Regenerate", label="Regenerate")],
         ),
     )
 
@@ -117,46 +121,53 @@ async def chatbot(q: Q):
     question = f"{q.args.chatbot}"
     logging.info(f"Question: {question}")
 
-    if q.args.chatbot.lower() == "db setup":
-        llm_response, err = db_setup_api(
-            db_name=q.user.db_name,
-            hostname=q.user.host_name,
-            user_name=q.user.user_name,
-            password=q.user.password,
-            port=q.user.port,
-            table_info_path=q.user.table_info_path,
-            table_samples_path=q.user.table_samples_path,
-            table_name=q.user.table_name,
-        )
-    elif q.args.chatbot.lower() == "regenerate":
-        if q.client.query is not None and q.client.query.strip() != "":
+    try:
+        if q.args.chatbot.lower() == "db setup":
+            llm_response, err = db_setup_api(
+                db_name=q.user.db_name,
+                hostname=q.user.host_name,
+                user_name=q.user.user_name,
+                password=q.user.password,
+                port=q.user.port,
+                table_info_path=q.user.table_info_path,
+                table_samples_path=q.user.table_samples_path,
+                table_name=q.user.table_name,
+            )
+        elif q.args.chatbot.lower() == "regenerate" or q.args.regenerate_event:
+            # Attempts to regenerate response on the last supplie query
+            if q.client.query is not None and q.client.query.strip() != "":
+                llm_response, alt_response, err = query_api(
+                    question=q.client.query,
+                    sample_queries_path=q.user.sample_qna_path,
+                    table_info_path=q.user.table_info_path,
+                    table_name=q.user.table_name,
+                    is_regenerate=True,
+                )
+                response = "\n".join(llm_response)
+                if alt_response:
+                    llm_response = response + "\n\n" + "**Alternate options:**\n" + "\n".join(alt_response)
+                    logging.info(f"Regenerate response: {llm_response}")
+                else:
+                    llm_response = response
+            else:
+                llm_response, err = (
+                    "Sure, I can generate a new response for you. However, in order to assist you "
+                    "effectively could you please provide me with your question?"
+                ), None
+        else:
+            q.client.query = question
             llm_response, alt_response, err = query_api(
-                question=q.client.query,
+                question=question,
                 sample_queries_path=q.user.sample_qna_path,
                 table_info_path=q.user.table_info_path,
                 table_name=q.user.table_name,
-                is_regenerate=True,
             )
-            response = "\n".join(llm_response)
-            if alt_response:
-                llm_response = response + "\n\n" + "**Alternate options:**\n" + "\n".join(alt_response)
-                logging.info(f"Regenerate response: {llm_response}")
-            else:
-                llm_response = response
-        else:
-            llm_response, err = (
-                "Sure, I can generate a new response for you. However, in order to assist you "
-                "effectively could you please provide me with your question?"
-            ), None
-    else:
-        q.client.query = question
-        llm_response, alt_response, err = query_api(
-            question=question,
-            sample_queries_path=q.user.sample_qna_path,
-            table_info_path=q.user.table_info_path,
-            table_name=q.user.table_name,
-        )
-        llm_response = "\n".join(llm_response)
+            llm_response = "\n".join(llm_response)
+    except (MemoryError, RuntimeError) as e:
+        logging.error(f"Something went wrong while generating response: {e}")
+        gc.collect()
+        torch.cuda.empty_cache()
+        llm_response = "Something went wrong, try executing the query again!"
 
     q.page["chat_card"].data += [llm_response, False]
 
@@ -393,7 +404,22 @@ async def init(q: Q) -> None:
 
 
 def on_shutdown():
-    logging.debug("App stopped. Goodbye!")
+    logging.info("App stopped. Goodbye!")
+
+
+async def on_event(q: Q):
+    event_handled = False
+    logging.info(f"Event handled ... ")
+    args_dict = expando_to_dict(q.args)
+    logging.debug(f"Args dict {args_dict}")
+    if q.args.regenerate_event:
+        q.args.chatbot = "regenerate"
+        await chatbot(q)
+        event_handled = True
+    else:  # default chatbot event
+        await handle_on(q)
+        event_handled = True
+    return event_handled
 
 
 @app("/", on_shutdown=on_shutdown)
@@ -406,5 +432,6 @@ async def serve(q: Q):
         q.client.initialized = True
 
     # Handle routing.
-    await handle_on(q)
-    await q.page.save()
+    if await on_event(q):
+        await q.page.save()
+        return
