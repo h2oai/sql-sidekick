@@ -321,6 +321,7 @@ def query_api(
     sample_queries_path: str,
     table_name: str,
     is_regenerate: bool = False,
+    is_regen_with_options: bool = False,
     is_command: bool = False,
 ):
     """Asks question and returns SQL."""
@@ -400,7 +401,8 @@ def query_api(
             job_path=base_path,
             data_input_path=table_info_path,
             sample_queries_path=sample_queries_path,
-            is_regenerate = is_regenerate
+            is_regenerate_with_options=is_regen_with_options,
+            is_regenerate=is_regenerate,
         )
         if "h2ogpt-sql" not in model_name:
             sql_g._tasks = sql_g.generate_tasks(table_names, question)
@@ -418,9 +420,7 @@ def query_api(
             if updated_tasks is not None:
                 sql_g._tasks = updated_tasks
         alt_res = None
-        res, alt_res = sql_g.generate_sql(
-            table_names, question, model_name=model_name, _dialect=db_dialect, is_regenerate=is_regenerate
-        )
+        res, alt_res = sql_g.generate_sql(table_names, question, model_name=model_name, _dialect=db_dialect)
         logger.info(f"Input query: {question}")
         logger.info(f"Generated response:\n\n{res}")
 
@@ -439,11 +439,7 @@ def query_api(
                     elif res_val.lower() == "r" or res_val.lower() == "regenerate":
                         click.echo("Attempting to regenerate...")
                         res, alt_res = sql_g.generate_sql(
-                            table_names,
-                            question,
-                            model_name=model_name,
-                            _dialect=db_dialect,
-                            is_regenerate=is_regenerate,
+                            table_names, question, model_name=model_name, _dialect=db_dialect
                         )
                         logger.info(f"Input query: {question}")
                         logger.info(f"Generated response:\n\n{res}")

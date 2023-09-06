@@ -8,14 +8,14 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 import torch
+from accelerate import infer_auto_device_map, init_empty_weights
 from InstructorEmbedding import INSTRUCTOR
 from pandasql import sqldf
 from sentence_transformers import SentenceTransformer
 from sidekick.logger import logger
 from sklearn.metrics.pairwise import cosine_similarity
-from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
-from accelerate import init_empty_weights, infer_auto_device_map
-from transformers import BitsAndBytesConfig
+from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
+                          BitsAndBytesConfig)
 
 
 def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, device: Optional[str] = None):
@@ -324,7 +324,7 @@ def load_causal_lm_model(
                 model_name, cache_dir=cache_path, device_map=device, quantization_config=nf4_config
             )
 
-        tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=cache_path, device_map=device)
+        tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=cache_path, device_map=device, use_fast=True)
 
         return model, tokenizer
     except Exception as e:

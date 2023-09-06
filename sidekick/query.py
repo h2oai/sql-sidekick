@@ -1,6 +1,6 @@
+import gc
 import json
 import os
-import gc
 import random
 import sys
 from pathlib import Path
@@ -18,14 +18,13 @@ from sidekick.logger import logger
 from sidekick.utils import (
     _check_file_info,
     filter_samples,
+    is_resource_low,
     load_causal_lm_model,
     load_embedding_model,
     read_sample_pairs,
     remove_duplicates,
-    is_resource_low,
 )
 from sqlalchemy import create_engine
-from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 class SQLGenerator:
@@ -41,6 +40,7 @@ class SQLGenerator:
         job_path: str = "./",
         device: str = "auto",
         is_regenerate: bool = False,
+        is_regenerate_with_options: bool = False,
     ):
         offloading = is_resource_low()
         if offloading and is_regenerate:
@@ -73,6 +73,7 @@ class SQLGenerator:
         job_path: str = "./",
         device: str = "cpu",
         is_regenerate: bool = False,
+        is_regenerate_with_options: bool = False,
     ):
         self.db_url = db_url
         self.engine = create_engine(db_url)
@@ -86,6 +87,9 @@ class SQLGenerator:
         self.model_name = model_name
         self.openai_key = openai_key
         self.content_queries = None
+        self.is_regenerate_with_options = is_regenerate_with_options
+        self.is_regenerate = is_regenerate
+        self.device = device
 
     def clear(self):
         del SQLGenerator._instance
@@ -252,12 +256,7 @@ class SQLGenerator:
             raise se
 
     def generate_sql(
-        self,
-        table_names: list,
-        input_question: str,
-        _dialect: str = "sqlite",
-        model_name: str = "h2ogpt-sql",
-        is_regenerate: bool = False,
+        self, table_names: list, input_question: str, _dialect: str = "sqlite", model_name: str = "h2ogpt-sql"
     ):
         context_file = f"{self.path}/var/lib/tmp/data/context.json"
         additional_context = json.load(open(context_file, "r")) if Path(context_file).exists() else {}
@@ -361,8 +360,8 @@ class SQLGenerator:
             logger.info(f"Number of possible contextual queries to question: {len(filtered_context)}")
             # If QnA pairs > 5, we keep top 5 for focused context
             _samples = filtered_context
-            if len(filtered_context) > 3:
-                _samples = filtered_context[0:3][::-1]
+            if len(filtered_context) > 5:
+                _samples = filtered_context[0:5][::-1]
 
             qna_samples = "\n".join(_samples)
 
@@ -431,7 +430,8 @@ class SQLGenerator:
             device_type = "cuda" if torch.cuda.is_available() else "cpu"
 
             alternate_queries = []
-            if not is_regenerate:
+            if not self.is_regenerate_with_options and not self.is_regenerate:
+                # Greedy decoding
                 output = self.model.generate(
                     **inputs.to(device_type),
                     max_new_tokens=300,
@@ -442,17 +442,37 @@ class SQLGenerator:
                 )
 
                 generated_tokens = output.sequences[:, input_length:][0]
-            else:
+            elif self.is_regenerate and not self.is_regenerate_with_options:
+                # throttle temperature for different result
                 logger.info("Regeneration requested on previous query ...")
                 random_seed = random.randint(0, 50)
                 torch.manual_seed(random_seed)
-                random_temperature = round(random.uniform(0.5, 0.75), 2)
+                possible_temp_choice = [0.1, 0.2, 0.3, 0.6, 0.75, 0.9]
+                random_temperature = np.random.choice(possible_temp_choice, 1)[0]
+                logger.debug(f"Selected temperature for fast regeneration : {random_temperature}")
+                output = self.model.generate(
+                    **inputs.to(device_type),
+                    max_new_tokens=300,
+                    temperature=random_temperature,
+                    output_scores=True,
+                    do_sample=True,
+                    return_dict_in_generate=True,
+                )
+                generated_tokens = output.sequences[:, input_length:][0]
+            else:
+                logger.info("Regeneration with options requested on previous query ...")
+                # Diverse beam search decoding to explore more options
+                random_seed = random.randint(0, 50)
+                torch.manual_seed(random_seed)
+                possible_temp_choice = [0.1, 0.3, 0.5, 0.6, 0.75]
+                random_temperature = np.random.choice(possible_temp_choice, 1)[0]
+                logger.debug(f"Selected temperature for diverse beam search: {random_temperature}")
                 output_re = self.model.generate(
                     **inputs.to(device_type),
                     max_new_tokens=300,
                     temperature=random_temperature,
                     top_k=5,
-                    top_p=0.95,
+                    top_p=0.9,
                     num_beams=5,
                     num_beam_groups=5,
                     num_return_sequences=5,
@@ -465,6 +485,7 @@ class SQLGenerator:
                 transition_scores = self.model.compute_transition_scores(
                     output_re.sequences, output_re.scores, output_re.beam_indices, normalize_logits=False
                 )
+
                 # Create a boolean tensor where elements are True if the corresponding element in transition_scores is less than 0
                 mask = transition_scores < 0
                 # Sum the True values along axis 1

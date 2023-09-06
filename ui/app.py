@@ -72,7 +72,7 @@ async def chat(q: Q):
     table_names = []
     tables, _ = get_table_keys(f"{tmp_path}/data/tables.json", None)
     for table in tables:
-        table_names.append(ui.choice(table, f"Table: {table}"))
+        table_names.append(ui.choice(table, f"{table}"))
 
     add_card(q, "background_card", ui.form_card(box="horizontal", items=[ui.text("Ask your questions:")]))
 
@@ -100,7 +100,15 @@ async def chat(q: Q):
             box=ui.box("vertical", height="500px"),
             name="chatbot",
             data=data(fields="content from_user", t="list", size=-50),
-            commands=[ui.command(name=f"regenerate_event", icon="RepeatAll", caption="Regenerate", label="Regenerate")],
+            commands=[
+                ui.command(name=f"regenerate", icon="RepeatOne", caption="Attempts regeneration", label="Regenerate"),
+                ui.command(
+                    name=f"regenerate_with_options",
+                    icon="RepeatAll",
+                    caption="Regenerates with options",
+                    label="Try Harder",
+                ),
+            ],
         ),
     )
 
@@ -121,6 +129,10 @@ async def chatbot(q: Q):
     question = f"{q.args.chatbot}"
     logging.info(f"Question: {question}")
 
+    # For regeneration, currently there are 2 modes
+    # 1. Quick fast approach by throttling the temperature
+    # 2. "Try harder mode (THM)" Slow approach by using the diverse beam search
+
     try:
         if q.args.chatbot.lower() == "db setup":
             llm_response, err = db_setup_api(
@@ -133,8 +145,9 @@ async def chatbot(q: Q):
                 table_samples_path=q.user.table_samples_path,
                 table_name=q.user.table_name,
             )
-        elif q.args.chatbot.lower() == "regenerate" or q.args.regenerate_event:
-            # Attempts to regenerate response on the last supplie query
+        elif q.args.chatbot.lower() == "regenerate" or q.args.regenerate:
+            # Attempts to regenerate response on the last supplied query
+            logging.info(f"Attempt for regeneration")
             if q.client.query is not None and q.client.query.strip() != "":
                 llm_response, alt_response, err = query_api(
                     question=q.client.query,
@@ -142,6 +155,20 @@ async def chatbot(q: Q):
                     table_info_path=q.user.table_info_path,
                     table_name=q.user.table_name,
                     is_regenerate=True,
+                    is_regen_with_options=False,
+                )
+                llm_response = "\n".join(llm_response)
+        elif q.args.chatbot.lower() == "try harder" or q.args.regenerate_with_options:
+            # Attempts to regenerate response on the last supplied query
+            logging.info(f"Attempt for regeneration with options.")
+            if q.client.query is not None and q.client.query.strip() != "":
+                llm_response, alt_response, err = query_api(
+                    question=q.client.query,
+                    sample_queries_path=q.user.sample_qna_path,
+                    table_info_path=q.user.table_info_path,
+                    table_name=q.user.table_name,
+                    is_regenerate=False,
+                    is_regen_with_options=True,
                 )
                 response = "\n".join(llm_response)
                 if alt_response:
@@ -412,8 +439,12 @@ async def on_event(q: Q):
     logging.info(f"Event handled ... ")
     args_dict = expando_to_dict(q.args)
     logging.debug(f"Args dict {args_dict}")
-    if q.args.regenerate_event:
+    if q.args.regenerate_with_options:
+        q.args.chatbot = "try harder"
+    elif q.args.regenerate:
         q.args.chatbot = "regenerate"
+
+    if q.args.regenerate_with_options or q.args.regenerate:
         await chatbot(q)
         event_handled = True
     else:  # default chatbot event
