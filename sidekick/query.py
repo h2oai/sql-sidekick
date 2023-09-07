@@ -43,7 +43,7 @@ class SQLGenerator:
         is_regenerate_with_options: bool = False,
     ):
         offloading = is_resource_low()
-        if offloading and is_regenerate:
+        if offloading and is_regenerate_with_options:
             del cls._instance
             cls._instance = None
             gc.collect()
@@ -56,7 +56,7 @@ class SQLGenerator:
                 cache_path=f"{job_path}/models/",
                 device=device,
                 off_load=offloading,
-                re_generate=is_regenerate,
+                re_generate=is_regenerate_with_options,
             )
             model_embed_path = f"{job_path}/models/sentence_transformers"
             device = "cuda" if torch.cuda.is_available() else "cpu" if device == "auto" else device
