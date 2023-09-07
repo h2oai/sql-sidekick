@@ -100,14 +100,39 @@ async def chat(q: Q):
             box=ui.box("vertical", height="500px"),
             name="chatbot",
             data=data(fields="content from_user", t="list", size=-50),
-            commands=[
-                ui.command(name=f"regenerate", icon="RepeatOne", caption="Attempts regeneration", label="Regenerate"),
-                ui.command(
-                    name=f"regenerate_with_options",
-                    icon="RepeatAll",
-                    caption="Regenerates with options",
-                    label="Try Harder",
-                ),
+        ),
+    )
+    add_card(
+        q,
+        "additional_actions",
+        ui.form_card(
+            box=ui.box("vertical", height="100px"),
+            items=[
+                ui.buttons(
+                    [
+                        ui.button(
+                            name="regenerate",
+                            icon="RepeatOne",
+                            caption="Attempts regeneration",
+                            label="Regenerate",
+                            primary=True,
+                        ),
+                        ui.button(
+                            name="regenerate_with_options",
+                            icon="RepeatAll",
+                            caption="Regenerates with options",
+                            label="Try Harder",
+                        ),
+                        ui.button(
+                            name="regenerate_with_options",
+                            caption="Saves the conversation for future reference/to improve response",
+                            label="Save",
+                            icon="Save",
+                            disabled=True,
+                        ),
+                    ],
+                    justify="center",
+                )
             ],
         ),
     )
@@ -132,7 +157,7 @@ async def chatbot(q: Q):
     # For regeneration, currently there are 2 modes
     # 1. Quick fast approach by throttling the temperature
     # 2. "Try harder mode (THM)" Slow approach by using the diverse beam search
-
+    llm_response = None
     try:
         if q.args.chatbot.lower() == "db setup":
             llm_response, err = db_setup_api(
@@ -158,6 +183,11 @@ async def chatbot(q: Q):
                     is_regen_with_options=False,
                 )
                 llm_response = "\n".join(llm_response)
+            else:
+                llm_response = (
+                    "Sure, I can generate a new response for you. "
+                    "However, in order to assist you effectively could you please provide me with your question?"
+                )
         elif q.args.chatbot.lower() == "try harder" or q.args.regenerate_with_options:
             # Attempts to regenerate response on the last supplied query
             logging.info(f"Attempt for regeneration with options.")
@@ -177,10 +207,10 @@ async def chatbot(q: Q):
                 else:
                     llm_response = response
             else:
-                llm_response, err = (
-                    "Sure, I can generate a new response for you. However, in order to assist you "
-                    "effectively could you please provide me with your question?"
-                ), None
+                llm_response = (
+                    "Sure, I can generate a new response for you. "
+                    "However, in order to assist you effectively could you please provide me with your question?"
+                )
         else:
             q.client.query = question
             llm_response, alt_response, err = query_api(

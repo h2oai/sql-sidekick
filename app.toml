@@ -1,7 +1,7 @@
 [App]
 name = "ai.h2o.wave.sql-sidekick"
 title = "SQL-Sidekick"
-description = "QnA with tabular data using NLI"
+description = "QnA with tabular data using NLQ"
 LongDescription = "about.md"
 Tags = ["DATA_SCIENCE", "MACHINE_LEARNING", "NLP"]
 Version = "0.0.7"
