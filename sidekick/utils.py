@@ -119,7 +119,10 @@ def remove_duplicates(
 
 
 def save_query(output_path: str, query, response, extracted_entity: Optional[dict] = ""):
-    chat_history = {"Query": query, "Answer": response, "Entity": extracted_entity}
+    _response = response
+    if response and "Generated Query".lower() in response.lower():
+        _response = response.split("**Generated Query:**")[1].split("**Query Results:**")[0].strip()
+    chat_history = {"Query": query, "Answer": _response, "Entity": extracted_entity}
 
     with open(f"{output_path}/var/lib/tmp/data/history.jsonl", "a") as outfile:
         json.dump(chat_history, outfile)

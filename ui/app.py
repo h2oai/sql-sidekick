@@ -10,7 +10,7 @@ import torch
 from h2o_wave import Q, app, data, handle_on, main, on, ui
 from h2o_wave.core import expando_to_dict
 from sidekick.prompter import db_setup_api, query_api
-from sidekick.utils import get_table_keys, setup_dir, update_tables
+from sidekick.utils import get_table_keys, save_query, setup_dir, update_tables
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
@@ -124,11 +124,10 @@ async def chat(q: Q):
                             label="Try Harder",
                         ),
                         ui.button(
-                            name="regenerate_with_options",
+                            name="save_conversation",
                             caption="Saves the conversation for future reference/to improve response",
                             label="Save",
                             icon="Save",
-                            disabled=True,
                         ),
                     ],
                     justify="center",
@@ -225,7 +224,7 @@ async def chatbot(q: Q):
         gc.collect()
         torch.cuda.empty_cache()
         llm_response = "Something went wrong, try executing the query again!"
-
+    q.client.llm_response = llm_response
     q.page["chat_card"].data += [llm_response, False]
 
 
@@ -476,6 +475,17 @@ async def on_event(q: Q):
 
     if q.args.regenerate_with_options or q.args.regenerate:
         await chatbot(q)
+        event_handled = True
+    if q.args.save_conversation:
+        question = q.client.query
+        _val = q.client.llm_response
+        if question is not None and _val is not None and _val.strip() != "":
+            logging.info(f"Saving conversation for question: {question} and response: {_val}")
+            save_query(base_path, query=question, response=_val)
+            _msg = "Conversation saved successfully!"
+        else:
+            _msg = "Sorry, try generating a conversation to save."
+        q.page["chat_card"].data += [_msg, False]
         event_handled = True
     else:  # default chatbot event
         await handle_on(q)
