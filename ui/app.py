@@ -106,7 +106,7 @@ async def chat(q: Q):
         q,
         "additional_actions",
         ui.form_card(
-            box=ui.box("vertical", height="100px"),
+            box=ui.box("vertical", height="120px"),
             items=[
                 ui.buttons(
                     [
@@ -140,7 +140,6 @@ async def chat(q: Q):
 @on("chatbot")
 async def chatbot(q: Q):
     q.page["sidebar"].value = "#chat"
-    # clear_cards(q)  # When routing, drop all the cards except of the main ones (header, sidebar, meta).
 
     # Append user message.
     q.page["chat_card"].data += [q.args.chatbot, True]
@@ -158,7 +157,7 @@ async def chatbot(q: Q):
     # 2. "Try harder mode (THM)" Slow approach by using the diverse beam search
     llm_response = None
     try:
-        if q.args.chatbot.lower() == "db setup":
+        if q.args.chatbot and q.args.chatbot.lower() == "db setup":
             llm_response, err = db_setup_api(
                 db_name=q.user.db_name,
                 hostname=q.user.host_name,
@@ -169,7 +168,7 @@ async def chatbot(q: Q):
                 table_samples_path=q.user.table_samples_path,
                 table_name=q.user.table_name,
             )
-        elif q.args.chatbot.lower() == "regenerate" or q.args.regenerate:
+        elif q.args.chatbot and q.args.chatbot.lower() == "regenerate" or q.args.regenerate:
             # Attempts to regenerate response on the last supplied query
             logging.info(f"Attempt for regeneration")
             if q.client.query is not None and q.client.query.strip() != "":
@@ -187,7 +186,7 @@ async def chatbot(q: Q):
                     "Sure, I can generate a new response for you. "
                     "However, in order to assist you effectively could you please provide me with your question?"
                 )
-        elif q.args.chatbot.lower() == "try harder" or q.args.regenerate_with_options:
+        elif q.args.chatbot and q.args.chatbot.lower() == "try harder" or q.args.regenerate_with_options:
             # Attempts to regenerate response on the last supplied query
             logging.info(f"Attempt for regeneration with options.")
             if q.client.query is not None and q.client.query.strip() != "":
@@ -465,17 +464,13 @@ def on_shutdown():
 
 async def on_event(q: Q):
     event_handled = False
-    logging.info(f"Event handled ... ")
     args_dict = expando_to_dict(q.args)
-    logging.debug(f"Args dict {args_dict}")
+    logging.info(f"Args dict {args_dict}")
     if q.args.regenerate_with_options:
         q.args.chatbot = "try harder"
     elif q.args.regenerate:
         q.args.chatbot = "regenerate"
 
-    if q.args.regenerate_with_options or q.args.regenerate:
-        await chatbot(q)
-        event_handled = True
     if q.args.save_conversation:
         question = q.client.query
         _val = q.client.llm_response
@@ -487,9 +482,13 @@ async def on_event(q: Q):
             _msg = "Sorry, try generating a conversation to save."
         q.page["chat_card"].data += [_msg, False]
         event_handled = True
+    elif q.args.regenerate or q.args.regenerate_with_options:
+        await chatbot(q)
+        event_handled = True
     else:  # default chatbot event
         await handle_on(q)
         event_handled = True
+    logging.info(f"Event handled: {event_handled} ... ")
     return event_handled
 
 
@@ -501,6 +500,7 @@ async def serve(q: Q):
         setup_dir(base_path)
         await init(q)
         q.client.initialized = True
+        logging.info("App initialized.")
 
     # Handle routing.
     if await on_event(q):

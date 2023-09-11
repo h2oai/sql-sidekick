@@ -4,7 +4,7 @@ title = "SQL-Sidekick"
 description = "QnA with tabular data using NLQ"
 LongDescription = "about.md"
 Tags = ["DATA_SCIENCE", "MACHINE_LEARNING", "NLP"]
-Version = "0.0.7"
+Version = "0.0.8"
 
 [Runtime]
 MemoryLimit = "64Gi"
