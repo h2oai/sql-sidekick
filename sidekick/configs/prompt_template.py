@@ -70,7 +70,7 @@ Table '{table_name}' has sample values ({data_info_detailed})
 
 
 
--- Using valid SQLite, answer the following questions with the information for '{table_name}' provided above; for final SQL only use values from the question.
+-- Using valid SQLite, answer the following questions with the information for '{table_name}' provided above; for final SQL only use column names from the CREATE TABLE.
 
 
 -- Using reference for TABLES '{table_name}' {context}; {question_txt}?
