@@ -11,19 +11,16 @@ import sqlglot
 import torch
 import torch.nn.functional as F
 from langchain import OpenAI
-from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
+from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
+                         LLMPredictor, ServiceContext, SQLDatabase)
 from llama_index.indices.struct_store import SQLContextContainerBuilder
-from sidekick.configs.prompt_template import DEBUGGING_PROMPT, NSQL_QUERY_PROMPT, QUERY_PROMPT, TASK_PROMPT
+from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
+                                              NSQL_QUERY_PROMPT, QUERY_PROMPT,
+                                              TASK_PROMPT)
 from sidekick.logger import logger
-from sidekick.utils import (
-    _check_file_info,
-    filter_samples,
-    is_resource_low,
-    load_causal_lm_model,
-    load_embedding_model,
-    read_sample_pairs,
-    remove_duplicates,
-)
+from sidekick.utils import (_check_file_info, filter_samples, is_resource_low,
+                            load_causal_lm_model, load_embedding_model,
+                            read_sample_pairs, remove_duplicates)
 from sqlalchemy import create_engine
 
 
@@ -319,7 +316,10 @@ class SQLGenerator:
             _context = {
                 "if patterns like 'current time' or 'now' occurs in question": "always use NOW() - INTERVAL",
                 "if patterns like 'total number', or 'List' occurs in question": "always use DISTINCT",
+                "detailed summary": "include min, avg, max",
+                "summary": "include min, avg, max"
             }
+
             m_path = f"{self.path}/models/sentence_transformers/"
             filtered_context = filter_samples(
                 model_obj=self.similarity_model,
@@ -373,6 +373,16 @@ class SQLGenerator:
             if len(_samples) > 2:
                 # Check for the columns in the QnA samples provided, if exists keep them
                 context_columns = [_c for _c in clmn_names if _c.lower().strip() in qna_samples.lower()]
+
+                # To be safe, when we have more than 2 samples, we check for the column names in the question as well
+                first_pass = [_c for _c in clmn_names if _c.lower().strip() in input_question.lower().strip()]
+                _input = input_question.lower().split(" ")
+                for _c in clmn_names:
+                    for _f in _c.lower().split("_"):
+                        res = _f in _input
+                    if res:
+                        first_pass.append(_c)
+                context_columns = set(context_columns + first_pass)
                 if len(context_columns) > 0:
                     contextual_data_samples = [
                         _d
@@ -381,6 +391,7 @@ class SQLGenerator:
                         if _cc.lower() in _d.lower()
                     ]
                     data_samples_list = contextual_data_samples
+
             relevant_columns = context_columns if len(context_columns) > 0 else clmn_names
             _column_info = ", ".join(relevant_columns)
 
@@ -447,7 +458,7 @@ class SQLGenerator:
                 logger.info("Regeneration requested on previous query ...")
                 random_seed = random.randint(0, 50)
                 torch.manual_seed(random_seed)
-                possible_temp_choice = [0.1, 0.2, 0.3, 0.6, 0.75, 0.9]
+                possible_temp_choice = [0.1, 0.2, 0.3, 0.6, 0.75, 0.9, 1.0]
                 random_temperature = np.random.choice(possible_temp_choice, 1)[0]
                 logger.debug(f"Selected temperature for fast regeneration : {random_temperature}")
                 output = self.model.generate(
@@ -464,7 +475,7 @@ class SQLGenerator:
                 # Diverse beam search decoding to explore more options
                 random_seed = random.randint(0, 50)
                 torch.manual_seed(random_seed)
-                possible_temp_choice = [0.1, 0.3, 0.5, 0.6, 0.75]
+                possible_temp_choice = [0.1, 0.3, 0.5, 0.6, 0.75, 0.9, 1.0]
                 random_temperature = np.random.choice(possible_temp_choice, 1)[0]
                 logger.debug(f"Selected temperature for diverse beam search: {random_temperature}")
                 output_re = self.model.generate(
@@ -478,7 +489,7 @@ class SQLGenerator:
                     num_return_sequences=5,
                     output_scores=True,
                     do_sample=False,
-                    diversity_penalty=1.0,
+                    diversity_penalty=2.0,
                     return_dict_in_generate=True,
                 )
 
@@ -497,19 +508,23 @@ class SQLGenerator:
                 # Converting logit scores to prob scores
                 probabilities_scores = F.softmax(reconstructed_scores, dim=-1)
                 out_idx = torch.argmax(probabilities_scores)
+                # Final output
                 output = output_re.sequences[out_idx]
-
                 generated_tokens = output[input_length:]
 
                 logger.info(f"Generated options:\n")
-                for idx, _out in enumerate(output_re.sequences):
+                prob_sorted_idxs = sorted(
+                    range(len(probabilities_scores)), key=lambda k: probabilities_scores[k], reverse=True
+                )
+                for idx, sorted_idx in enumerate(prob_sorted_idxs):
+                    _out = output_re.sequences[sorted_idx]
                     res = self.tokenizer.decode(_out[input_length:], skip_special_tokens=True)
                     result = res.replace("table_name", _table_name)
                     if "LIMIT".lower() not in result.lower():
                         res = "SELECT " + result.strip() + " LIMIT 100;"
                     else:
                         res = "SELECT " + result.strip() + ";"
-                    alt_res = f"Option {idx+1}: (_probability_: {probabilities_scores[idx]})\n{res}\n"
+                    alt_res = f"Option {idx+1}: (_probability_: {probabilities_scores[sorted_idx]})\n{res}\n"
                     alternate_queries.append(alt_res)
                     logger.info(alt_res)
 

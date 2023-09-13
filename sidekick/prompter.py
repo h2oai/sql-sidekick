@@ -420,7 +420,16 @@ def query_api(
             if updated_tasks is not None:
                 sql_g._tasks = updated_tasks
         alt_res = None
-        res, alt_res = sql_g.generate_sql(table_names, question, model_name=model_name, _dialect=db_dialect)
+        if (
+            question is not None
+            and "SELECT" in question
+            and (question.lower().startswith("question:") or question.lower().startswith("q:"))
+        ):
+            _q = question.lower().split("q:")[1].split("r:")[0].strip()
+            res = question.lower().split("r:")[1].strip()
+            question = _q
+        else:
+            res, alt_res = sql_g.generate_sql(table_names, question, model_name=model_name, _dialect=db_dialect)
         logger.info(f"Input query: {question}")
         logger.info(f"Generated response:\n\n{res}")
 
@@ -444,7 +453,7 @@ def query_api(
                         logger.info(f"Input query: {question}")
                         logger.info(f"Generated response:\n\n{res}")
 
-            results.extend(["**Generated Query:**\n", res, "\n"])
+            results.extend([f"**Generated response for question,**\n{question}\n", res, "\n"])
             logger.info(f"Alternate responses:\n\n{alt_res}")
 
             exe_sql = click.prompt("Would you like to execute the generated SQL (y/n)?") if is_command else "y"
@@ -495,7 +504,7 @@ def query_api(
                         click.echo("Error in executing the query. Validate generated SQL and try again.")
                         click.echo("No result to display.")
 
-                results.append("**Query Results:** \n")
+                results.append("**Result:** \n")
                 if q_res:
                     click.echo(f"The query results are:\n {q_res}")
                     results.extend([str(q_res), "\n"])

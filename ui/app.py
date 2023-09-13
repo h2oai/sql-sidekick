@@ -212,7 +212,7 @@ async def chatbot(q: Q):
         else:
             q.client.query = question
             llm_response, alt_response, err = query_api(
-                question=question,
+                question=q.client.query,
                 sample_queries_path=q.user.sample_qna_path,
                 table_info_path=q.user.table_info_path,
                 table_name=q.user.table_name,
@@ -374,7 +374,7 @@ async def submit_table(q: Q):
         q.user.table_info_path = table_info["schema_info_path"]
         q.user.table_samples_path = table_info["samples_path"]
         q.user.sample_qna_path = table_info["samples_qa"]
-        q.user.table_name = table_key
+        q.user.table_name = table_key.replace(" ", "_")
 
         q.page["select_tables"].table_dropdown.value = table_key
     else:
@@ -471,10 +471,21 @@ async def on_event(q: Q):
     elif q.args.regenerate:
         q.args.chatbot = "regenerate"
 
-    if q.args.save_conversation:
+    if q.args.save_conversation or (q.args.chatbot and "save the qna pair:" in q.args.chatbot.lower()):
         question = q.client.query
         _val = q.client.llm_response
-        if question is not None and _val is not None and _val.strip() != "":
+        # Currently, any manual input by the user is a Question by default
+        if (
+            question is not None
+            and "SELECT" in question
+            and (question.lower().startswith("question:") or question.lower().startswith("q:"))
+        ):
+            _q = question.lower().split("q:")[1].split("r:")[0].strip()
+            _r = question.lower().split("r:")[1].strip()
+            logging.info(f"Saving conversation for question: {_q} and response: {_r}")
+            save_query(base_path, query=_q, response=_r)
+            _msg = "Conversation saved successfully!"
+        elif question is not None and _val is not None and _val.strip() != "":
             logging.info(f"Saving conversation for question: {question} and response: {_val}")
             save_query(base_path, query=question, response=_val)
             _msg = "Conversation saved successfully!"
