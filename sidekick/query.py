@@ -228,7 +228,11 @@ class SQLGenerator:
 
             # Filter closest samples to the input question, threshold = 0.45
             filtered_context = (
-                filter_samples(input_question, updated_context, m_path, threshold=0.9)
+                filter_samples(input_question,
+                               updated_context,
+                               m_path,
+                               threshold=0.9,
+                               is_regenerate= True if (self.is_regenerate and not self.is_regenerate_with_options) else False)
                 if len(updated_context) > 1
                 else updated_context
             )
@@ -353,6 +357,7 @@ class SQLGenerator:
                     model_path=m_path,
                     model_obj=self.similarity_model,
                     threshold=0.9,
+                    is_regenerate= True if (self.is_regenerate and not self.is_regenerate_with_options) else False
                 )
                 if len(context_queries) > 1
                 else context_queries
