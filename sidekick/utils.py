@@ -43,9 +43,9 @@ def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, devic
 
 
 def load_embedding_model(model_path: str, device: str):
-    model_name_path = glob.glob(f"{model_path}/models--hkunlp--instructor-large/snapshots/*/")[0]
+    model_name_path = glob.glob(f"{model_path}/models--BAAI--bge-base-en/snapshots/*/")[0]
 
-    sentence_model = INSTRUCTOR(model_name_path, cache_folder=model_path, device=device)
+    sentence_model = SentenceTransformer(model_name_path, cache_folder=model_path, device=device)
     if "cuda" not in device:
         # Issue https://github.com/pytorch/pytorch/issues/69364
         # # In the initial experimentation, quantized model is generates slightly better results
@@ -70,7 +70,7 @@ def generate_text_embeddings(model_path: str, x, model_obj=None, batch_size: int
 
 
 def filter_samples(
-    input_q: str, probable_qs: list, model_path: str, model_obj=None, threshold: float = 0.80, device="auto"
+    input_q: str, probable_qs: list, model_path: str, model_obj=None, threshold: float = 0.80, device="auto", is_regenerate: bool = False
 ):
     # Only consider the questions, note: this might change in future.
     _inq = ("# query: " + input_q).strip().lower()
@@ -82,17 +82,27 @@ def filter_samples(
     logger.debug(f"Probable context: {input_pqs}")
     embeddings = generate_text_embeddings(model_path, x=input_pqs, model_obj=model_obj, device=_device)
     res = {}
-    _scores = []
+    _scores = {}
     for idx, _se in enumerate(embeddings):
         similarities_score = cosine_similarity(
             [_se.astype(float).tolist()], [question_embeddings.astype(float).tolist()[0]]
         )
         logger.debug(f"Similarity score for: {input_pqs[idx]}: {similarities_score[0][0]}")
+        _scores[idx] = similarities_score[0][0]
         if similarities_score[0][0] > threshold:
             res[str(probable_qs[idx])] = similarities_score[0][0]
-            _scores.append(similarities_score[0][0])
 
-    sorted_res = sorted(res.items(), key=lambda x: x[1], reverse=True)
+    # Get Top N Context Queries if user requested to regenerate regardless of scores
+    if len(res) == 0 and is_regenerate and len(_scores) > 0:
+        top_n = min(len(_scores), 2)
+        sorted_res = dict()
+        sorted_scores = sorted(_scores, key=_scores.get, reverse=True)
+        top_idxs = sorted_scores[:top_n]
+        for idx in top_idxs:
+            sorted_res[str(probable_qs[idx])] = similarities_score[0][0]
+    else:
+        sorted_res = sorted(res.items(), key=lambda x: x[1], reverse=True)
+
     logger.debug(f"Sorted context: {sorted_res}")
     return list(dict(sorted_res).keys())
 
