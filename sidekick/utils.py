@@ -14,8 +14,7 @@ from pandasql import sqldf
 from sentence_transformers import SentenceTransformer
 from sidekick.logger import logger
 from sklearn.metrics.pairwise import cosine_similarity
-from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
-                          BitsAndBytesConfig)
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 
 def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, device: Optional[str] = None):
@@ -120,8 +119,9 @@ def remove_duplicates(
 
 def save_query(output_path: str, query, response, extracted_entity: Optional[dict] = ""):
     _response = response
-    if response and "Generated Query".lower() in response.lower():
-        _response = response.split("**Generated Query:**")[1].split("**Query Results:**")[0].strip()
+    # Probably need to find a better way to extra the info rather than depending on key phrases
+    if response and "Generated response for question,".lower() in response.lower():
+        _response = response.split("**Generated response for question,**")[1].split("\n")[3].strip()
     chat_history = {"Query": query, "Answer": _response, "Entity": extracted_entity}
 
     with open(f"{output_path}/var/lib/tmp/data/history.jsonl", "a") as outfile:
