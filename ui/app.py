@@ -480,36 +480,45 @@ def on_shutdown():
 
 # Preload sample data for the app
 def upload_demo_examples(q: Q):
-    # Do not upload dataset if user had any tables uploaded previously. This avoids re-uploading sample dataset
-
+    upload_action = True
     cur_dir = os.getcwd()
     sample_data_path = f"{cur_dir}/examples/demo/"
-    sample_files = os.listdir(sample_data_path)
     usr_table_name = "Sleep health and lifestyle study"
 
-    table_metadata = dict()
-    table_metadata[usr_table_name] = {
-        "schema_info_path": f"{sample_data_path}/table_info.jsonl",
-        "samples_path": f"{sample_data_path}/Sleep_health_and_lifestyle_dataset.csv",
-        "samples_qa": None,
-    }
-    update_tables(f"{tmp_path}/data/tables.json", table_metadata)
+    table_metadata_path = f"{tmp_path}/data/tables.json"
+    # Do not upload dataset if user had any tables uploaded previously. This check avoids re-uploading sample dataset.
+    if os.path.exists(table_metadata_path):
+        # Read the existing content from the JSON file
+        with open(table_metadata_path, "r") as json_file:
+            existing_data = json.load(json_file)
+            if usr_table_name in existing_data:
+                upload_action = False
+                logging.info(f"Dataset already uploaded, skipping upload!")
+    if upload_action:
+        table_metadata = dict()
+        table_metadata[usr_table_name] = {
+            "schema_info_path": f"{sample_data_path}/table_info.jsonl",
+            "samples_path": f"{sample_data_path}/Sleep_health_and_lifestyle_dataset.csv",
+            "samples_qa": None,
+        }
+        update_tables(f"{tmp_path}/data/tables.json", table_metadata)
 
-    q.user.table_name = usr_table_name
-    q.user.table_samples_path = f"{sample_data_path}/Sleep_health_and_lifestyle_dataset.csv"
-    q.user.table_info_path = f"{sample_data_path}/table_info.jsonl"
-    q.user.sample_qna_path = None
+        q.user.table_name = usr_table_name
+        q.user.table_samples_path = f"{sample_data_path}/Sleep_health_and_lifestyle_dataset.csv"
+        q.user.table_info_path = f"{sample_data_path}/table_info.jsonl"
+        q.user.sample_qna_path = None
 
-    db_resp = db_setup_api(
-        db_name=q.user.db_name,
-        hostname=q.user.host_name,
-        user_name=q.user.user_name,
-        password=q.user.password,
-        port=q.user.port,
-        table_info_path=q.user.table_info_path,
-        table_samples_path=q.user.table_samples_path,
-        table_name=q.user.table_name,
-    )
+        db_resp = db_setup_api(
+            db_name=q.user.db_name,
+            hostname=q.user.host_name,
+            user_name=q.user.user_name,
+            password=q.user.password,
+            port=q.user.port,
+            table_info_path=q.user.table_info_path,
+            table_samples_path=q.user.table_samples_path,
+            table_name=q.user.table_name,
+        )
+        logging.info(f"DB updated with demo examples: \n {db_resp}")
 
 
 async def on_event(q: Q):
@@ -561,6 +570,7 @@ async def on_event(q: Q):
         """
         q.args.chatbot = f"Demo mode is enabled. Try below example questions for the selected data,\n{sample_qs}"
         q.page["chat_card"].data += [q.args.chatbot, True]
+        q.page["meta"].redirect = "#chat"
         event_handled = True
     else:  # default chatbot event
         await handle_on(q)
