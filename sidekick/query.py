@@ -11,16 +11,19 @@ import sqlglot
 import torch
 import torch.nn.functional as F
 from langchain import OpenAI
-from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
-                         LLMPredictor, ServiceContext, SQLDatabase)
+from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
 from llama_index.indices.struct_store import SQLContextContainerBuilder
-from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
-                                              NSQL_QUERY_PROMPT, QUERY_PROMPT,
-                                              TASK_PROMPT)
+from sidekick.configs.prompt_template import DEBUGGING_PROMPT, NSQL_QUERY_PROMPT, QUERY_PROMPT, TASK_PROMPT
 from sidekick.logger import logger
-from sidekick.utils import (_check_file_info, filter_samples, is_resource_low,
-                            load_causal_lm_model, load_embedding_model,
-                            read_sample_pairs, remove_duplicates)
+from sidekick.utils import (
+    _check_file_info,
+    filter_samples,
+    is_resource_low,
+    load_causal_lm_model,
+    load_embedding_model,
+    read_sample_pairs,
+    remove_duplicates,
+)
 from sqlalchemy import create_engine
 
 
@@ -228,11 +231,13 @@ class SQLGenerator:
 
             # Filter closest samples to the input question, threshold = 0.45
             filtered_context = (
-                filter_samples(input_question,
-                               updated_context,
-                               m_path,
-                               threshold=0.9,
-                               is_regenerate= True if (self.is_regenerate and not self.is_regenerate_with_options) else False)
+                filter_samples(
+                    input_question,
+                    updated_context,
+                    m_path,
+                    threshold=0.9,
+                    is_regenerate=True if (self.is_regenerate and not self.is_regenerate_with_options) else False,
+                )
                 if len(updated_context) > 1
                 else updated_context
             )
@@ -263,7 +268,9 @@ class SQLGenerator:
         additional_context = json.load(open(context_file, "r")) if Path(context_file).exists() else {}
         context_queries = self.content_queries
 
-        table_context_dict = {str(table_names[0]).lower(): str(additional_context).lower()}
+        # TODO: Update needed to support multiple tables
+        table_name = str(table_names[0].replace(" ", "_")).lower()
+        table_context_dict = {table_name: str(additional_context).lower()}
         self.context_builder = SQLContextContainerBuilder(self.sql_database, context_dict=table_context_dict)
 
         if model_name != "h2ogpt-sql":
@@ -311,9 +318,7 @@ class SQLGenerator:
                 logger.info(f"Realized query so far:\n {res}")
         else:
             # TODO Update needed for multiple tables
-            columns_w_type = (
-                self.context_builder.full_context_dict[table_names[0]].split(":")[2].split("and")[0].strip()
-            )
+            columns_w_type = self.context_builder.full_context_dict[table_name].split(":")[2].split("and")[0].strip()
 
             data_samples_list = self.load_column_samples(table_names)
 
@@ -321,7 +326,7 @@ class SQLGenerator:
                 "if patterns like 'current time' or 'now' occurs in question": "always use NOW() - INTERVAL",
                 "if patterns like 'total number', or 'List' occurs in question": "always use DISTINCT",
                 "detailed summary": "include min, avg, max",
-                "summary": "include min, avg, max"
+                "summary": "include min, avg, max",
             }
 
             m_path = f"{self.path}/models/sentence_transformers/"
@@ -357,7 +362,7 @@ class SQLGenerator:
                     model_path=m_path,
                     model_obj=self.similarity_model,
                     threshold=0.9,
-                    is_regenerate= True if (self.is_regenerate and not self.is_regenerate_with_options) else False
+                    is_regenerate=True if (self.is_regenerate and not self.is_regenerate_with_options) else False,
                 )
                 if len(context_queries) > 1
                 else context_queries
@@ -392,7 +397,7 @@ class SQLGenerator:
                     contextual_data_samples = [
                         _d
                         for _cc in context_columns
-                        for _d in data_samples_list[table_names[0]]
+                        for _d in data_samples_list[table_name]
                         if _cc.lower() in _d.lower()
                     ]
                     data_samples_list = contextual_data_samples
@@ -536,7 +541,7 @@ class SQLGenerator:
             _res = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
             # Below is a pre-caution in-case of an error in table name during generation
             # COLLATE NOCASE is used to ignore case sensitivity, this might be specific to sqlite
-            _temp = _res.replace("table_name", table_names[0]).split(";")[0]
+            _temp = _res.replace("table_name", table_name).split(";")[0]
 
             if "LIMIT".lower() not in _temp.lower():
                 res = "SELECT " + _temp.strip() + " LIMIT 100;"
