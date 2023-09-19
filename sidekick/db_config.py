@@ -10,8 +10,8 @@ from psycopg2.extras import Json
 from sidekick.configs.data_template import data_samples_template
 from sidekick.logger import logger
 from sqlalchemy import create_engine
-from sqlalchemy_utils import database_exists
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy_utils import database_exists
 
 
 class DBConfig:
@@ -49,7 +49,7 @@ class DBConfig:
 
     @table_name.setter
     def table_name(self, val):
-        self._table_name = val
+        self._table_name = val.lower().replace(" ", "_")
 
     @property
     def engine(self):
@@ -110,7 +110,10 @@ class DBConfig:
                                 if "Sample Values" in data:
                                     _sample_values = data["Sample Values"]
                                     _ds = data_samples_template.format(
-                                        column_name=col_name, comma_separated_sample_values=",".join(str(_sample_val) for _sample_val in _sample_values)
+                                        column_name=col_name,
+                                        comma_separated_sample_values=",".join(
+                                            str(_sample_val) for _sample_val in _sample_values
+                                        ),
                                     )
                                     sample_values.append(_ds)
                                 _new_samples = f"{col_name} {col_type}"

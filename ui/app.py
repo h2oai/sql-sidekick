@@ -1,6 +1,7 @@
 import gc
 import json
 import logging
+import os
 from pathlib import Path
 from typing import List, Optional
 
@@ -74,7 +75,17 @@ async def chat(q: Q):
     for table in tables:
         table_names.append(ui.choice(table, f"{table}"))
 
-    add_card(q, "background_card", ui.form_card(box="horizontal", items=[ui.text("Ask your questions:")]))
+    add_card(
+        q,
+        "background_card",
+        ui.form_card(
+            box="horizontal",
+            items=[
+                ui.text("Ask your questions:"),
+                ui.inline(items=[ui.toggle(name="demo_mode", label="Demo", trigger=True)], justify="end"),
+            ],
+        ),
+    )
 
     add_card(
         q,
@@ -135,6 +146,11 @@ async def chat(q: Q):
             ],
         ),
     )
+
+    if q.args.chatbot is None or q.args.chatbot.strip() == "":
+        q.args.chatbot = "Welcome to the SQL Sidekick!\nI am an AI assistant that helps you with SQL queries for insights in tabular data."
+        q.page["chat_card"].data += [q.args.chatbot, False]
+    logging.info(f"Chatbot response: {q.args.chatbot}")
 
 
 @on("chatbot")
@@ -462,6 +478,49 @@ def on_shutdown():
     logging.info("App stopped. Goodbye!")
 
 
+# Preload sample data for the app
+def upload_demo_examples(q: Q):
+    upload_action = True
+    cur_dir = os.getcwd()
+    sample_data_path = f"{cur_dir}/examples/demo/"
+    usr_table_name = "Sleep health and lifestyle study"
+
+    table_metadata_path = f"{tmp_path}/data/tables.json"
+    # Do not upload dataset if user had any tables uploaded previously. This check avoids re-uploading sample dataset.
+    if os.path.exists(table_metadata_path):
+        # Read the existing content from the JSON file
+        with open(table_metadata_path, "r") as json_file:
+            existing_data = json.load(json_file)
+            if usr_table_name in existing_data:
+                upload_action = False
+                logging.info(f"Dataset already uploaded, skipping upload!")
+    if upload_action:
+        table_metadata = dict()
+        table_metadata[usr_table_name] = {
+            "schema_info_path": f"{sample_data_path}/table_info.jsonl",
+            "samples_path": f"{sample_data_path}/Sleep_health_and_lifestyle_dataset.csv",
+            "samples_qa": None,
+        }
+        update_tables(f"{tmp_path}/data/tables.json", table_metadata)
+
+        q.user.table_name = usr_table_name
+        q.user.table_samples_path = f"{sample_data_path}/Sleep_health_and_lifestyle_dataset.csv"
+        q.user.table_info_path = f"{sample_data_path}/table_info.jsonl"
+        q.user.sample_qna_path = None
+
+        db_resp = db_setup_api(
+            db_name=q.user.db_name,
+            hostname=q.user.host_name,
+            user_name=q.user.user_name,
+            password=q.user.password,
+            port=q.user.port,
+            table_info_path=q.user.table_info_path,
+            table_samples_path=q.user.table_samples_path,
+            table_name=q.user.table_name,
+        )
+        logging.info(f"DB updated with demo examples: \n {db_resp}")
+
+
 async def on_event(q: Q):
     event_handled = False
     args_dict = expando_to_dict(q.args)
@@ -495,6 +554,23 @@ async def on_event(q: Q):
         event_handled = True
     elif q.args.regenerate or q.args.regenerate_with_options:
         await chatbot(q)
+        event_handled = True
+    elif q.args.demo_mode:
+        logging.info(f"Switching to demo mode!")
+        # If demo datasets are not present, register them.
+        upload_demo_examples(q)
+        sample_qs = """
+        1. Describe data.
+        2. What is the average sleep duration for each gender?
+        3. How does average sleep duration vary across different age groups?
+        4. What are the most common occupations among individuals in the dataset?
+        5. What is the average sleep duration for each occupation?
+        6. What is the average sleep duration for each age group?
+        7. What is the effect of Physical Activity Level on Quality of Sleep?
+        """
+        q.args.chatbot = f"Demo mode is enabled. Try below example questions for the selected data,\n{sample_qs}"
+        q.page["chat_card"].data += [q.args.chatbot, True]
+        q.page["meta"].redirect = "#chat"
         event_handled = True
     else:  # default chatbot event
         await handle_on(q)

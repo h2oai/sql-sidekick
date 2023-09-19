@@ -228,11 +228,13 @@ class SQLGenerator:
 
             # Filter closest samples to the input question, threshold = 0.45
             filtered_context = (
-                filter_samples(input_question,
-                               updated_context,
-                               m_path,
-                               threshold=0.9,
-                               is_regenerate= True if (self.is_regenerate and not self.is_regenerate_with_options) else False)
+                filter_samples(
+                    input_question,
+                    updated_context,
+                    m_path,
+                    threshold=0.9,
+                    is_regenerate=True if (self.is_regenerate and not self.is_regenerate_with_options) else False,
+                )
                 if len(updated_context) > 1
                 else updated_context
             )
@@ -259,302 +261,310 @@ class SQLGenerator:
     def generate_sql(
         self, table_names: list, input_question: str, _dialect: str = "sqlite", model_name: str = "h2ogpt-sql"
     ):
-        context_file = f"{self.path}/var/lib/tmp/data/context.json"
-        additional_context = json.load(open(context_file, "r")) if Path(context_file).exists() else {}
-        context_queries = self.content_queries
-
-        table_context_dict = {str(table_names[0]).lower(): str(additional_context).lower()}
-        self.context_builder = SQLContextContainerBuilder(self.sql_database, context_dict=table_context_dict)
-
-        if model_name != "h2ogpt-sql":
-            _tasks = self.task_formatter(self._tasks)
-
-            # TODO: The need to pass data info again could be eliminated if Task generation becomes more consistent and accurate.
-            query_str = QUERY_PROMPT.format(
-                _dialect=_dialect,
-                _data_info=self._data_info,
-                _question=input_question,
-                _table_name=table_names,
-                _sample_queries=context_queries,
-                _tasks=_tasks,
-            )
-
-            # Reference: https://github.com/jerryjliu/llama_index/issues/987
-            llm_predictor_gpt3 = LLMPredictor(llm=OpenAI(temperature=0.5, model_name=model_name))
-            service_context_gpt3 = ServiceContext.from_defaults(llm_predictor=llm_predictor_gpt3, chunk_size_limit=512)
-
-            table_schema_index = self.build_index(persist=False)
-            self.context_builder.query_index_for_context(table_schema_index, query_str, store_context_str=True)
-            context_container = self.context_builder.build_context_container()
-
-            index = GPTSQLStructStoreIndex(
-                [], sql_database=self.sql_database, table_name=table_names, service_context=service_context_gpt3
-            )
-            res = self.generate_response(context_container, sql_index=index, input_prompt=query_str)
-            try:
-                # Check if `SQL` is formatted ---> ``` SQL_text ```
-                if "```" in str(res):
-                    res = (
-                        str(res)
-                        .split("```", 1)[1]
-                        .split(";", 1)[0]
-                        .strip()
-                        .replace("```", "")
-                        .replace("sql\n", "")
-                        .strip()
-                    )
-                else:
-                    res = str(res).split("Explanation:", 1)[0].strip()
-                sqlglot.transpile(res)
-            except (sqlglot.errors.ParseError, ValueError, RuntimeError) as e:
-                logger.info("We did the best we could, there might be still be some error:\n")
-                logger.info(f"Realized query so far:\n {res}")
+        # TODO: Update needed to support multiple tables
+        table_name = str(table_names[0].replace(" ", "_")).lower()
+        alternate_queries = []
+        describe_keywords = ["describe table", "describe", "describe table schema", "describe data"]
+        enable_describe_qry = any([True for _dk in describe_keywords if _dk in input_question.lower()])
+        if input_question is not None and enable_describe_qry:
+            result = f"""SELECT "name" from PRAGMA_TABLE_INFO("{table_name}")"""
         else:
-            # TODO Update needed for multiple tables
-            columns_w_type = (
-                self.context_builder.full_context_dict[table_names[0]].split(":")[2].split("and")[0].strip()
-            )
+            context_file = f"{self.path}/var/lib/tmp/data/context.json"
+            additional_context = json.load(open(context_file, "r")) if Path(context_file).exists() else {}
+            table_context_dict = {table_name: str(additional_context).lower()}
+            context_queries = self.content_queries
+            self.context_builder = SQLContextContainerBuilder(self.sql_database, context_dict=table_context_dict)
 
-            data_samples_list = self.load_column_samples(table_names)
+            if model_name != "h2ogpt-sql":
+                _tasks = self.task_formatter(self._tasks)
 
-            _context = {
-                "if patterns like 'current time' or 'now' occurs in question": "always use NOW() - INTERVAL",
-                "if patterns like 'total number', or 'List' occurs in question": "always use DISTINCT",
-                "detailed summary": "include min, avg, max",
-                "summary": "include min, avg, max"
-            }
-
-            m_path = f"{self.path}/models/sentence_transformers/"
-            filtered_context = filter_samples(
-                model_obj=self.similarity_model,
-                input_q=input_question,
-                probable_qs=list(_context.keys()),
-                model_path=m_path,
-                threshold=0.90,
-            )
-            logger.debug(f"Filter Context: {filtered_context}")
-
-            contextual_context = []
-            for _item in filtered_context:
-                _val = _context.get(_item, None)
-                if _val:
-                    contextual_context.append(f"{_item}: {_val}")
-
-            logger.info("Filtering Question/Query pairs ...")
-            context_queries: list = self.update_context_queries()
-            logger.info(f"Number of context queries found: {len(context_queries)}")
-
-            # Remove duplicates from the context queries
-            m_path = f"{self.path}/models/sentence_transformers/"
-            # duplicates_idx = remove_duplicates(context_queries, m_path, similarity_model=self.similarity_model)
-            # updated_context = np.delete(np.array(context_queries), duplicates_idx).tolist()
-
-            # Filter closest samples to the input question, threshold = 0.9
-            filtered_context = (
-                filter_samples(
-                    input_q=input_question,
-                    probable_qs=context_queries,
-                    model_path=m_path,
-                    model_obj=self.similarity_model,
-                    threshold=0.9,
-                    is_regenerate= True if (self.is_regenerate and not self.is_regenerate_with_options) else False
+                # TODO: The need to pass data info again could be eliminated if Task generation becomes more consistent and accurate.
+                query_str = QUERY_PROMPT.format(
+                    _dialect=_dialect,
+                    _data_info=self._data_info,
+                    _question=input_question,
+                    _table_name=table_names,
+                    _sample_queries=context_queries,
+                    _tasks=_tasks,
                 )
-                if len(context_queries) > 1
-                else context_queries
-            )
-            logger.info(f"Number of possible contextual queries to question: {len(filtered_context)}")
-            # If QnA pairs > 5, we keep top 5 for focused context
-            _samples = filtered_context
-            if len(filtered_context) > 5:
-                _samples = filtered_context[0:5][::-1]
 
-            qna_samples = "\n".join(_samples)
+                # Reference: https://github.com/jerryjliu/llama_index/issues/987
+                llm_predictor_gpt3 = LLMPredictor(llm=OpenAI(temperature=0.5, model_name=model_name))
+                service_context_gpt3 = ServiceContext.from_defaults(
+                    llm_predictor=llm_predictor_gpt3, chunk_size_limit=512
+                )
 
-            contextual_context_val = ", ".join(contextual_context)
-            column_names = columns_w_type.strip().split(",")
-            clmn_names = [i.split("(")[0].strip() for i in column_names]
+                table_schema_index = self.build_index(persist=False)
+                self.context_builder.query_index_for_context(table_schema_index, query_str, store_context_str=True)
+                context_container = self.context_builder.build_context_container()
 
-            context_columns = []
-            if len(_samples) > 2:
-                # Check for the columns in the QnA samples provided, if exists keep them
-                context_columns = [_c for _c in clmn_names if _c.lower().strip() in qna_samples.lower()]
+                index = GPTSQLStructStoreIndex(
+                    [], sql_database=self.sql_database, table_name=table_names, service_context=service_context_gpt3
+                )
+                res = self.generate_response(context_container, sql_index=index, input_prompt=query_str)
+                try:
+                    # Check if `SQL` is formatted ---> ``` SQL_text ```
+                    if "```" in str(res):
+                        res = (
+                            str(res)
+                            .split("```", 1)[1]
+                            .split(";", 1)[0]
+                            .strip()
+                            .replace("```", "")
+                            .replace("sql\n", "")
+                            .strip()
+                        )
+                    else:
+                        res = str(res).split("Explanation:", 1)[0].strip()
+                    sqlglot.transpile(res)
+                except (sqlglot.errors.ParseError, ValueError, RuntimeError) as e:
+                    logger.info("We did the best we could, there might be still be some error:\n")
+                    logger.info(f"Realized query so far:\n {res}")
+            else:
+                # TODO Update needed for multiple tables
+                columns_w_type = (
+                    self.context_builder.full_context_dict[table_name].split(":")[2].split("and")[0].strip()
+                )
 
-                # To be safe, when we have more than 2 samples, we check for the column names in the question as well
-                first_pass = [_c for _c in clmn_names if _c.lower().strip() in input_question.lower().strip()]
-                _input = input_question.lower().split(" ")
-                for _c in clmn_names:
-                    for _f in _c.lower().split("_"):
-                        res = _f in _input
-                    if res:
-                        first_pass.append(_c)
-                context_columns = set(context_columns + first_pass)
-                if len(context_columns) > 0:
-                    contextual_data_samples = [
-                        _d
-                        for _cc in context_columns
-                        for _d in data_samples_list[table_names[0]]
-                        if _cc.lower() in _d.lower()
-                    ]
-                    data_samples_list = contextual_data_samples
+                data_samples_list = self.load_column_samples(table_names)
 
-            relevant_columns = context_columns if len(context_columns) > 0 else clmn_names
-            _column_info = ", ".join(relevant_columns)
+                _context = {
+                    "if patterns like 'current time' or 'now' occurs in question": "always use NOW() - INTERVAL",
+                    "if patterns like 'total number', or 'List' occurs in question": "always use DISTINCT",
+                    "detailed summary": "include min, avg, max",
+                    "summary": "include min, avg, max",
+                }
 
-            logger.debug(f"Relevant sample column values: {data_samples_list}")
-            _table_name = ", ".join(table_names)
+                m_path = f"{self.path}/models/sentence_transformers/"
+                filtered_context = filter_samples(
+                    model_obj=self.similarity_model,
+                    input_q=input_question,
+                    probable_qs=list(_context.keys()),
+                    model_path=m_path,
+                    threshold=0.90,
+                )
+                logger.debug(f"Filter Context: {filtered_context}")
 
-            query = NSQL_QUERY_PROMPT.format(
-                table_name=_table_name,
-                column_info=_column_info,
-                data_info_detailed=data_samples_list,
-                sample_queries=qna_samples,
-                context=contextual_context_val,
-                question_txt=input_question,
-            )
+                contextual_context = []
+                for _item in filtered_context:
+                    _val = _context.get(_item, None)
+                    if _val:
+                        contextual_context.append(f"{_item}: {_val}")
 
-            logger.debug(f"Query Text:\n {query}")
-            inputs = self.tokenizer([query], return_tensors="pt")
-            input_length = 1 if self.model.config.is_encoder_decoder else inputs.input_ids.shape[1]
-            logger.info(f"Context length: {input_length}")
+                logger.info("Filtering Question/Query pairs ...")
+                context_queries: list = self.update_context_queries()
+                logger.info(f"Number of context queries found: {len(context_queries)}")
 
-            # Handle limited context length
-            # Currently, conservative approach: remove column description from the prompt, if input_length > (2048-300)
-            # Others to try:
-            # 1. Move to a model with larger context length
-            # 2. Possibly use a different tokenizer for chunking
-            # 3. Maybe positional interpolation --> https://arxiv.org/abs/2306.15595
-            if int(input_length) > 4000:
-                logger.info("Input length is greater than 1748, removing column description from the prompt")
+                # Remove duplicates from the context queries
+                m_path = f"{self.path}/models/sentence_transformers/"
+                # duplicates_idx = remove_duplicates(context_queries, m_path, similarity_model=self.similarity_model)
+                # updated_context = np.delete(np.array(context_queries), duplicates_idx).tolist()
+
+                # Filter closest samples to the input question, threshold = 0.9
+                filtered_context = (
+                    filter_samples(
+                        input_q=input_question,
+                        probable_qs=context_queries,
+                        model_path=m_path,
+                        model_obj=self.similarity_model,
+                        threshold=0.9,
+                        is_regenerate=True if (self.is_regenerate and not self.is_regenerate_with_options) else False,
+                    )
+                    if len(context_queries) > 1
+                    else context_queries
+                )
+                logger.info(f"Number of possible contextual queries to question: {len(filtered_context)}")
+                # If QnA pairs > 5, we keep top 5 for focused context
+                _samples = filtered_context
+                if len(filtered_context) > 5:
+                    _samples = filtered_context[0:5][::-1]
+
+                qna_samples = "\n".join(_samples)
+
+                contextual_context_val = ", ".join(contextual_context)
+                column_names = columns_w_type.strip().split(",")
+                clmn_names = [i.split("(")[0].strip() for i in column_names]
+
+                context_columns = []
+                if len(_samples) > 2:
+                    # Check for the columns in the QnA samples provided, if exists keep them
+                    context_columns = [_c for _c in clmn_names if _c.lower().strip() in qna_samples.lower()]
+
+                    # To be safe, when we have more than 2 samples, we check for the column names in the question as well
+                    first_pass = [_c for _c in clmn_names if _c.lower().strip() in input_question.lower().strip()]
+                    _input = input_question.lower().split(" ")
+                    for _c in clmn_names:
+                        for _f in _c.lower().split("_"):
+                            res = _f in _input
+                        if res:
+                            first_pass.append(_c)
+                    context_columns = set(context_columns + first_pass)
+                    if len(context_columns) > 0:
+                        contextual_data_samples = [
+                            _d
+                            for _cc in context_columns
+                            for _d in data_samples_list[table_name]
+                            if _cc.lower() in _d.lower()
+                        ]
+                        data_samples_list = contextual_data_samples
+
+                relevant_columns = context_columns if len(context_columns) > 0 else clmn_names
+                _column_info = ", ".join(relevant_columns)
+
+                logger.debug(f"Relevant sample column values: {data_samples_list}")
+                _table_name = ", ".join(table_names)
+
                 query = NSQL_QUERY_PROMPT.format(
                     table_name=_table_name,
                     column_info=_column_info,
-                    data_info_detailed="",
+                    data_info_detailed=data_samples_list,
                     sample_queries=qna_samples,
                     context=contextual_context_val,
                     question_txt=input_question,
                 )
-                logger.debug(f"Adjusted query Text:\n {query}")
+
+                logger.debug(f"Query Text:\n {query}")
                 inputs = self.tokenizer([query], return_tensors="pt")
                 input_length = 1 if self.model.config.is_encoder_decoder else inputs.input_ids.shape[1]
-                logger.info(f"Adjusted context length: {input_length}")
-            # Generate SQL
-            random_seed = random.randint(0, 50)
-            torch.manual_seed(random_seed)
+                logger.info(f"Context length: {input_length}")
 
-            # Greedy search for quick response
-            self.model.eval()
-            device_type = "cuda" if torch.cuda.is_available() else "cpu"
-
-            alternate_queries = []
-            if not self.is_regenerate_with_options and not self.is_regenerate:
-                # Greedy decoding
-                output = self.model.generate(
-                    **inputs.to(device_type),
-                    max_new_tokens=300,
-                    temperature=0.5,
-                    output_scores=True,
-                    do_sample=True,
-                    return_dict_in_generate=True,
-                )
-
-                generated_tokens = output.sequences[:, input_length:][0]
-            elif self.is_regenerate and not self.is_regenerate_with_options:
-                # throttle temperature for different result
-                logger.info("Regeneration requested on previous query ...")
+                # Handle limited context length
+                # Currently, conservative approach: remove column description from the prompt, if input_length > (2048-300)
+                # Others to try:
+                # 1. Move to a model with larger context length
+                # 2. Possibly use a different tokenizer for chunking
+                # 3. Maybe positional interpolation --> https://arxiv.org/abs/2306.15595
+                if int(input_length) > 4000:
+                    logger.info("Input length is greater than 1748, removing column description from the prompt")
+                    query = NSQL_QUERY_PROMPT.format(
+                        table_name=_table_name,
+                        column_info=_column_info,
+                        data_info_detailed="",
+                        sample_queries=qna_samples,
+                        context=contextual_context_val,
+                        question_txt=input_question,
+                    )
+                    logger.debug(f"Adjusted query Text:\n {query}")
+                    inputs = self.tokenizer([query], return_tensors="pt")
+                    input_length = 1 if self.model.config.is_encoder_decoder else inputs.input_ids.shape[1]
+                    logger.info(f"Adjusted context length: {input_length}")
+                # Generate SQL
                 random_seed = random.randint(0, 50)
                 torch.manual_seed(random_seed)
-                possible_temp_choice = [0.1, 0.2, 0.3, 0.6, 0.75, 0.9, 1.0]
-                random_temperature = np.random.choice(possible_temp_choice, 1)[0]
-                logger.debug(f"Selected temperature for fast regeneration : {random_temperature}")
-                output = self.model.generate(
-                    **inputs.to(device_type),
-                    max_new_tokens=300,
-                    temperature=random_temperature,
-                    output_scores=True,
-                    do_sample=True,
-                    return_dict_in_generate=True,
-                )
-                generated_tokens = output.sequences[:, input_length:][0]
-            else:
-                logger.info("Regeneration with options requested on previous query ...")
-                # Diverse beam search decoding to explore more options
-                random_seed = random.randint(0, 50)
-                torch.manual_seed(random_seed)
-                possible_temp_choice = [0.1, 0.3, 0.5, 0.6, 0.75, 0.9, 1.0]
-                random_temperature = np.random.choice(possible_temp_choice, 1)[0]
-                logger.debug(f"Selected temperature for diverse beam search: {random_temperature}")
-                output_re = self.model.generate(
-                    **inputs.to(device_type),
-                    max_new_tokens=300,
-                    temperature=random_temperature,
-                    top_k=5,
-                    top_p=0.9,
-                    num_beams=5,
-                    num_beam_groups=5,
-                    num_return_sequences=5,
-                    output_scores=True,
-                    do_sample=False,
-                    diversity_penalty=2.0,
-                    return_dict_in_generate=True,
-                )
 
-                transition_scores = self.model.compute_transition_scores(
-                    output_re.sequences, output_re.scores, output_re.beam_indices, normalize_logits=False
-                )
+                # Greedy search for quick response
+                self.model.eval()
+                device_type = "cuda" if torch.cuda.is_available() else "cpu"
 
-                # Create a boolean tensor where elements are True if the corresponding element in transition_scores is less than 0
-                mask = transition_scores < 0
-                # Sum the True values along axis 1
-                counts = torch.sum(mask, dim=1)
-                output_length = inputs.input_ids.shape[1] + counts
-                length_penalty = self.model.generation_config.length_penalty
-                reconstructed_scores = transition_scores.sum(axis=1) / (output_length**length_penalty)
+                if not self.is_regenerate_with_options and not self.is_regenerate:
+                    # Greedy decoding
+                    output = self.model.generate(
+                        **inputs.to(device_type),
+                        max_new_tokens=300,
+                        temperature=0.5,
+                        output_scores=True,
+                        do_sample=True,
+                        return_dict_in_generate=True,
+                    )
 
-                # Converting logit scores to prob scores
-                probabilities_scores = F.softmax(reconstructed_scores, dim=-1)
-                out_idx = torch.argmax(probabilities_scores)
-                # Final output
-                output = output_re.sequences[out_idx]
-                generated_tokens = output[input_length:]
+                    generated_tokens = output.sequences[:, input_length:][0]
+                elif self.is_regenerate and not self.is_regenerate_with_options:
+                    # throttle temperature for different result
+                    logger.info("Regeneration requested on previous query ...")
+                    random_seed = random.randint(0, 50)
+                    torch.manual_seed(random_seed)
+                    possible_temp_choice = [0.1, 0.2, 0.3, 0.6, 0.75, 0.9, 1.0]
+                    random_temperature = np.random.choice(possible_temp_choice, 1)[0]
+                    logger.debug(f"Selected temperature for fast regeneration : {random_temperature}")
+                    output = self.model.generate(
+                        **inputs.to(device_type),
+                        max_new_tokens=300,
+                        temperature=random_temperature,
+                        output_scores=True,
+                        do_sample=True,
+                        return_dict_in_generate=True,
+                    )
+                    generated_tokens = output.sequences[:, input_length:][0]
+                else:
+                    logger.info("Regeneration with options requested on previous query ...")
+                    # Diverse beam search decoding to explore more options
+                    random_seed = random.randint(0, 50)
+                    torch.manual_seed(random_seed)
+                    possible_temp_choice = [0.1, 0.3, 0.5, 0.6, 0.75, 0.9, 1.0]
+                    random_temperature = np.random.choice(possible_temp_choice, 1)[0]
+                    logger.debug(f"Selected temperature for diverse beam search: {random_temperature}")
+                    output_re = self.model.generate(
+                        **inputs.to(device_type),
+                        max_new_tokens=300,
+                        temperature=random_temperature,
+                        top_k=5,
+                        top_p=0.9,
+                        num_beams=5,
+                        num_beam_groups=5,
+                        num_return_sequences=5,
+                        output_scores=True,
+                        do_sample=False,
+                        diversity_penalty=2.0,
+                        return_dict_in_generate=True,
+                    )
 
-                logger.info(f"Generated options:\n")
-                prob_sorted_idxs = sorted(
-                    range(len(probabilities_scores)), key=lambda k: probabilities_scores[k], reverse=True
-                )
-                for idx, sorted_idx in enumerate(prob_sorted_idxs):
-                    _out = output_re.sequences[sorted_idx]
-                    res = self.tokenizer.decode(_out[input_length:], skip_special_tokens=True)
-                    result = res.replace("table_name", _table_name)
-                    if "LIMIT".lower() not in result.lower():
-                        res = "SELECT " + result.strip() + " LIMIT 100;"
-                    else:
-                        res = "SELECT " + result.strip() + ";"
-                    alt_res = f"Option {idx+1}: (_probability_: {probabilities_scores[sorted_idx]})\n{res}\n"
-                    alternate_queries.append(alt_res)
-                    logger.info(alt_res)
+                    transition_scores = self.model.compute_transition_scores(
+                        output_re.sequences, output_re.scores, output_re.beam_indices, normalize_logits=False
+                    )
 
-            _res = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
-            # Below is a pre-caution in-case of an error in table name during generation
-            # COLLATE NOCASE is used to ignore case sensitivity, this might be specific to sqlite
-            _temp = _res.replace("table_name", table_names[0]).split(";")[0]
+                    # Create a boolean tensor where elements are True if the corresponding element in transition_scores is less than 0
+                    mask = transition_scores < 0
+                    # Sum the True values along axis 1
+                    counts = torch.sum(mask, dim=1)
+                    output_length = inputs.input_ids.shape[1] + counts
+                    length_penalty = self.model.generation_config.length_penalty
+                    reconstructed_scores = transition_scores.sum(axis=1) / (output_length**length_penalty)
 
-            if "LIMIT".lower() not in _temp.lower():
-                res = "SELECT " + _temp.strip() + " LIMIT 100;"
-            else:
-                res = "SELECT " + _temp.strip() + ";"
+                    # Converting logit scores to prob scores
+                    probabilities_scores = F.softmax(reconstructed_scores, dim=-1)
+                    out_idx = torch.argmax(probabilities_scores)
+                    # Final output
+                    output = output_re.sequences[out_idx]
+                    generated_tokens = output[input_length:]
 
-            # Validate the generate SQL for parsing errors, along with dialect specific validation
-            # Note: Doesn't do well with handling date-time conversions
-            # e.g.
-            # sqlite: SELECT DATETIME(MAX(timestamp), '-5 minute') FROM demo WHERE isin_id = 'VM88109EGG92'
-            # postgres: SELECT MAX(timestamp) - INTERVAL '5 minutes' FROM demo where isin_id='VM88109EGG92'
-            # Reference ticket: https://github.com/tobymao/sqlglot/issues/2011
-            result = res
-            try:
-                result = sqlglot.transpile(res, identify=True, write="sqlite")[0]
-            except (sqlglot.errors.ParseError, ValueError, RuntimeError) as e:
-                logger.info("We did the best we could, there might be still be some error:\n")
-                logger.info(f"Realized query so far:\n {res}")
+                    logger.info(f"Generated options:\n")
+                    prob_sorted_idxs = sorted(
+                        range(len(probabilities_scores)), key=lambda k: probabilities_scores[k], reverse=True
+                    )
+                    for idx, sorted_idx in enumerate(prob_sorted_idxs):
+                        _out = output_re.sequences[sorted_idx]
+                        res = self.tokenizer.decode(_out[input_length:], skip_special_tokens=True)
+                        result = res.replace("table_name", _table_name)
+                        if "LIMIT".lower() not in result.lower():
+                            res = "SELECT " + result.strip() + " LIMIT 100;"
+                        else:
+                            res = "SELECT " + result.strip() + ";"
+                        alt_res = f"Option {idx+1}: (_probability_: {probabilities_scores[sorted_idx]})\n{res}\n"
+                        alternate_queries.append(alt_res)
+                        logger.info(alt_res)
+
+                _res = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+                # Below is a pre-caution in-case of an error in table name during generation
+                # COLLATE NOCASE is used to ignore case sensitivity, this might be specific to sqlite
+                _temp = _res.replace("table_name", table_name).split(";")[0]
+
+                if "LIMIT".lower() not in _temp.lower():
+                    res = "SELECT " + _temp.strip() + " LIMIT 100;"
+                else:
+                    res = "SELECT " + _temp.strip() + ";"
+
+                # Validate the generate SQL for parsing errors, along with dialect specific validation
+                # Note: Doesn't do well with handling date-time conversions
+                # e.g.
+                # sqlite: SELECT DATETIME(MAX(timestamp), '-5 minute') FROM demo WHERE isin_id = 'VM88109EGG92'
+                # postgres: SELECT MAX(timestamp) - INTERVAL '5 minutes' FROM demo where isin_id='VM88109EGG92'
+                # Reference ticket: https://github.com/tobymao/sqlglot/issues/2011
+                result = res
+                try:
+                    result = sqlglot.transpile(res, identify=True, write="sqlite")[0]
+                except (sqlglot.errors.ParseError, ValueError, RuntimeError) as e:
+                    logger.info("We did the best we could, there might be still be some error:\n")
+                    logger.info(f"Realized query so far:\n {res}")
         return result, alternate_queries
 
     def task_formatter(self, input_task: str):

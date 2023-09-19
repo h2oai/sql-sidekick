@@ -204,7 +204,7 @@ def db_setup_api(
             table_value = input("Enter table name: ") if is_command else table_name
             click.echo(f"Table name: {table_value}")
             # set table name
-            db_obj.table_name = table_value.replace(" ", "_")
+            db_obj.table_name = table_value.lower().replace(" ", "_")
             res, err = db_obj.create_table(table_info_path)
 
         update_table_info(path, table_info_path, db_obj.table_name)
@@ -337,14 +337,14 @@ def query_api(
     table_names = []
 
     if table_name is not None:
-        table_names = [table_name]
+        table_names = [table_name.lower().replace(" ", "_")]
     elif table_context and "tables_in_use" in table_context:
         _tables = table_context["tables_in_use"]
-        table_names = [_t.replace(" ", "_") for _t in _tables]
+        table_names = [_t.lower().replace(" ", "_") for _t in _tables]
     else:
         # Ask for table name only when more than one table exists.
         table_names = [click.prompt("Which table to use?")]
-        table_context["tables_in_use"] = [_t.replace(" ", "_") for _t in table_names]
+        table_context["tables_in_use"] = [_t.lower().replace(" ", "_") for _t in table_names]
         with open(f"{path}/table_context.json", "w") as outfile:
             json.dump(table_context, outfile, indent=4, sort_keys=False)
     logger.info(f"Table in use: {table_names}")

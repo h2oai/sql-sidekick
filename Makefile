@@ -1,5 +1,5 @@
 sentence_transformer = s3cmd get --recursive --skip-existing s3://h2o-model-gym/models/nlp/sentence_trasnsformer/all-MiniLM-L6-v2/ ./models/sentence_transformers/sentence-transformers_all-MiniLM-L6-v2
-demo_data = s3cmd get --recursive --skip-existing s3://h2o-sql-sidekick/demo/ ./examples/demo/
+demo_data = s3cmd get --recursive --skip-existing s3://h2o-sql-sidekick/demo/sleepEDA/ ./examples/demo/
 
 .PHONY: download_demo_data
 
