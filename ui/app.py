@@ -560,7 +560,14 @@ async def on_event(q: Q):
         # If demo datasets are not present, register them.
         upload_demo_examples(q)
         sample_qs = """
-        1. Describe data.
+        Data description: The Sleep Health and Lifestyle Dataset comprises 400 rows and 13 columns,
+        covering a wide range of variables related to sleep and daily habits.
+        It includes details such as gender, age, occupation, sleep duration, quality of sleep,
+        physical activity level, stress levels, BMI category, blood pressure, heart rate, daily steps,
+        and the presence or absence of sleep disorders\n
+        Reference: https://www.kaggle.com/datasets/uom190346a/sleep-health-and-lifestyle-dataset \n
+        Example questions:\n
+        1. Describe data. Tip: For more detailed insights on the data try AutoInsights on the Cloud marketplace.
         2. What is the average sleep duration for each gender?
         3. How does average sleep duration vary across different age groups?
         4. What are the most common occupations among individuals in the dataset?
@@ -568,7 +575,9 @@ async def on_event(q: Q):
         6. What is the average sleep duration for each age group?
         7. What is the effect of Physical Activity Level on Quality of Sleep?
         """
-        q.args.chatbot = f"Demo mode is enabled. Try below example questions for the selected data,\n{sample_qs}"
+        q.args.chatbot = (
+            f"Demo mode is enabled.\nTry below example questions for the selected data to get started,\n{sample_qs}"
+        )
         q.page["chat_card"].data += [q.args.chatbot, True]
         q.page["meta"].redirect = "#chat"
         event_handled = True

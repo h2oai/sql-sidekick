@@ -15,8 +15,7 @@ from pandasql import sqldf
 from sidekick.db_config import DBConfig
 from sidekick.memory import EntityMemory
 from sidekick.query import SQLGenerator
-from sidekick.utils import (execute_query_pd, extract_table_names, save_query,
-                            setup_dir)
+from sidekick.utils import execute_query_pd, extract_table_names, save_query, setup_dir, _execute_sql
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
@@ -420,14 +419,18 @@ def query_api(
             if updated_tasks is not None:
                 sql_g._tasks = updated_tasks
         alt_res = None
+        # The interface could also be used to simply execute user provided SQL
+        # Keyword: "Execute SQL: <SQL query>"
         if (
             question is not None
-            and "SELECT" in question
+            and "select" in question.lower()
             and (question.lower().startswith("question:") or question.lower().startswith("q:"))
         ):
             _q = question.lower().split("q:")[1].split("r:")[0].strip()
             res = question.lower().split("r:")[1].strip()
             question = _q
+        elif _execute_sql(question):
+            res = question.strip().lower().split("execute sql:")[1].strip()
         else:
             res, alt_res = sql_g.generate_sql(table_names, question, model_name=model_name, _dialect=db_dialect)
         logger.info(f"Input query: {question}")

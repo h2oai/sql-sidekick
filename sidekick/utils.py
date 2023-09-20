@@ -14,7 +14,8 @@ from pandasql import sqldf
 from sentence_transformers import SentenceTransformer
 from sidekick.logger import logger
 from sklearn.metrics.pairwise import cosine_similarity
-from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
+                          BitsAndBytesConfig)
 
 
 def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, device: Optional[str] = None):
@@ -70,7 +71,13 @@ def generate_text_embeddings(model_path: str, x, model_obj=None, batch_size: int
 
 
 def filter_samples(
-    input_q: str, probable_qs: list, model_path: str, model_obj=None, threshold: float = 0.80, device="auto", is_regenerate: bool = False
+    input_q: str,
+    probable_qs: list,
+    model_path: str,
+    model_obj=None,
+    threshold: float = 0.80,
+    device="auto",
+    is_regenerate: bool = False,
 ):
     # Only consider the questions, note: this might change in future.
     _inq = ("# query: " + input_q).strip().lower()
@@ -352,6 +359,19 @@ def _check_file_info(file_path: str):
     else:
         logger.info("Required info not found, provide a path for table information and try again")
         raise FileNotFoundError(f"Table info not found at {file_path}")
+
+
+def _execute_sql(query: str):
+    # Check for,
+    # 1. Keyword: "Execute SQL: <SQL query>"
+    # 2. Query starts with SQL statement
+    # TODO vulnerability check for possible SELECT SQL injection via source code.
+    _cond1 = _cond2 = False
+    _cond1 = re.findall(r"Execute SQL:\s+(.*)", query, re.IGNORECASE)
+    _temp_cond = query.strip().lower().split("execute sql:")
+    if len(_temp_cond) > 1:
+        _cond2 = True if query.strip().lower().split("execute sql:")[1].strip().startswith("select") else False
+    return _cond1 and _cond2
 
 
 def make_dir(path: str):
