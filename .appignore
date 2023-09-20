@@ -12,5 +12,6 @@ build/
 dist/
 tests/
 ci/
-examples/
+examples/sleep_eda/
+examples/telemetry/
 .log
