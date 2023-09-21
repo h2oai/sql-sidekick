@@ -1,13 +1,13 @@
-{"Column Name": "Person_ID", "Column Type": "NUMERIC", "Sample Values": [1, 2, 3, 4, 5]}
+{"Column Name": "Person_ID", "Column Type": "NUMERIC"}
 {"Column Name": "Gender", "Column Type": "TEXT", "Sample Values": ["Male", "Female"]}
-{"Column Name": "Age", "Column Type": "NUMERIC", "Sample Values": [27, 28, 29, 30, 31]}
+{"Column Name": "Age", "Column Type": "NUMERIC"}
 {"Column Name": "Occupation", "Column Type": "TEXT", "Sample Values": ["Software Engineer", "Doctor", "Sales Representative", "Teacher", "Nurse", "Engineer", "Accountant", "Scientist", "Lawyer", "Salesperson", "Manager"]}
-{"Column Name": "Sleep_Duration", "Column Type": "NUMERIC", "Sample Values": [6.1, 6.2, 5.9, 6.3, 7.8]}
-{"Column Name": "Quality_of_Sleep", "Column Type": "NUMERIC", "Sample Values": [6, 4, 7, 5, 8]}
-{"Column Name": "Physical_Activity_Level", "Column Type": "NUMERIC", "Sample Values": [42, 60, 30, 40, 75]}
-{"Column Name": "Stress_Level", "Column Type": "NUMERIC", "Sample Values": [6, 8, 7, 4, 3]}
+{"Column Name": "Sleep_Duration", "Column Type": "NUMERIC"}
+{"Column Name": "Quality_of_Sleep", "Column Type": "NUMERIC"}
+{"Column Name": "Physical_Activity_Level", "Column Type": "NUMERIC"}
+{"Column Name": "Stress_Level", "Column Type": "NUMERIC"}
 {"Column Name": "BMI_Category", "Column Type": "TEXT", "Sample Values": ["Overweight", "Normal", "Obese", "Normal Weight"]}
-{"Column Name": "Blood_Pressure", "Column Type": "TEXT", "Sample Values": ["126/83", "125/80", "140/90", "120/80", "132/87", "130/86", "117/76", "118/76", "128/85", "131/86", "128/84", "115/75", "135/88", "129/84", "130/85", "115/78", "119/77", "121/79", "125/82", "135/90", "122/80", "142/92", "140/95", "139/91", "118/75"]}
-{"Column Name": "Heart_Rate", "Column Type": "NUMERIC", "Sample Values": [77, 75, 85, 82, 70]}
-{"Column Name": "Daily_Steps", "Column Type": "NUMERIC", "Sample Values": [4200, 10000, 3000, 3500, 8000]}
+{"Column Name": "Blood_Pressure", "Column Type": "TEXT"}
+{"Column Name": "Heart_Rate", "Column Type": "NUMERIC"}
+{"Column Name": "Daily_Steps", "Column Type": "NUMERIC"}
 {"Column Name": "Sleep_Disorder", "Column Type": "TEXT", "Sample Values": ["Sleep Apnea", "Insomnia"]}

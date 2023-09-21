@@ -1,4 +1,4 @@
-Person ID,Gender,Age,Occupation,Sleep Duration,Quality of Sleep,Physical Activity Level,Stress Level,BMI Category,Blood Pressure,Heart Rate,Daily Steps,Sleep Disorder
+Person_ID,Gender,Age,Occupation,Sleep_Duration,Quality_of_Sleep,Physical_Activity_Level,Stress_Level,BMI_Category,Blood_Pressure,Heart_Rate,Daily_Steps,Sleep_Disorder
 1,Male,27,Software Engineer,6.1,6,42,6,Overweight,126/83,77,4200,None
 2,Male,28,Doctor,6.2,6,60,8,Normal,125/80,75,10000,None
 3,Male,28,Doctor,6.2,6,60,8,Normal,125/80,75,10000,None
