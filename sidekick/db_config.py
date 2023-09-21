@@ -9,7 +9,7 @@ from pandasql import sqldf
 from psycopg2.extras import Json
 from sidekick.configs.data_template import data_samples_template
 from sidekick.logger import logger
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy_utils import database_exists
 
@@ -38,6 +38,7 @@ class DBConfig:
         self._engine = None
         self.dialect = dialect
         self.base_path = base_path
+        self.column_names = []
         if dialect == "sqlite":
             self._url = f"sqlite:///{base_path}/db/sqlite/{db_name}.db"
         else:
@@ -103,6 +104,7 @@ class DBConfig:
                             data = json.loads(line)
                             if "Column Name" in data and "Column Type" in data:
                                 col_name = data["Column Name"]
+                                self.column_names.append(col_name)
                                 col_type = data["Column Type"]
                                 if col_type.lower() == "text":
                                     col_type = col_type + " COLLATE NOCASE"
@@ -167,6 +169,9 @@ class DBConfig:
         conn_str = self._url
         try:
             df = pd.read_csv(data_csv_path)
+            # Make sure column names in the data-frame match the schema
+            df.columns = self.column_names
+            logger.debug(f"Column names in the data-frame: {df.columns}")
             engine = create_engine(conn_str, isolation_level="AUTOCOMMIT")
 
             sample_query = f"SELECT COUNT(*) AS ROWS FROM {self.table_name} LIMIT 1"
@@ -206,7 +211,8 @@ class DBConfig:
                 # Create a connection
                 connection = engine.connect()
                 logger.debug(f"Executing query:\n {query}")
-                result = connection.execute(query)
+                _query = text(query)
+                result = connection.execute(_query)
 
                 # Process the query results
                 cnt = 0

@@ -361,7 +361,7 @@ async def datasets(q: Q):
                 ui.progress(
                     name="progress_bar", width="100%", label="Uploading datasets and creating tables!", visible=False
                 ),
-                ui.button(name="file_upload", label="Submit", primary=True),
+                ui.button(name="file_upload", label="Upload", primary=True),
             ],
         ),
     )
@@ -445,7 +445,7 @@ async def init(q: Q) -> None:
         items=[
             ui.nav_group(
                 "Menu",
-                items=[ui.nav_item(name="#datasets", label="Upload"), ui.nav_item(name="#chat", label="Chat")],
+                items=[ui.nav_item(name="#datasets", label="Upload Dataset"), ui.nav_item(name="#chat", label="Chat")],
             ),
             ui.nav_group(
                 "Help",
