@@ -4,7 +4,7 @@ title = "SQL-Sidekick"
 description = "QnA with tabular data using NLQ"
 LongDescription = "about.md"
 Tags = ["DATA_SCIENCE", "MACHINE_LEARNING", "NLP"]
-Version = "0.0.11"
+Version = "0.0.12"
 
 [Runtime]
 MemoryLimit = "64Gi"
@@ -14,7 +14,7 @@ VolumeMount = "/meta_data"
 VolumeSize = "100Gi"
 ResourceVolumeSize = "64Gi"
 GPUCount = 1
-RuntimeVersion = "ub2004_cuda114_cudnn8_py38_wlatest"
+RuntimeVersion = "ub2004_cuda114_cudnn8_py38_wlatest_a10g"
 RoutingMode = "BASE_URL"
 EnableOIDC = true
 
