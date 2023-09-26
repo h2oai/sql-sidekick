@@ -382,3 +382,30 @@ def make_dir(path: str):
             pass
         else:
             raise Exception("Error reported while creating default directory path.")
+
+
+def check_vulnerability(input_query: str):
+    import re
+
+    # Common SQL injection patterns
+    # Reference: https://github.com/payloadbox/sql-injection-payload-list#generic-sql-injection-payloads
+    sql_injection_patterns = [
+        r"\b(UNION\s+ALL\s+SELECT|OR\s+\d+\s*=\s*\d+|1\s*=\s*1|--\s+)",
+        r'\b(SELECT\s+\*\s+FROM\s+\w+\s+WHERE\s+\w+\s*=\s*[\'"].*?[\'"]\s*;?\s*--)',
+        r'\b(INSERT\s+INTO\s+\w+\s+\(\s*\w+\s*,\s*\w+\s*\)\s+VALUES\s*\(\s*[\'"].*?[\'"]\s*,\s*[\'"].*?[\'"]\s*\)\s*;?\s*--)',
+        r"\b(DROP\s+TABLE|ALTER\s+TABLE|admin\'--)",
+        r'([\'`\\\/#]|--|\b(OR\s+[\'"][^;]*;|AND\s+id\s+IS\s+NULL|OR\s+[a-zA-Z_]\s*=\s*[a-zA-Z_#]))',
+    ]
+
+    # Check for SQL injection patterns in the SQL code
+    res = False
+    _msg = None
+    p_detected = []
+    for pattern in sql_injection_patterns:
+        matches = re.findall(pattern, input_query, re.IGNORECASE)
+        if matches:
+            res = True
+            p_detected.append(matches)
+    if res:
+        _msg = f"The input question has malicious patterns, {p_detected} that could lead to SQL Injection.\nSorry, I will not be able to provide an answer.\nPlease try rephrasing the question."
+    return res, _msg

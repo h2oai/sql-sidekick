@@ -15,7 +15,9 @@ from pandasql import sqldf
 from sidekick.db_config import DBConfig
 from sidekick.memory import EntityMemory
 from sidekick.query import SQLGenerator
-from sidekick.utils import execute_query_pd, extract_table_names, save_query, setup_dir, _execute_sql
+from sidekick.utils import (_execute_sql, check_vulnerability,
+                            execute_query_pd, extract_table_names, save_query,
+                            setup_dir)
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
@@ -476,7 +478,12 @@ def query_api(
                         db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect
                     )
 
-                    q_res, err = db_obj.execute_query_db(query=_val)
+                    # Before executing, check if known vulnerabilities exist in the generated SQL code.
+                    r, m = check_vulnerability(_val)
+                    if not r:
+                        q_res, err = db_obj.execute_query_db(query=_val)
+                    else:
+                        q_res = m
 
                 elif option == "pandas":
                     tables = extract_table_names(_val)
