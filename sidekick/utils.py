@@ -387,7 +387,7 @@ def make_dir(path: str):
 def check_vulnerability(input_query: str):
     import re
 
-    # Common SQL injection patterns
+    # Common SQL injection patterns checklist
     # Reference: https://github.com/payloadbox/sql-injection-payload-list#generic-sql-injection-payloads
     sql_injection_patterns = [
         r"\b(UNION\s+ALL\s+SELECT|OR\s+\d+\s*=\s*\d+|1\s*=\s*1|--\s+)",
