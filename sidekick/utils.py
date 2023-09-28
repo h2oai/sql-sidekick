@@ -14,7 +14,8 @@ from pandasql import sqldf
 from sentence_transformers import SentenceTransformer
 from sidekick.logger import logger
 from sklearn.metrics.pairwise import cosine_similarity
-from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
+                          BitsAndBytesConfig)
 
 
 def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, device: Optional[str] = None):
@@ -396,7 +397,7 @@ def check_vulnerability(input_query: str):
         r'\b(INSERT\s+INTO\s+\w+\s+\(\s*\w+\s*,\s*\w+\s*\)\s+VALUES\s*\(\s*[\'"].*?[\'"]\s*,\s*[\'"].*?[\'"]\s*\)\s*;?\s*--)',
         r"\b(DROP\s+TABLE|ALTER\s+TABLE|admin\'--)",  # DROP TABLE/ALTER TABLE
         r"(?:'|\”|--|#|‘\s*OR\s*‘1|‘\s*OR\s*\d+\s*--\s*-|\"\s*OR\s*\"\" = \"|\"\s*OR\s*\d+\s*=\s*\d+\s*--\s*-|’\s*OR\s*''\s*=\s*‘|‘=‘|'=0--+|OR\s*\d+\s*=\s*\d+|‘\s*OR\s*‘x’=‘x’|AND\s*id\s*IS\s*NULL;\s*--|‘’’’’’’’’’’’’UNION\s*SELECT\s*‘\d+|%00|/\*.*?\*/|\+|\|\||%|@\w+|@@\w+)",
-        r"(AND\s+[0-9]+|true|false|[0-9]+[-*][0-9]+|-[0-9]+)",
+        r"AND\s[01]|AND\s(true|false)|[01]-((true|false))",
         r"\d+'\s*ORDER\s*BY\s*\d+--\+|\d+'\s*GROUP\s*BY\s*(\d+,)*\d+--\+|'\s*GROUP\s*BY\s*columnnames\s*having\s*1=1\s*--",
         r"\bUNION\b\s+\b(?:ALL\s+)?\bSELECT\b\s+[A-Za-z0-9]+",  # Union Based
         r'\b(OR|AND|HAVING|AS|WHERE)\s+\d+=\d+(\s+AND\s+[\'"]\w+[\'"]\s*=\s*[\'"]\w+[\'"])?(\s*--|\s*#)?\b',
