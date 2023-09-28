@@ -437,6 +437,7 @@ def query_api(
             res = question.lower().split("r:")[1].strip()
             question = _q
         elif _execute_sql(question):
+            logger.info("Executing user provided SQL without re-generation...")
             res = question.strip().lower().split("execute sql:")[1].strip()
         else:
             res, alt_res = sql_g.generate_sql(table_names, question, model_name=model_name, _dialect=db_dialect)
@@ -484,7 +485,7 @@ def query_api(
                     )
 
                     # Before executing, check if known vulnerabilities exist in the generated SQL code.
-                    _val = _val.replace("“", '"')
+                    _val = _val.replace("“", '"').replace("”", '"').replace("‘", "'")
                     r, m = check_vulnerability(_val)
                     if not r:
                         q_res, err = db_obj.execute_query_db(query=_val)
