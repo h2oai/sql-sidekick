@@ -1,6 +1,7 @@
 import gc
 import json
 import os
+import string
 from pathlib import Path
 
 import click
@@ -15,7 +16,9 @@ from pandasql import sqldf
 from sidekick.db_config import DBConfig
 from sidekick.memory import EntityMemory
 from sidekick.query import SQLGenerator
-from sidekick.utils import execute_query_pd, extract_table_names, save_query, setup_dir, _execute_sql
+from sidekick.utils import (_execute_sql, check_vulnerability,
+                            execute_query_pd, extract_table_names, save_query,
+                            setup_dir)
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
@@ -430,6 +433,7 @@ def query_api(
             res = question.lower().split("r:")[1].strip()
             question = _q
         elif _execute_sql(question):
+            logger.info("Executing user provided SQL without re-generation...")
             res = question.strip().lower().split("execute sql:")[1].strip()
         else:
             res, alt_res = sql_g.generate_sql(table_names, question, model_name=model_name, _dialect=db_dialect)
@@ -476,7 +480,14 @@ def query_api(
                         db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect
                     )
 
-                    q_res, err = db_obj.execute_query_db(query=_val)
+                    # Before executing, check if known vulnerabilities exist in the generated SQL code.
+                    _val = _val.replace("“", '"').replace("”", '"')
+                    [_val := _val.replace(s, "'") for s in "‘`" if s in _val]
+                    r, m = check_vulnerability(_val)
+                    if not r:
+                        q_res, err = db_obj.execute_query_db(query=_val)
+                    else:
+                        q_res = m
 
                 elif option == "pandas":
                     tables = extract_table_names(_val)

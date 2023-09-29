@@ -382,3 +382,44 @@ def make_dir(path: str):
             pass
         else:
             raise Exception("Error reported while creating default directory path.")
+
+
+def flatten_list(_list: list):
+    return [item for sublist in _list for item in sublist]
+
+
+def check_vulnerability(input_query: str):
+    # Common SQL injection patterns checklist
+    # Reference: https://github.com/payloadbox/sql-injection-payload-list#generic-sql-injection-payloads
+    sql_injection_patterns = [
+        r"\b(UNION\s+ALL\s+SELECT|OR\s+\d+\s*=\s*\d+|1\s*=\s*1|--\s+)",
+        r'\b(SELECT\s+\*\s+FROM\s+\w+\s+WHERE\s+\w+\s*=\s*[\'"].*?[\'"]\s*;?\s*--)',
+        r'\b(INSERT\s+INTO\s+\w+\s+\(\s*\w+\s*,\s*\w+\s*\)\s+VALUES\s*\(\s*[\'"].*?[\'"]\s*,\s*[\'"].*?[\'"]\s*\)\s*;?\s*--)',
+        r"\b(DROP\s+TABLE|ALTER\s+TABLE|admin\'--)",  # DROP TABLE/ALTER TABLE
+        r"(?:'|\”|--|#|‘\s*OR\s*‘1|‘\s*OR\s*\d+\s*--\s*-|\"\s*OR\s*\"\" = \"|\"\s*OR\s*\d+\s*=\s*\d+\s*--\s*-|’\s*OR\s*''\s*=\s*‘|‘=‘|'=0--+|OR\s*\d+\s*=\s*\d+|‘\s*OR\s*‘x’=‘x’|AND\s*id\s*IS\s*NULL;\s*--|‘’’’’’’’’’’’’UNION\s*SELECT\s*‘\d+|%00|/\*.*?\*/|\+|\|\||%|@\w+|@@\w+)",
+        r"AND\s[01]|AND\s(true|false)|[01]-((true|false))",
+        r"\d+'\s*ORDER\s*BY\s*\d+--\+|\d+'\s*GROUP\s*BY\s*(\d+,)*\d+--\+|'\s*GROUP\s*BY\s*columnnames\s*having\s*1=1\s*--",
+        r"\bUNION\b\s+\b(?:ALL\s+)?\bSELECT\b\s+[A-Za-z0-9]+",  # Union Based
+        r'\b(OR|AND|HAVING|AS|WHERE)\s+\d+=\d+(\s+AND\s+[\'"]\w+[\'"]\s*=\s*[\'"]\w+[\'"])?(\s*--|\s*#)?\b',
+        r"\b(?:RLIKE|IF)\s*\(\s*SELECT\s*\(\s*CASE\s*WHEN\s*\(\s*[\d=]+\s*\)\s*THEN\s*0x[0-9a-fA-F]+\s*ELSE\s*0x[0-9a-fA-F]+\s*END\s*\)\s*\)\s*AND\s*'\w+'=\w+\s*|\b%\s*AND\s*[\d=]+\s*AND\s*'\w+'=\w+\s*|and\s*\(\s*select\s*substring\s*\(\s*@@version,\d+,\d+\)\s*\)=\s*'[\w]'\b",
+        r"('|\")?\s*(or|\|\|)\s*sleep\(.*?\)\s*(\#|--)?\s*(;waitfor\s+delay\s+'[0-9:]+')?\s*;?(\s+AND\s+)?\s*\w+\s*=\s*\w+\s*",  # Time Based
+        r"(ORDER BY \d+,\s*)*(ORDER BY \d+,?)*SLEEP\(\d+\),?(BENCHMARK\(\d+,\s*MD5\('[A-Z]'\)\),?)*\d*,?",  # Additional generic UNION patterns
+    ]
+
+    # Check for SQL injection patterns in the SQL code
+    res = False
+    _msg = None
+    p_detected = []
+    for pattern in sql_injection_patterns:
+        matches = re.findall(pattern, input_query, re.IGNORECASE)
+        if matches:
+            if all(v == "'" for v in matches) or all(v == "''" for v in matches):
+                matches = []
+            else:
+                res = True
+                p_detected.append(matches)
+    _pd = set(flatten_list(p_detected))
+    if res:
+        _detected_patterns = ", ".join([str(elem) for elem in _pd])
+        _msg = f"The input question has malicious patterns, **{_detected_patterns}** that could lead to SQL Injection.\nSorry, I will not be able to provide an answer.\nPlease try rephrasing the question."
+    return res, _msg
