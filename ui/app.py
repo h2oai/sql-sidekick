@@ -72,8 +72,12 @@ async def chat(q: Q):
 
     table_names = []
     tables, _ = get_table_keys(f"{tmp_path}/data/tables.json", None)
-    for table in tables:
-        table_names.append(ui.choice(table, f"{table}"))
+    if len(tables) > 0:
+        with open(f"{tmp_path}/data/tables.json", "r") as json_file:
+            meta_data = json.load(json_file)
+            for table in tables:
+                original_name = meta_data[table].get("original_name", q.user.original_name)
+                table_names.append(ui.choice(table, f"{original_name}"))
 
     add_card(
         q,
@@ -99,8 +103,9 @@ async def chat(q: Q):
                     required=True,
                     choices=table_names,
                     value=q.user.table_name if q.user.table_name else None,
+                    trigger=True,
                 ),
-                ui.button(name="submit_table", label="Submit", primary=True),
+                ui.button(name="submit_table", label="Select", primary=True),
             ],
         ),
     )
@@ -259,14 +264,13 @@ async def fileupload(q: Q):
     sample_data = q.args.sample_data
     sample_schema = q.args.data_schema
     sample_qa = q.args.sample_qa
-
-    usr_table_name = q.args.table_name
+    org_table_name = q.args.table_name
+    usr_table_name = q.args.table_name.strip().lower().replace(" ", "_")
 
     if sample_data is None or sample_schema is None or usr_table_name is None or usr_table_name.strip() == "":
         q.page["dataset"].error_bar.visible = True
         q.page["dataset"].progress_bar.visible = False
     else:
-        usr_table_name = usr_table_name.lower()
         if sample_data:
             usr_samples_path = await q.site.download(
                 sample_data[0], f"{tmp_path}/jobs/{usr_table_name}_table_samples.csv"
@@ -282,6 +286,7 @@ async def fileupload(q: Q):
 
         table_metadata = dict()
         table_metadata[usr_table_name] = {
+            "original_name": org_table_name,
             "schema_info_path": usr_info_path,
             "samples_path": usr_samples_path,
             "samples_qa": usr_sample_qa,
@@ -385,14 +390,15 @@ async def handle_page4(q: Q):
 async def submit_table(q: Q):
     table_key = q.args.table_dropdown
     if table_key:
-        _, table_info = get_table_keys(f"{tmp_path}/data/tables.json", table_key)
+        table_name = table_key.lower().replace(" ", "_")
+        _, table_info = get_table_keys(f"{tmp_path}/data/tables.json", table_name)
 
         q.user.table_info_path = table_info["schema_info_path"]
         q.user.table_samples_path = table_info["samples_path"]
         q.user.sample_qna_path = table_info["samples_qa"]
         q.user.table_name = table_key.replace(" ", "_")
-
-        q.page["select_tables"].table_dropdown.value = table_key
+        q.user.original_name = table_info["original_name"]
+        q.page["select_tables"].table_dropdown.value = table_name
     else:
         q.page["select_tables"].table_dropdown.value = q.user.table_name
 
@@ -483,7 +489,8 @@ def upload_demo_examples(q: Q):
     upload_action = True
     cur_dir = os.getcwd()
     sample_data_path = f"{cur_dir}/examples/demo/"
-    usr_table_name = "Sleep health and lifestyle study"
+    org_table_name = "Sleep health and lifestyle study"
+    usr_table_name = org_table_name.lower().replace(" ", "_")
 
     table_metadata_path = f"{tmp_path}/data/tables.json"
     # Do not upload dataset if user had any tables uploaded previously. This check avoids re-uploading sample dataset.
@@ -494,17 +501,20 @@ def upload_demo_examples(q: Q):
             if usr_table_name in existing_data:
                 upload_action = False
                 logging.info(f"Dataset already uploaded, skipping upload!")
+
     if upload_action:
         table_metadata = dict()
         table_metadata[usr_table_name] = {
+            "original_name": org_table_name,
             "schema_info_path": f"{sample_data_path}/table_info.jsonl",
-            "samples_path": f"{sample_data_path}/Sleep_health_and_lifestyle_dataset.csv",
+            "samples_path": f"{sample_data_path}/sleep_health_and_lifestyle_dataset.csv",
             "samples_qa": None,
         }
         update_tables(f"{tmp_path}/data/tables.json", table_metadata)
 
+        q.user.org_table_name = org_table_name
         q.user.table_name = usr_table_name
-        q.user.table_samples_path = f"{sample_data_path}/Sleep_health_and_lifestyle_dataset.csv"
+        q.user.table_samples_path = f"{sample_data_path}/sleep_health_and_lifestyle_dataset.csv"
         q.user.table_info_path = f"{sample_data_path}/table_info.jsonl"
         q.user.sample_qna_path = None
 
@@ -552,6 +562,11 @@ async def on_event(q: Q):
             _msg = "Sorry, try generating a conversation to save."
         q.page["chat_card"].data += [_msg, False]
         event_handled = True
+    elif q.args.table_dropdown is not None:
+        logging.info(f"User selected table: {q.args.table_dropdown}")
+        await submit_table(q)
+        q.page["chat_card"].data += [f"Table {q.args.table_dropdown} selected", False]
+        event_handled = True
     elif q.args.regenerate or q.args.regenerate_with_options:
         await chatbot(q)
         event_handled = True
@@ -559,6 +574,7 @@ async def on_event(q: Q):
         logging.info(f"Switching to demo mode!")
         # If demo datasets are not present, register them.
         upload_demo_examples(q)
+        q.page["select_tables"].table_dropdown.value = q.user.table_name
         sample_qs = """
         Data description: The Sleep Health and Lifestyle Dataset comprises 400 rows and 13 columns,
         covering a wide range of variables related to sleep and daily habits.
