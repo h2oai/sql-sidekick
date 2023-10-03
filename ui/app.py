@@ -68,8 +68,15 @@ def clear_cards(q, ignore: Optional[List[str]] = []) -> None:
 @on("#chat")
 async def chat(q: Q):
     q.page["sidebar"].value = "#chat"
-    clear_cards(q)  # When routing, drop all the cards except of the main ones (header, sidebar, meta).
 
+    if q.args.table_dropdown:
+        # If a table is selected, the trigger causes refresh of the page
+        # so we update chat history with table name selection and return
+        # avoiding re-drawing.
+        q.page["chat_card"].data += [q.args.chatbot, False]
+        return
+
+    clear_cards(q)  # When routing, drop all the cards except of the main ones (header, sidebar, meta).
     table_names = []
     tables, _ = get_table_keys(f"{tmp_path}/data/tables.json", None)
     if len(tables) > 0:
@@ -104,8 +111,7 @@ async def chat(q: Q):
                     choices=table_names,
                     value=q.user.table_name if q.user.table_name else None,
                     trigger=True,
-                ),
-                ui.button(name="submit_table", label="Select", primary=True),
+                )
             ],
         ),
     )
@@ -153,7 +159,7 @@ async def chat(q: Q):
     )
 
     if q.args.chatbot is None or q.args.chatbot.strip() == "":
-        q.args.chatbot = "Welcome to the SQL Sidekick!\nI am an AI assistant that helps you with SQL queries for insights in tabular data."
+        q.args.chatbot = "Welcome to the SQL Sidekick!\nI am an AI assistant, i am here to help you find answers to questions on structured data."
         q.page["chat_card"].data += [q.args.chatbot, False]
     logging.info(f"Chatbot response: {q.args.chatbot}")
 
@@ -529,6 +535,7 @@ def upload_demo_examples(q: Q):
             table_name=q.user.table_name,
         )
         logging.info(f"DB updated with demo examples: \n {db_resp}")
+    q.args.table_dropdown = usr_table_name
 
 
 async def on_event(q: Q):
@@ -539,6 +546,13 @@ async def on_event(q: Q):
         q.args.chatbot = "try harder"
     elif q.args.regenerate:
         q.args.chatbot = "regenerate"
+
+    if q.args.table_dropdown:
+        logging.info(f"User selected table: {q.args.table_dropdown}")
+        await submit_table(q)
+        q.args.chatbot = f"Table {q.args.table_dropdown} selected"
+        # Refresh response is triggered when user selects a table via dropdown
+        event_handled = True
 
     if q.args.save_conversation or (q.args.chatbot and "save the qna pair:" in q.args.chatbot.lower()):
         question = q.client.query
@@ -562,11 +576,6 @@ async def on_event(q: Q):
             _msg = "Sorry, try generating a conversation to save."
         q.page["chat_card"].data += [_msg, False]
         event_handled = True
-    elif q.args.table_dropdown is not None:
-        logging.info(f"User selected table: {q.args.table_dropdown}")
-        await submit_table(q)
-        q.page["chat_card"].data += [f"Table {q.args.table_dropdown} selected", False]
-        event_handled = True
     elif q.args.regenerate or q.args.regenerate_with_options:
         await chatbot(q)
         event_handled = True
@@ -574,7 +583,8 @@ async def on_event(q: Q):
         logging.info(f"Switching to demo mode!")
         # If demo datasets are not present, register them.
         upload_demo_examples(q)
-        q.page["select_tables"].table_dropdown.value = q.user.table_name
+        logging.info(f"Demo dataset selected: {q.user.table_name}")
+        await submit_table(q)
         sample_qs = """
         Data description: The Sleep Health and Lifestyle Dataset comprises 400 rows and 13 columns,
         covering a wide range of variables related to sleep and daily habits.
