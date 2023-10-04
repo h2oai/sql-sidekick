@@ -5,7 +5,6 @@ from pathlib import Path
 import pandas as pd
 import psycopg2 as pg
 import sqlalchemy
-from pandasql import sqldf
 from psycopg2.extras import Json
 from sidekick.configs.data_template import data_samples_template
 from sidekick.logger import logger
@@ -162,30 +161,28 @@ class DBConfig:
 
     def has_table(self):
         engine = create_engine(self._url)
-
         return sqlalchemy.inspect(engine).has_table(self.table_name)
 
     def add_samples(self, data_csv_path=None):
         conn_str = self._url
         try:
-            df = pd.read_csv(data_csv_path)
-            # Make sure column names in the data-frame match the schema
-            df.columns = self.column_names
-            logger.debug(f"Column names in the data-frame: {df.columns}")
+            df_chunks = pd.read_csv(data_csv_path, chunksize=10000)
             engine = create_engine(conn_str, isolation_level="AUTOCOMMIT")
 
             sample_query = f"SELECT COUNT(*) AS ROWS FROM {self.table_name} LIMIT 1"
-            num_rows_bef = pd.read_sql_query(sample_query, engine)
+            for idx, chunk in enumerate(df_chunks):
+                # Write rows to database
+                logger.debug(f"Inserting chunk: {idx}")
+                chunk.columns = self.column_names
+                # Make sure column names in the data-frame match the schema
+                chunk.to_sql(self.table_name, engine, if_exists="append", index=False, method="multi")
 
-            # Write rows to database
-            df.to_sql(self.table_name, engine, if_exists="append", index=False)
-
+            logger.info(f"Data inserted into table: {self.table_name}")
             # Fetch the number of rows from the table
-            num_rows_aft = pd.read_sql_query(sample_query, engine)
-            num_inserted = num_rows_aft.iloc[0, 0] - num_rows_bef.iloc[0, 0]
-            logger.info(f"Number of rows inserted: {num_inserted}")
+            num_rows = pd.read_sql_query(sample_query, engine)
+            logger.info(f"Number of rows inserted: {num_rows.values[0][0]}")
             engine.dispose()
-            return num_inserted, None
+            return num_rows, None
         except SQLAlchemyError as sqla_error:
             logger.debug("SQLAlchemy error:", sqla_error)
             return None, sqla_error

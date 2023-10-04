@@ -159,7 +159,12 @@ async def chat(q: Q):
     )
 
     if q.args.chatbot is None or q.args.chatbot.strip() == "":
-        q.args.chatbot = "Welcome to the SQL Sidekick!\nI am an AI assistant, i am here to help you find answers to questions on structured data."
+        _msg = """Welcome to the SQL Sidekick!\nI am an AI assistant, i am here to help you find answers to questions on structured data.
+To get started, please select a table from the dropdown and ask your question.
+One could start by learning about the dataset by asking questions like:
+- Describe data."""
+
+        q.args.chatbot = _msg
         q.page["chat_card"].data += [q.args.chatbot, False]
     logging.info(f"Chatbot response: {q.args.chatbot}")
 
@@ -547,7 +552,7 @@ async def on_event(q: Q):
     elif q.args.regenerate:
         q.args.chatbot = "regenerate"
 
-    if q.args.table_dropdown:
+    if q.args.table_dropdown and not q.args.chatbot:
         logging.info(f"User selected table: {q.args.table_dropdown}")
         await submit_table(q)
         q.args.chatbot = f"Table {q.args.table_dropdown} selected"
