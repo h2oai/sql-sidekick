@@ -7,8 +7,8 @@ import psycopg2 as pg
 import sqlalchemy
 from pandasql import sqldf
 from psycopg2.extras import Json
-from sidekick.configs.data_template import data_samples_template
-from sidekick.logger import logger
+from configs.data_template import data_samples_template
+from logger import logger
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy_utils import database_exists

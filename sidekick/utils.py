@@ -12,7 +12,7 @@ from accelerate import infer_auto_device_map, init_empty_weights
 from InstructorEmbedding import INSTRUCTOR
 from pandasql import sqldf
 from sentence_transformers import SentenceTransformer
-from sidekick.logger import logger
+from logger import logger
 from sklearn.metrics.pairwise import cosine_similarity
 from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
                           BitsAndBytesConfig)

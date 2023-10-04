@@ -14,11 +14,11 @@ from langchain import OpenAI
 from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
                          LLMPredictor, ServiceContext, SQLDatabase)
 from llama_index.indices.struct_store import SQLContextContainerBuilder
-from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
+from configs.prompt_template import (DEBUGGING_PROMPT,
                                               NSQL_QUERY_PROMPT, QUERY_PROMPT,
                                               TASK_PROMPT)
-from sidekick.logger import logger
-from sidekick.utils import (_check_file_info, filter_samples, is_resource_low,
+from logger import logger
+from utils import (_check_file_info, filter_samples, is_resource_low,
                             load_causal_lm_model, load_embedding_model,
                             read_sample_pairs, remove_duplicates)
 from sqlalchemy import create_engine

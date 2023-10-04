@@ -13,10 +13,10 @@ from colorama import Fore as F
 from colorama import Style
 from loguru import logger
 from pandasql import sqldf
-from sidekick.db_config import DBConfig
-from sidekick.memory import EntityMemory
-from sidekick.query import SQLGenerator
-from sidekick.utils import (_execute_sql, check_vulnerability,
+from db_config import DBConfig
+from memory import EntityMemory
+from query import SQLGenerator
+from utils import (_execute_sql, check_vulnerability,
                             execute_query_pd, extract_table_names, save_query,
                             setup_dir)
 
