@@ -16,6 +16,7 @@ from pandasql import sqldf
 from sidekick.db_config import DBConfig
 from sidekick.memory import EntityMemory
 from sidekick.query import SQLGenerator
+from sidekick.schema_generator import generate_schema
 from sidekick.utils import (_execute_sql, check_vulnerability,
                             execute_query_pd, extract_table_names, save_query,
                             setup_dir)
@@ -116,6 +117,16 @@ def update_table_info(cache_path: str, table_info_path: str = None, table_name: 
     table_metadata["data_table_map"] = {}
     with open(f"{cache_path}/table_context.json", "w") as outfile:
         json.dump(table_metadata, outfile, indent=4, sort_keys=False)
+
+
+@configure.command(
+    "generate_schema", help=f"Helps generate default schema for the selected Database dialect: {db_dialect}"
+)
+@click.option("--data_path", default="data.csv", help="Enter the path of csv", type=str)
+@click.option("--output_path", default="table_info.jsonl", help="Enter the path of generated schema in jsonl", type=str)
+def generate_input_schema(data_path, output_path):
+    o_path = generate_schema(data_path, output_path)
+    click.echo(f"Schema generated for the input data at {o_path}")
 
 
 @configure.command("db-setup", help=f"Enter information to configure {db_dialect} database locally")

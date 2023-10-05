@@ -1,14 +1,8 @@
 import json
 import re
-import string
-
-import click
 import pandas as pd
 
 
-@click.command()
-@click.option("--data_path", default="data.csv", help="Enter the path of csv", type=str)
-@click.option("--output_path", default="table_info.jsonl", help="Enter the path of generated schema in jsonl", type=str)
 def generate_schema(data_path, output_path):
     df = pd.read_csv(data_path)
     # Extract the schema information
@@ -16,6 +10,9 @@ def generate_schema(data_path, output_path):
     schema_list = []
     special_characters = {" ": "_", ":": "_", "/": "_", "-": "_"}
 
+    import pdb
+
+    pdb.set_trace()
     for key, value in schema.items():
         new_key = "".join(special_characters[s] if s in special_characters.keys() else s for s in key)
         # if " " in key:
@@ -38,7 +35,4 @@ def generate_schema(data_path, output_path):
         for item in schema_list:
             json.dump(item, f)
             f.write("\n")
-
-
-if __name__ == "__main__":
-    generate_schema()
+    return output_path
