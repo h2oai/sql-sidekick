@@ -10,15 +10,9 @@ def generate_schema(data_path, output_path):
     schema_list = []
     special_characters = {" ": "_", ":": "_", "/": "_", "-": "_"}
 
-    import pdb
-
-    pdb.set_trace()
     for key, value in schema.items():
         new_key = "".join(special_characters[s] if s in special_characters.keys() else s for s in key)
-        # if " " in key:
-        #     new_key = key.replace(" ", "_") # Remove the space in the column name
-        # else:
-        #     new_key = key
+
         if value == "object":
             value = "TEXT"
             unique_values = df[key].dropna().unique().tolist()
