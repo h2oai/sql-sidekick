@@ -18,7 +18,7 @@ Dialect: postgres
 - docker run --rm --name pgsql-dev -e POSTGRES_PASSWORD=abc -p 5432:5432 postgres
 
 Default: sqlite
-Step: 
+Step:
 - Download and install .whl --> s3://sql-sidekick/releases/sql_sidekick-0.0.3-py3-none-any.whl
 - python3 -m venv .sidekickvenv
 - source .sidekickvenv/bin/activate

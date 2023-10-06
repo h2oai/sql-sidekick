@@ -1,8 +1,8 @@
 node_modules
 tmp
 
-# Generated files 
-.docusaurus 
+# Generated files
+.docusaurus
 .cach-loader
 
 # Misc
