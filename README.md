@@ -9,7 +9,8 @@ A simple SQL assistant (WIP)
 2. cd sql-sidekick
 3. make setup
 4. source ./.sidekickvenv/bin/activate
-5. python sidekick/prompter.py
+5. poetry install (in-case there is an error, try `poetry update` before `poetry install`)
+6. python sidekick/prompter.py
 ```
 ## Usage
 ```
@@ -28,6 +29,8 @@ Step:
 ```
 Welcome to the SQL Sidekick! I am an AI assistant that helps you with SQL
 queries. I can help you with the following:
+  0. Generate input schema: 
+  `sql-sidekick configure generate_schema configure generate_schema --data_path "./sample_passenger_statisfaction.csv" --output_path "./table_config.jsonl"`
 
   1. Configure a local database(for schema validation and syntax checking):
   `sql-sidekick configure db-setup -t "<local_dir_path_to_>/table_info.jsonl"` (e.g., format --> https://github.com/h2oai/sql-sidekick/blob/main/examples/telemetry/table_info.jsonl)
