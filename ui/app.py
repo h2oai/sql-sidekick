@@ -275,10 +275,20 @@ async def fileupload(q: Q):
     sample_data = q.args.sample_data
     sample_schema = q.args.data_schema
     sample_qa = q.args.sample_qa
-    org_table_name = q.args.table_name
-    usr_table_name = q.args.table_name.strip().lower().replace(" ", "_")
 
-    if sample_data is None or sample_schema is None or usr_table_name is None or usr_table_name.strip() == "":
+    org_table_name = usr_table_name = None
+    if (
+        q.args.table_name == "" or q.args.table_name is None and sample_data
+    ):  # User did not provide a table name, use the filename as table name
+        org_table_name = sample_data[0].split(".")[0].split("/")[-1]
+        logging.info(f"Using provided filename as table name: {org_table_name}")
+        q.args.table_name = org_table_name
+    if q.args.table_name:
+        org_table_name = q.args.table_name
+        usr_table_name = q.args.table_name.strip().lower().replace(" ", "_")
+
+    logging.info(f"Upload initiated for {org_table_name} with scheme input: {sample_schema}")
+    if sample_data is None:
         q.page["dataset"].error_bar.visible = True
         q.page["dataset"].progress_bar.visible = False
     else:
@@ -302,6 +312,7 @@ async def fileupload(q: Q):
             "samples_path": usr_samples_path,
             "samples_qa": usr_sample_qa,
         }
+        logging.info(f"Table metadata: {table_metadata}")
         update_tables(f"{tmp_path}/data/tables.json", table_metadata)
 
         q.user.table_name = usr_table_name
@@ -328,7 +339,7 @@ async def fileupload(q: Q):
 async def datasets(q: Q):
     q.page["sidebar"].value = "#datasets"
     clear_cards(q)  # When routing, drop all the cards except of the main ones (header, sidebar, meta).
-    add_card(q, "data_header", ui.form_card(box="horizontal", title="Dataset", items=[]))
+    add_card(q, "data_header", ui.form_card(box="horizontal", title="Input Data", items=[]))
 
     add_card(
         q,
@@ -343,16 +354,30 @@ async def datasets(q: Q):
                     visible=False,
                 ),
                 ui.message_bar(name="success_bar", type="success", text="Files Uploaded Successfully!", visible=False),
-                ui.textbox(name="table_name", label="Table Name", required=True),
+                ui.file_upload(
+                    name="sample_data",
+                    label="Dataset",
+                    compact=True,
+                    multiple=False,
+                    file_extensions=["csv"],
+                    required=True,
+                    max_file_size=5000,  # Specified in MB.
+                    tooltip="Upload data to ask questions (currently only .CSV is supported)",
+                ),
+                ui.separator(label="Optional"),
+                ui.textbox(
+                    name="table_name",
+                    label="Table Name",
+                    tooltip="Name of the table to be created, by default data filename is used!",
+                ),
                 ui.file_upload(
                     name="data_schema",
                     label="Data Schema",
                     multiple=False,
                     compact=True,
                     file_extensions=["jsonl"],
-                    required=True,
                     max_file_size=5000,  # Specified in MB.
-                    tooltip="The data describing table schema and sample values, formats allowed are JSONL & CSV respectively!",
+                    tooltip="The schema input summarizing the uploaded structured table, formats allowed are JSONL. If not provided, default schema will be inferred from the data",
                 ),
                 ui.file_upload(
                     name="sample_qa",
@@ -362,17 +387,7 @@ async def datasets(q: Q):
                     file_extensions=["csv"],
                     required=False,
                     max_file_size=5000,  # Specified in MB.
-                    tooltip="The data describing table schema and sample values, formats allowed are JSONL & CSV respectively!",
-                ),
-                ui.file_upload(
-                    name="sample_data",
-                    label="Data Samples",
-                    multiple=False,
-                    compact=True,
-                    file_extensions=["csv"],
-                    required=True,
-                    max_file_size=5000,  # Specified in MB.
-                    tooltip="The data describing table schema and sample values, formats allowed are JSONL & CSV respectively!",
+                    tooltip="Sample QnA pairs to improve contextual generation (currently only .CSV is supported)",
                 ),
                 ui.progress(
                     name="progress_bar", width="100%", label="Uploading datasets and creating tables!", visible=False

@@ -166,19 +166,20 @@ class DBConfig:
     def add_samples(self, data_csv_path=None):
         conn_str = self._url
         try:
-            df_chunks = pd.read_csv(data_csv_path, chunksize=10000)
+            logger.debug(f"Adding sample values to table: {data_csv_path}")
+            df_chunks = pd.read_csv(data_csv_path, chunksize=5000)
             engine = create_engine(conn_str, isolation_level="AUTOCOMMIT")
 
-            sample_query = f"SELECT COUNT(*) AS ROWS FROM {self.table_name} LIMIT 1"
             for idx, chunk in enumerate(df_chunks):
                 # Write rows to database
                 logger.debug(f"Inserting chunk: {idx}")
                 chunk.columns = self.column_names
                 # Make sure column names in the data-frame match the schema
-                chunk.to_sql(self.table_name, engine, if_exists="append", index=False, method="multi")
+                chunk.to_sql(self.table_name, engine, if_exists="replace", index=False, method="multi")
 
             logger.info(f"Data inserted into table: {self.table_name}")
             # Fetch the number of rows from the table
+            sample_query = f"SELECT COUNT(*) AS ROWS FROM {self.table_name} LIMIT 1"
             num_rows = pd.read_sql_query(sample_query, engine)
             logger.info(f"Number of rows inserted: {num_rows.values[0][0]}")
             engine.dispose()
