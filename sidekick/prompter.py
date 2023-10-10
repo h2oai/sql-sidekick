@@ -17,14 +17,9 @@ from sidekick.db_config import DBConfig
 from sidekick.memory import EntityMemory
 from sidekick.query import SQLGenerator
 from sidekick.schema_generator import generate_schema
-from sidekick.utils import (
-    _execute_sql,
-    check_vulnerability,
-    execute_query_pd,
-    extract_table_names,
-    save_query,
-    setup_dir,
-)
+from sidekick.utils import (_execute_sql, check_vulnerability,
+                            execute_query_pd, extract_table_names, save_query,
+                            setup_dir)
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
@@ -82,45 +77,24 @@ def set_loglevel(set_level):
 
 def _get_table_info(cache_path: str, table_name: str = None):
     # Search for the file in the default current path, if not present ask user to enter the path
-    if Path(f"{cache_path}/table_info.jsonl").exists():
-        table_info_path = f"{cache_path}/table_info.jsonl"  # input schema in jsonl format
+    if Path(f"{cache_path}/{table_name}_table_info.jsonl").exists():
+        table_info_path = f"{cache_path}/{table_name}_table_info.jsonl"  # input schema in jsonl format
     else:
-        # Check in table cache before requesting
-        # table_context.json contains info about the current table in use.
-        if Path(f"{cache_path}/table_context.json").exists():
-            f = open(f"{cache_path}/table_context.json", "r")
+        # Search for table related meta data in tables.json
+        # TODO: In future, metadata could be pushed on to a Db.
+        if Path(f"{cache_path}/tables.json").exists():
+            f = open(f"{cache_path}/tables.json", "r")
             table_metadata = json.load(f)
-
-            if "schema_info_path" in table_metadata:
-                table_info_path = table_metadata["schema_info_path"]
+            current_meta = table_metadata[table_name]
+            if "schema_info_path" in current_meta:
+                table_info_path = current_meta["schema_info_path"]
                 if table_info_path is None:
                     # if table_info_path is None, generate default schema n set path
-                    data_path = table_metadata["samples_path"]
-                    s_path = generate_schema(data_path, f"{cache_path}/table_info.jsonl")
-                    table_metadata["schema_info_path"] = s_path
-            else:
-                table_info_path = click.prompt("Enter table info path")
-                table_metadata["schema_info_path"] = table_info_path
-                with open(f"{cache_path}/table_context.json", "w") as outfile:
-                    json.dump(table_metadata, outfile, indent=4, sort_keys=False)
-        else:
-            # table_info_path = click.prompt("Enter table info path")
-            # Check if 'tables.json' exists in the current path
-            # 'tables.json' contains info about all the tables
-            # TODO: In future, metadata could be pushed on to a Db.
-            if Path(f"{cache_path}/tables.json").exists():
-                f = open(f"{cache_path}/tables.json", "r")
-                table_metadata = json.load(f)
-                current_meta = table_metadata[table_name]
-                if "schema_info_path" in current_meta:
-                    table_info_path = current_meta["schema_info_path"]
-                    if table_info_path is None:
-                        # if table_info_path is None, generate default schema n set path
-                        data_path = current_meta["samples_path"]
-                        table_info_path = generate_schema(data_path, f"{cache_path}/table_info.jsonl")
-            table_metadata = {"schema_info_path": table_info_path}
-            with open(f"{cache_path}/table_context.json", "w") as outfile:
-                json.dump(table_metadata, outfile, indent=4, sort_keys=False)
+                    data_path = current_meta["samples_path"]
+                    table_info_path = generate_schema(data_path, f"{cache_path}/{table_name}_table_info.jsonl")
+        table_metadata = {"schema_info_path": table_info_path}
+        with open(f"{cache_path}/table_context.json", "w") as outfile:
+            json.dump(table_metadata, outfile, indent=4, sort_keys=False)
     return table_info_path
 
 
@@ -238,6 +212,7 @@ def db_setup_api(
         if table_info_path is None:
             logger.debug(f"Retrieve meta information for table {table_name}")
             table_info_path = _get_table_info(path, table_name)
+            logger.debug(f"Updated table info path: {table_info_path}")
 
         if val.lower() == "y" or val.lower() == "yes":
             table_value = input("Enter table name: ") if is_command else table_name
@@ -432,7 +407,7 @@ def query_api(
             )
 
         if table_info_path is None:
-            table_info_path = _get_table_info(path)
+            table_info_path = _get_table_info(path, table_name)
             logger.debug(f"Table info path: {table_info_path}")
 
         sql_g = SQLGenerator(
