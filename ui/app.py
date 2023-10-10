@@ -362,7 +362,7 @@ async def datasets(q: Q):
                     file_extensions=["csv"],
                     required=True,
                     max_file_size=5000,  # Specified in MB.
-                    tooltip="The data describing table schema and sample values, formats allowed are JSONL & CSV respectively!",
+                    tooltip="Upload data to ask questions (currently only .CSV is supported)",
                 ),
                 ui.separator(label="Optional"),
                 ui.textbox(
@@ -377,7 +377,7 @@ async def datasets(q: Q):
                     compact=True,
                     file_extensions=["jsonl"],
                     max_file_size=5000,  # Specified in MB.
-                    tooltip="The data describing table schema and sample values, formats allowed are JSONL. If not provided, default schema will be inferred from the data",
+                    tooltip="The schema input summarizing the uploaded structured table, formats allowed are JSONL. If not provided, default schema will be inferred from the data",
                 ),
                 ui.file_upload(
                     name="sample_qa",
@@ -387,7 +387,7 @@ async def datasets(q: Q):
                     file_extensions=["csv"],
                     required=False,
                     max_file_size=5000,  # Specified in MB.
-                    tooltip="The data describing table schema and sample values, formats allowed are JSONL & CSV respectively!",
+                    tooltip="Sample QnA pairs to improve contextual generation (currently only .CSV is supported)",
                 ),
                 ui.progress(
                     name="progress_bar", width="100%", label="Uploading datasets and creating tables!", visible=False
