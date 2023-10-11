@@ -387,6 +387,8 @@ class SQLGenerator:
                 contextual_context_val = ", ".join(contextual_context)
                 column_names = columns_w_type.strip().split(",")
                 clmn_names = [i.split("(")[0].strip() for i in column_names]
+                clmn_types = [i.split("(")[1].strip().replace(")", "") for i in column_names]
+                clmn_info_map = dict(zip(clmn_names, clmn_types))
 
                 context_columns = []
                 if len(_samples) > 2:
@@ -411,8 +413,10 @@ class SQLGenerator:
                         ]
                         data_samples_list = contextual_data_samples
 
-                relevant_columns = context_columns if len(context_columns) > 0 else [columns_w_type]
-                _column_info = ", ".join(relevant_columns)
+                if len(context_columns) > 0:
+                    filtered_dict = {k: f"({clmn_info_map[k]})" for k in context_columns}
+                    filtered_c_type = ", ".join([f"{k} {v}" for k, v in filtered_dict.items()])
+                _column_info = filtered_c_type if len(context_columns) > 0 else [columns_w_type]
 
                 logger.debug(f"Relevant sample column values: {data_samples_list}")
                 _table_name = ", ".join(table_names)
