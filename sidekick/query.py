@@ -323,7 +323,10 @@ class SQLGenerator:
             else:
                 # TODO Update needed for multiple tables
                 columns_w_type = (
-                    self.context_builder.full_context_dict[table_name].split(":")[2].split("and")[0].strip()
+                    self.context_builder.full_context_dict[table_name]
+                    .split(":")[2]
+                    .split(" and foreign keys")[0]
+                    .strip()
                 )
 
                 data_samples_list = self.load_column_samples(table_names)
@@ -331,8 +334,8 @@ class SQLGenerator:
                 _context = {
                     "if patterns like 'current time' or 'now' occurs in question": "always use NOW() - INTERVAL",
                     "if patterns like 'total number', or 'List' occurs in question": "always use DISTINCT",
-                    "detailed summary": "include min, avg, max",
-                    "summary": "include min, avg, max",
+                    "detailed summary": "include min, avg, max for numeric columns",
+                    "summary": "include min, avg, max for numeric columns",
                 }
 
                 m_path = f"{self.path}/models/sentence_transformers/"
@@ -408,7 +411,7 @@ class SQLGenerator:
                         ]
                         data_samples_list = contextual_data_samples
 
-                relevant_columns = context_columns if len(context_columns) > 0 else clmn_names
+                relevant_columns = context_columns if len(context_columns) > 0 else [columns_w_type]
                 _column_info = ", ".join(relevant_columns)
 
                 logger.debug(f"Relevant sample column values: {data_samples_list}")

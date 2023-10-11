@@ -470,6 +470,8 @@ def query_api(
                         res, alt_res = sql_g.generate_sql(
                             table_names, question, model_name=model_name, _dialect=db_dialect
                         )
+                        res = res.replace("“", '"').replace("”", '"')
+                        [res := res.replace(s, '"') for s in "‘`’'" if s in res]
                         logger.info(f"Input query: {question}")
                         logger.info(f"Generated response:\n\n{res}")
 
@@ -495,7 +497,8 @@ def query_api(
 
                     # Before executing, check if known vulnerabilities exist in the generated SQL code.
                     _val = _val.replace("“", '"').replace("”", '"')
-                    [_val := _val.replace(s, "'") for s in "‘`" if s in _val]
+                    [_val := _val.replace(s, '"') for s in "‘`’'" if s in _val]
+
                     r, m = check_vulnerability(_val)
                     if not r:
                         q_res, err = db_obj.execute_query_db(query=_val)
