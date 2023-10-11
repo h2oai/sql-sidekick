@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import openai
 import sqlglot
+import sqlparse
 import torch
 import torch.nn.functional as F
 from langchain import OpenAI
@@ -87,6 +88,7 @@ class SQLGenerator:
         self.is_regenerate_with_options = is_regenerate_with_options
         self.is_regenerate = is_regenerate
         self.device = device
+        self.table_name = None
 
     def clear(self):
         del SQLGenerator._instance
@@ -129,7 +131,7 @@ class SQLGenerator:
             with open(f"{self.path}/var/lib/tmp/data/queries_cache.json", "r") as f:
                 new_context_queries = json.load(f)
         # Read the history file and update the context queries
-        history_file = f"{self.path}/var/lib/tmp/data/history.jsonl"
+        history_file = f"{self.path}/var/lib/tmp/data/{self.table_name}/history.jsonl"
         try:
             if Path(history_file).exists():
                 with open(history_file, "r") as in_file:
@@ -218,6 +220,7 @@ class SQLGenerator:
         try:
             # Step 1: Given a question, generate tasks to possibly answer the question and persist the result -> tasks.txt
             # Step 2: Append task list to 'query_prompt_template', generate SQL code to answer the question and persist the result -> sql.txt
+            self.table_name = table_names[0]
             context_queries: list = self.update_context_queries()
             logger.info(f"Number of context queries found: {len(context_queries)}")
 
@@ -263,6 +266,7 @@ class SQLGenerator:
     ):
         # TODO: Update needed to support multiple tables
         table_name = str(table_names[0].replace(" ", "_")).lower()
+        self.table_name = table_name
         alternate_queries = []
         describe_keywords = ["describe table", "describe", "describe table schema", "describe data"]
         enable_describe_qry = any([True for _dk in describe_keywords if _dk in input_question.lower()])
@@ -546,7 +550,12 @@ class SQLGenerator:
                             res = "SELECT " + result.strip() + " LIMIT 100;"
                         else:
                             res = "SELECT " + result.strip() + ";"
-                        alt_res = f"Option {idx+1}: (_probability_: {probabilities_scores[sorted_idx]})\n{res}\n"
+
+                        pretty_sql = sqlparse.format(res, reindent=True, keyword_case="upper")
+                        syntax_highlight = f"""``` sql\n{pretty_sql}\n```\n\n"""
+                        alt_res = (
+                            f"Option {idx+1}: (_probability_: {probabilities_scores[sorted_idx]})\n{syntax_highlight}\n"
+                        )
                         alternate_queries.append(alt_res)
                         logger.info(alt_res)
 
