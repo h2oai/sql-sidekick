@@ -76,3 +76,26 @@ Table '{table_name}' has sample values ({data_info_detailed})
 -- Using reference for TABLES '{table_name}' {context}; {question_txt}?
 
 SELECT"""
+
+# https://colab.research.google.com/drive/13BIKsqHnPOBcQ-ba2p77L5saiepTIwu0#scrollTo=0eI-VpCkf-fN
+STARCODER2_PROMPT = """
+### Instructions:
+Your task is convert a question into a SQL query, given a sqlite database schema.
+Adhere to these rules:
+- **Deliberately go through the question and database schema word by word** to appropriately answer the question
+- **Use Table Aliases** to prevent ambiguity. For example, `SELECT table1.col1, table2.col1 FROM table1 JOIN table2 ON table1.id = table2.id`.
+- When creating a ratio, always cast the numerator as float
+
+### Input:
+Generate a SQL query that answers the question `{question}`.
+For SQL TABLE '{table_name}' sample question/answer pairs,\n({sample_queries})
+This query will run on a database whose schema is represented in this string:
+CREATE TABLE '{table_name}' ({column_info}
+);
+
+-- Table '{table_name}' has sample values ({data_info_detailed})
+
+### Response:
+Based on your instructions, here is the SQL query I have generated to answer the question `{question}`:
+```sql
+SELECT"""
