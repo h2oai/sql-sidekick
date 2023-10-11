@@ -6,6 +6,7 @@ from pathlib import Path
 
 import click
 import openai
+import sqlparse
 import toml
 import torch
 from colorama import Back as B
@@ -474,8 +475,9 @@ def query_api(
                         [res := res.replace(s, '"') for s in "‘`’'" if s in res]
                         logger.info(f"Input query: {question}")
                         logger.info(f"Generated response:\n\n{res}")
-
-            results.extend([f"**Generated response for question,**\n{question}\n", res, "\n"])
+            pretty_sql = sqlparse.format(res, reindent=True, keyword_case="upper")
+            syntax_highlight = f"""``` sql\n{pretty_sql}\n```\n\n"""
+            results.extend([f"**Generated response for question,**\n{question}\n", syntax_highlight, "\n"])
             logger.info(f"Alternate responses:\n\n{alt_res}")
 
             exe_sql = click.prompt("Would you like to execute the generated SQL (y/n)?") if is_command else "y"
