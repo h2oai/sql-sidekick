@@ -21,7 +21,7 @@ from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
 from sidekick.logger import logger
 from sidekick.utils import (_check_file_info, filter_samples, is_resource_low,
                             load_causal_lm_model, load_embedding_model,
-                            read_sample_pairs, remove_duplicates)
+                            make_dir, read_sample_pairs, remove_duplicates)
 from sqlalchemy import create_engine
 
 
@@ -119,19 +119,21 @@ class SQLGenerator:
 
     def update_context_queries(self):
         # Check if seed samples were provided
+        cache_path = f"{self.path}/var/lib/tmp/.cache/{self.table_name}/"
         new_context_queries = []
         if self.sample_queries_path is not None and Path(self.sample_queries_path).exists():
             logger.info(f"Using QnA samples from path {self.sample_queries_path}")
             new_context_queries = read_sample_pairs(self.sample_queries_path, "h2ogpt-sql")
             # cache the samples for future use
-            with open(f"{self.path}/var/lib/tmp/data/queries_cache.json", "w") as f:
+            make_dir(cache_path)
+            with open(f"{cache_path}/queries_cache.json", "w") as f:
                 json.dump(new_context_queries, f, indent=2)
-        elif self.sample_queries_path is None and Path(f"{self.path}/var/lib/tmp/data/queries_cache.json").exists():
+        elif self.sample_queries_path is None and Path(f"{cache_path}/queries_cache.json").exists():
             logger.info(f"Using samples from cache")
-            with open(f"{self.path}/var/lib/tmp/data/queries_cache.json", "r") as f:
+            with open(f"{cache_path}/queries_cache.json", "r") as f:
                 new_context_queries = json.load(f)
         # Read the history file and update the context queries
-        history_file = f"{self.path}/var/lib/tmp/data/{self.table_name}/history.jsonl"
+        history_file = f"{self.path}/var/lib/tmp/.cache/{self.table_name}/history.jsonl"
         try:
             if Path(history_file).exists():
                 with open(history_file, "r") as in_file:

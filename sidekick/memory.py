@@ -31,8 +31,6 @@ class EntityMemory:
         split_token = ";"
         query = " ".join(info.partition(":")[2].split(split_token)[0].strip().split())
         response = " ".join(info.partition(":")[2].split(split_token)[1].partition(":")[2].strip().split())
-        # TODO add additional guardrails to check if the response is a valid response.
-        # At-least syntactically correct SQL.
 
         # Check if entity extraction is enabled
         # Add logic for entity extraction
@@ -66,7 +64,8 @@ class EntityMemory:
 
         # Persist added information locally
         if chat_history:
-            with open(f"{self.path}/var/lib/tmp/data/history.jsonl", "a") as outfile:
+            # TODO: Persist history for each user. This flow is currently only affects openai models.
+            with open(f"{self.path}/var/lib/tmp/.cache/history.jsonl", "a") as outfile:
                 json.dump(chat_history, outfile)
                 outfile.write("\n")
             if extract_context:

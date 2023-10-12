@@ -578,6 +578,7 @@ async def on_event(q: Q):
         question = q.client.query
         _val = q.client.llm_response
         # Currently, any manual input by the user is a Question by default
+        table_name = q.user.table_name if q.user.table_name else "default"
         if (
             question is not None
             and "SELECT" in question
@@ -586,11 +587,11 @@ async def on_event(q: Q):
             _q = question.lower().split("q:")[1].split("r:")[0].strip()
             _r = question.lower().split("r:")[1].strip()
             logging.info(f"Saving conversation for question: {_q} and response: {_r}")
-            save_query(base_path, query=_q, response=_r)
+            save_query(base_path, table_name, query=_q, response=_r)
             _msg = "Conversation saved successfully!"
         elif question is not None and _val is not None and _val.strip() != "":
             logging.info(f"Saving conversation for question: {question} and response: {_val}")
-            save_query(base_path, query=question, response=_val)
+            save_query(base_path, table_name, query=question, response=_val)
             _msg = "Conversation saved successfully!"
         else:
             _msg = "Sorry, try generating a conversation to save."

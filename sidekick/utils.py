@@ -1,3 +1,4 @@
+import errno
 import glob
 import json
 import os
@@ -134,14 +135,19 @@ def remove_duplicates(
     return res
 
 
-def save_query(output_path: str, query, response, extracted_entity: Optional[dict] = ""):
+def save_query(output_path: str, table_name: str, query, response, extracted_entity: Optional[dict] = ""):
     _response = response
     # Probably need to find a better way to extra the info rather than depending on key phrases
     if response and "Generated response for question,".lower() in response.lower():
-        _response = response.split("**Generated response for question,**")[1].split("\n")[3].strip()
+        _response = (
+            response.split("**Generated response for question,**")[1].split("``` sql")[1].split("```")[0].strip()
+        )
     chat_history = {"Query": query, "Answer": _response, "Entity": extracted_entity}
 
-    with open(f"{output_path}/var/lib/tmp/data/history.jsonl", "a") as outfile:
+    # Persist history for contextual reference wrt to the table.
+    dir_name = f"{output_path}/var/lib/tmp/.cache/{table_name}"
+    make_dir(dir_name)
+    with open(f"{dir_name}/history.jsonl", "a") as outfile:
         json.dump(chat_history, outfile)
         outfile.write("\n")
 
@@ -378,7 +384,7 @@ def make_dir(path: str):
     try:
         os.makedirs(path)
     except OSError as exc:
-        if exc.errno == errno.EXIST and os.path.isdir(path):
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
             pass
         else:
             raise Exception("Error reported while creating default directory path.")
