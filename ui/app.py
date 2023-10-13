@@ -69,8 +69,8 @@ def clear_cards(q, ignore: Optional[List[str]] = []) -> None:
 async def chat(q: Q):
     q.page["sidebar"].value = "#chat"
 
-    if q.args.table_dropdown:
-        # If a table is selected, the trigger causes refresh of the page
+    if q.args.table_dropdown or q.args.model_choice_dropdown:
+        # If a table/model is selected, the trigger causes refresh of the page
         # so we update chat history with table name selection and return
         # avoiding re-drawing.
         q.page["chat_card"].data += [q.args.chatbot, False]
@@ -136,7 +136,7 @@ async def chat(q: Q):
             name="chatbot",
             data=data(fields="content from_user", t="list", size=-50),
         ),
-    )
+    ),
     add_card(
         q,
         "additional_actions",
@@ -414,9 +414,9 @@ async def datasets(q: Q):
     )
 
 
-@on("#about")
+@on("#documentation")
 async def about(q: Q):
-    q.page["sidebar"].value = "#about"
+    q.page["sidebar"].value = "#documentation"
     clear_cards(q)
 
 
@@ -498,7 +498,7 @@ async def init(q: Q) -> None:
             ui.nav_group(
                 "Help",
                 items=[
-                    ui.nav_item(name="#about", label="About"),
+                    ui.nav_item(name="#documentation", label="Documentation"),
                     ui.nav_item(name="#support", label="Support"),
                 ],
             ),
