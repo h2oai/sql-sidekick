@@ -41,12 +41,17 @@ class SQLGenerator:
         is_regenerate_with_options: bool = False,
     ):
         offloading = is_resource_low()
-        if offloading and is_regenerate_with_options:
+        # Initially load one model at a time if the user swapped the model dynamically.
+        # TODO:
+        # 1. Keep multiple models in memory if possible
+        # 2. Support remote model loading as an option
+        if offloading and is_regenerate_with_options or (cls._instance and cls._instance.model_name != model_name):
             del cls._instance
             cls._instance = None
             gc.collect()
             torch.cuda.empty_cache()
             logger.info(f"Low memory: {offloading}/ Model re-initialization: True")
+
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance.model, cls._instance.tokenizer = load_causal_lm_model(
