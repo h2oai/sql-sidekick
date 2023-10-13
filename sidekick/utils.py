@@ -193,7 +193,7 @@ def read_sample_pairs(input_path: str, model_name: str = "h2ogpt-sql"):
     df = df.reset_index(drop=True)
 
     # NSQL format
-    if model_name != "h2ogpt-sql":
+    if "h2ogpt-sql" not in model_name:
         # Open AI format
         # Convert frame to below format
         # [
@@ -281,7 +281,7 @@ def is_resource_low():
 
 
 def load_causal_lm_model(
-    model_name: str,
+    model_type: str,
     cache_path: str,
     device: str,
     load_in_8bit: bool = False,
@@ -290,7 +290,13 @@ def load_causal_lm_model(
     re_generate: bool = False,
 ):
     try:
-        # Load h2oGPT.NSQL model
+        model_choices_map = {
+            "h2ogpt-sql-nsql-llama-2-7B": "NumbersStation/nsql-llama-2-7B",
+            "h2ogpt-sql-sqlcoder2": "defog/sqlcoder2",
+        }
+        model_name = model_choices_map[model_type]
+        logger.info(f"Loading model: {model_name}")
+        # Load h2oGPT.SQL model
         device = {"": 0} if torch.cuda.is_available() else "cpu" if device == "auto" else device
         total_memory = int(torch.cuda.get_device_properties(0).total_memory / 1024**3)
         free_in_GB = int(torch.cuda.mem_get_info()[0] / 1024**3)
@@ -402,7 +408,7 @@ def check_vulnerability(input_query: str):
         r'\b(SELECT\s+\*\s+FROM\s+\w+\s+WHERE\s+\w+\s*=\s*[\'"].*?[\'"]\s*;?\s*--)',
         r'\b(INSERT\s+INTO\s+\w+\s+\(\s*\w+\s*,\s*\w+\s*\)\s+VALUES\s*\(\s*[\'"].*?[\'"]\s*,\s*[\'"].*?[\'"]\s*\)\s*;?\s*--)',
         r"\b(DROP\s+TABLE|ALTER\s+TABLE|admin\'--)",  # DROP TABLE/ALTER TABLE
-        r"(?:'|\”|--|#|‘\s*OR\s*‘1|‘\s*OR\s*\d+\s*--\s*-|\"\s*OR\s*\"\" = \"|\"\s*OR\s*\d+\s*=\s*\d+\s*--\s*-|’\s*OR\s*''\s*=\s*‘|‘=‘|'=0--+|OR\s*\d+\s*=\s*\d+|‘\s*OR\s*‘x’=‘x’|AND\s*id\s*IS\s*NULL;\s*--|‘’’’’’’’’’’’’UNION\s*SELECT\s*‘\d+|%00|/\*.*?\*/|\+|\|\||%|@\w+|@@\w+)",
+        r"(?:'|\”|--|#|‘\s*OR\s*‘1|‘\s*OR\s*\d+\s*--\s*-|\"\s*OR\s*\"\" = \"|\"\s*OR\s*\d+\s*=\s*\d+\s*--\s*-|’\s*OR\s*''\s*=\s*‘|‘=‘|'=0--+|OR\s*\d+\s*=\s*\d+|‘\s*OR\s*‘x’=‘x’|AND\s*id\s*IS\s*NULL;\s*--|‘’’’’’’’’’’’’UNION\s*SELECT\s*‘\d+|%00|/\*.*?\*/|\+|\|\||@\w+|@@\w+)",
         r"AND\s[01]|AND\s(true|false)|[01]-((true|false))",
         r"\d+'\s*ORDER\s*BY\s*\d+--\+|\d+'\s*GROUP\s*BY\s*(\d+,)*\d+--\+|'\s*GROUP\s*BY\s*columnnames\s*having\s*1=1\s*--",
         r"\bUNION\b\s+\b(?:ALL\s+)?\bSELECT\b\s+[A-Za-z0-9]+",  # Union Based
