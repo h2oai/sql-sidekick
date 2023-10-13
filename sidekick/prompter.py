@@ -335,6 +335,7 @@ def query_api(
     table_info_path: str,
     sample_queries_path: str,
     table_name: str,
+    model_name: str = "h2ogpt-sql-nsql-llama-2-7B",
     is_regenerate: bool = False,
     is_regen_with_options: bool = False,
     is_command: bool = False,
@@ -365,7 +366,7 @@ def query_api(
     logger.info(f"Table in use: {table_names}")
     # Check if env.toml file exists
     api_key = None
-    if model_name != "h2ogpt-sql":
+    if "h2ogpt-sql" not in model_name:
         api_key = env_settings["MODEL_INFO"]["OPENAI_API_KEY"]
         if api_key is None or api_key == "":
             if os.getenv("OPENAI_API_KEY") is None or os.getenv("OPENAI_API_KEY") == "":
@@ -414,6 +415,7 @@ def query_api(
         sql_g = SQLGenerator(
             db_url,
             api_key,
+            model_name=model_name,
             job_path=base_path,
             data_input_path=table_info_path,
             sample_queries_path=sample_queries_path,

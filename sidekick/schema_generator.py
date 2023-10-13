@@ -9,10 +9,12 @@ def generate_schema(data_path, output_path):
     schema = df.dtypes.to_dict()
     schema_list = []
     special_characters = {" ": "_", ":": "_", "/": "_", "-": "_"}
+    syntax_names = ["default"]
 
     for key, value in schema.items():
         new_key = "".join(special_characters[s] if s in special_characters.keys() else s for s in key)
-
+        if new_key.lower() in syntax_names:
+            new_key = new_key + "_col"
         if value == "object":
             value = "TEXT"
             unique_values = df[key].dropna().unique().tolist()

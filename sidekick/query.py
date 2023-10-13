@@ -17,7 +17,7 @@ from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
 from llama_index.indices.struct_store import SQLContextContainerBuilder
 from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
                                               NSQL_QUERY_PROMPT, QUERY_PROMPT,
-                                              TASK_PROMPT)
+                                              STARCODER2_PROMPT, TASK_PROMPT)
 from sidekick.logger import logger
 from sidekick.utils import (_check_file_info, filter_samples, is_resource_low,
                             load_causal_lm_model, load_embedding_model,
@@ -32,7 +32,7 @@ class SQLGenerator:
         cls,
         db_url: str,
         openai_key: str = None,
-        model_name="NumbersStation/nsql-llama-2-7B",
+        model_name="h2ogpt-sql-nsql-llama-2-7B",
         data_input_path: str = "./table_info.jsonl",
         sample_queries_path: str = "./samples.csv",
         job_path: str = "./",
@@ -65,7 +65,7 @@ class SQLGenerator:
         self,
         db_url: str,
         openai_key: str = None,
-        model_name="NumbersStation/nsql-llama-2-7B",
+        model_name="h2ogpt-sql-nsql-llama-2-7B",
         data_input_path: str = "./table_info.jsonl",
         sample_queries_path: str = "./samples.csv",
         job_path: str = "./",
@@ -281,7 +281,7 @@ class SQLGenerator:
             context_queries = self.content_queries
             self.context_builder = SQLContextContainerBuilder(self.sql_database, context_dict=table_context_dict)
 
-            if model_name != "h2ogpt-sql":
+            if "h2ogpt-sql" not in model_name:
                 _tasks = self.task_formatter(self._tasks)
 
                 # TODO: The need to pass data info again could be eliminated if Task generation becomes more consistent and accurate.
@@ -427,7 +427,11 @@ class SQLGenerator:
                 logger.debug(f"Relevant sample column values: {data_samples_list}")
                 _table_name = ", ".join(table_names)
 
-                query = NSQL_QUERY_PROMPT.format(
+                query_prompt_format = STARCODER2_PROMPT
+                if model_name == "h2ogpt-sql-nsql-llama-2-7B":
+                    query_prompt_format = NSQL_QUERY_PROMPT
+
+                query = query_prompt_format.format(
                     table_name=_table_name,
                     column_info=_column_info,
                     data_info_detailed=data_samples_list,
@@ -449,7 +453,7 @@ class SQLGenerator:
                 # 3. Maybe positional interpolation --> https://arxiv.org/abs/2306.15595
                 if int(input_length) > 4000:
                     logger.info("Input length is greater than 1748, removing column description from the prompt")
-                    query = NSQL_QUERY_PROMPT.format(
+                    query = query_prompt_format.format(
                         table_name=_table_name,
                         column_info=_column_info,
                         data_info_detailed="",

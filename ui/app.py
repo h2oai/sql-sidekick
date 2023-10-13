@@ -86,6 +86,11 @@ async def chat(q: Q):
                 original_name = meta_data[table].get("original_name", q.user.original_name)
                 table_names.append(ui.choice(table, f"{original_name}"))
 
+    model_choices = [
+        ui.choice("h2ogpt-sql-nsql-llama-2-7B", "h2ogpt-sql-nsql-llama-2-7B"),
+        ui.choice("h2ogpt-sql-sqlcoder2", "h2ogpt-sql-sqlcoder2"),
+    ]
+    q.user.model_choice_dropdown = "h2ogpt-sql-sqlcoder2"
     add_card(
         q,
         "background_card",
@@ -111,7 +116,15 @@ async def chat(q: Q):
                     choices=table_names,
                     value=q.user.table_name if q.user.table_name else None,
                     trigger=True,
-                )
+                ),
+                ui.dropdown(
+                    name="model_choice_dropdown",
+                    label="Model Choice",
+                    required=True,
+                    choices=model_choices,
+                    value=q.user.model_choice_dropdown if q.user.model_choice_dropdown else None,
+                    trigger=True,
+                ),
             ],
         ),
     )
@@ -209,6 +222,7 @@ async def chatbot(q: Q):
                     sample_queries_path=q.user.sample_qna_path,
                     table_info_path=q.user.table_info_path,
                     table_name=q.user.table_name,
+                    model_name=q.user.model_choice_dropdown,
                     is_regenerate=True,
                     is_regen_with_options=False,
                 )
@@ -227,6 +241,7 @@ async def chatbot(q: Q):
                     sample_queries_path=q.user.sample_qna_path,
                     table_info_path=q.user.table_info_path,
                     table_name=q.user.table_name,
+                    model_name=q.user.model_choice_dropdown,
                     is_regenerate=False,
                     is_regen_with_options=True,
                 )
@@ -248,6 +263,7 @@ async def chatbot(q: Q):
                 sample_queries_path=q.user.sample_qna_path,
                 table_info_path=q.user.table_info_path,
                 table_name=q.user.table_name,
+                model_name=q.user.model_choice_dropdown,
             )
             llm_response = "\n".join(llm_response)
     except (MemoryError, RuntimeError) as e:
@@ -567,10 +583,21 @@ async def on_event(q: Q):
     elif q.args.regenerate:
         q.args.chatbot = "regenerate"
 
-    if q.args.table_dropdown and not q.args.chatbot:
+    if q.args.table_dropdown and not q.args.chatbot and q.user.table_name != q.args.table_dropdown:
         logging.info(f"User selected table: {q.args.table_dropdown}")
         await submit_table(q)
         q.args.chatbot = f"Table {q.args.table_dropdown} selected"
+        # Refresh response is triggered when user selects a table via dropdown
+        event_handled = True
+    if (
+        q.args.model_choice_dropdown
+        and not q.args.chatbot
+        and q.user.model_choice_dropdown != q.args.model_choice_dropdown
+    ):
+        logging.info(f"User selected model type: {q.args.model_choice_dropdown}")
+        q.user.model_choice_dropdown = q.args.model_choice_dropdown
+        q.page["select_tables"].model_choice_dropdown.value = q.user.model_choice_dropdown
+        q.args.chatbot = f"Model {q.args.model_choice_dropdown} selected"
         # Refresh response is triggered when user selects a table via dropdown
         event_handled = True
 
