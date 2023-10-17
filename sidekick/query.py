@@ -79,8 +79,8 @@ class SQLGenerator:
         is_regenerate_with_options: bool = False,
     ):
         self.db_url = db_url
-        self.engine = create_engine(db_url)
-        self.sql_database = SQLDatabase(self.engine)
+        self.engine = create_engine(db_url) if db_url else None
+        self.sql_database = SQLDatabase(self.engine) if self.engine else None
         self.context_builder = None
         self.data_input_path = _check_file_info(data_input_path)
         self.sample_queries_path = sample_queries_path

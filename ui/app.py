@@ -11,6 +11,7 @@ import torch
 from h2o_wave import Q, app, data, handle_on, main, on, ui
 from h2o_wave.core import expando_to_dict
 from sidekick.prompter import db_setup_api, query_api
+from sidekick.query import SQLGenerator
 from sidekick.utils import get_table_keys, save_query, setup_dir, update_tables
 
 # Load the config file and initialize required paths
@@ -197,6 +198,8 @@ async def chatbot(q: Q):
     question = f"{q.args.chatbot}"
     logging.info(f"Question: {question}")
 
+    if q.args.table_dropdown or q.args.model_choice_dropdown:
+        return
     # For regeneration, currently there are 2 modes
     # 1. Quick fast approach by throttling the temperature
     # 2. "Try harder mode (THM)" Slow approach by using the diverse beam search
@@ -662,6 +665,23 @@ async def on_event(q: Q):
     return event_handled
 
 
+def on_startup():
+    logging.info("SQL-Assistant started!")
+    logging.info(f"Initializing default model")
+
+    _ = SQLGenerator(
+        None,
+        None,
+        model_name="h2ogpt-sql-sqlcoder2",
+        job_path=base_path,
+        data_input_path="",
+        sample_queries_path="",
+        is_regenerate_with_options="",
+        is_regenerate="",
+    )
+    return
+
+
 @app("/", on_shutdown=on_shutdown)
 async def serve(q: Q):
     # Run only once per client connection.
@@ -670,6 +690,7 @@ async def serve(q: Q):
         setup_dir(base_path)
         await init(q)
         q.client.initialized = True
+        on_startup()
         logging.info("App initialized.")
 
     # Handle routing.

@@ -15,8 +15,7 @@ from pandasql import sqldf
 from sentence_transformers import SentenceTransformer
 from sidekick.logger import logger
 from sklearn.metrics.pairwise import cosine_similarity
-from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
-                          BitsAndBytesConfig)
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 
 def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, device: Optional[str] = None):
@@ -269,9 +268,9 @@ def get_table_keys(file_path: str, table_key: str):
         return res, data
 
 
-def is_resource_low():
-    free_in_GB = int(torch.cuda.mem_get_info()[0] / 1024**3)
-    total_memory = int(torch.cuda.get_device_properties(0).total_memory / 1024**3)
+def is_resource_low(device_index: int = 0):
+    free_in_GB = int(torch.cuda.mem_get_info(device_index)[0] / 1024**3)
+    total_memory = int(torch.cuda.get_device_properties(device_index).total_memory / 1024**3)
     logger.info(f"Total Memory: {total_memory}GB")
     logger.info(f"Free GPU memory: {free_in_GB}GB")
     off_load = True
@@ -296,20 +295,21 @@ def load_causal_lm_model(
         }
         model_name = model_choices_map[model_type]
         logger.info(f"Loading model: {model_name}")
+        device_index = 0
         # Load h2oGPT.SQL model
-        device = {"": 0} if torch.cuda.is_available() else "cpu" if device == "auto" else device
+        device = {"": device_index} if torch.cuda.is_available() else "cpu" if device == "auto" else device
         total_memory = int(torch.cuda.get_device_properties(0).total_memory / 1024**3)
         free_in_GB = int(torch.cuda.mem_get_info()[0] / 1024**3)
         logger.info(f"Free GPU memory: {free_in_GB}GB")
         n_gpus = torch.cuda.device_count()
+        logger.info(f"Total GPUs: {n_gpus}")
         _load_in_8bit = load_in_8bit
 
         # 22GB (Least requirement on GPU) is a magic number for the current model size.
         if off_load and re_generate and total_memory < 22:
             # To prevent the system from crashing in-case memory runs low.
             # TODO: Performance when offloading to CPU.
-            max_memory = f"{4}GB"
-            max_memory = {i: max_memory for i in range(n_gpus)}
+            max_memory = {device_index: f"{4}GB"}
             logger.info(f"Max Memory: {max_memory}, offloading to CPU")
             with init_empty_weights():
                 config = AutoConfig.from_pretrained(model_name, cache_dir=cache_path, offload_folder=cache_path)
@@ -322,8 +322,7 @@ def load_causal_lm_model(
             _load_in_8bit = True
             load_in_4bit = False
         else:
-            max_memory = f"{int(free_in_GB)-2}GB"
-            max_memory = {i: max_memory for i in range(n_gpus)}
+            max_memory = {device_index: f"{int(free_in_GB)-2}GB"}
             _offload_state_dict = False
             _llm_int8_enable_fp32_cpu_offload = False
 
