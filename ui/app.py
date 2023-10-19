@@ -23,6 +23,27 @@ ui_title = env_settings["WAVE_UI"]["TITLE"]
 ui_description = env_settings["WAVE_UI"]["SUB_TITLE"]
 
 
+# Pre-initialize the models for faster response
+def initialize_models():
+    logging.info(f"Initializing models")
+
+    _ = SQLGenerator(
+        None,
+        None,
+        model_name=None,  # Default: h2ogpt-sql-sqlcoder2
+        job_path=base_path,
+        data_input_path="",
+        sample_queries_path="",
+        is_regenerate_with_options="",
+        is_regenerate="",
+    )
+    return
+
+
+logging.info("Initializing the models")
+initialize_models()
+
+
 async def user_variable(q: Q):
     db_settings = toml.load(f"{base_path}/sidekick/configs/env.toml")
 
@@ -194,12 +215,16 @@ async def chatbot(q: Q):
         q.page["chat_card"].data += ["Please select a table to continue!", False]
         return
 
+    if (
+        f"Table {q.user.table_dropdown} selected" in q.args.chatbot
+        or f"Model {q.user.model_choice_dropdown} selected" in q.args.chatbot
+    ):
+        return
+
     # Append bot response.
     question = f"{q.args.chatbot}"
     logging.info(f"Question: {question}")
 
-    if q.args.table_dropdown or q.args.model_choice_dropdown:
-        return
     # For regeneration, currently there are 2 modes
     # 1. Quick fast approach by throttling the temperature
     # 2. "Try harder mode (THM)" Slow approach by using the diverse beam search
@@ -600,7 +625,7 @@ async def on_event(q: Q):
         logging.info(f"User selected model type: {q.args.model_choice_dropdown}")
         q.user.model_choice_dropdown = q.args.model_choice_dropdown
         q.page["select_tables"].model_choice_dropdown.value = q.user.model_choice_dropdown
-        q.args.chatbot = f"Model {q.args.model_choice_dropdown} selected"
+        q.args.chatbot = f"Model {q.user.model_choice_dropdown} selected"
         # Refresh response is triggered when user selects a table via dropdown
         event_handled = True
 
@@ -656,7 +681,6 @@ async def on_event(q: Q):
             f"Demo mode is enabled.\nTry below example questions for the selected data to get started,\n{sample_qs}"
         )
         q.page["chat_card"].data += [q.args.chatbot, True]
-        q.page["meta"].redirect = "#chat"
         event_handled = True
     else:  # default chatbot event
         await handle_on(q)
@@ -665,32 +689,14 @@ async def on_event(q: Q):
     return event_handled
 
 
-def on_startup():
-    logging.info("SQL-Assistant started!")
-    logging.info(f"Initializing default model")
-
-    _ = SQLGenerator(
-        None,
-        None,
-        model_name="h2ogpt-sql-sqlcoder2",
-        job_path=base_path,
-        data_input_path="",
-        sample_queries_path="",
-        is_regenerate_with_options="",
-        is_regenerate="",
-    )
-    return
-
-
 @app("/", on_shutdown=on_shutdown)
 async def serve(q: Q):
-    # Run only once per client connection.
+    # Run only once per client connection
     if not q.client.initialized:
         q.client.cards = set()
         setup_dir(base_path)
         await init(q)
         q.client.initialized = True
-        on_startup()
         logging.info("App initialized.")
 
     # Handle routing.

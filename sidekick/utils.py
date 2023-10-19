@@ -15,7 +15,18 @@ from pandasql import sqldf
 from sentence_transformers import SentenceTransformer
 from sidekick.logger import logger
 from sklearn.metrics.pairwise import cosine_similarity
-from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
+                          BitsAndBytesConfig)
+
+model_choices_map = {
+    "h2ogpt-sql-sqlcoder2": "defog/sqlcoder2",
+    "h2ogpt-sql-nsql-llama-2-7B": "NumbersStation/nsql-llama-2-7B",
+}
+
+model_device_map = {
+    "h2ogpt-sql-sqlcoder2": 0,
+    "h2ogpt-sql-nsql-llama-2-7B": 1,
+}
 
 
 def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, device: Optional[str] = None):
@@ -268,15 +279,21 @@ def get_table_keys(file_path: str, table_key: str):
         return res, data
 
 
-def is_resource_low(device_index: int = 0):
-    free_in_GB = int(torch.cuda.mem_get_info(device_index)[0] / 1024**3)
-    total_memory = int(torch.cuda.get_device_properties(device_index).total_memory / 1024**3)
-    logger.info(f"Total Memory: {total_memory}GB")
-    logger.info(f"Free GPU memory: {free_in_GB}GB")
+def is_resource_low(model_name: str):
     off_load = True
-    if (int(free_in_GB) - 2) >= int(0.5 * total_memory):
+    if not model_name:  # If None, load all models
         off_load = False
-    return off_load
+    else:
+        n_gpus = torch.cuda.device_count()
+        device_index = model_device_map[model_name] if model_name and n_gpus > 1 else 0
+        logger.debug(f"Information on device: {device_index}")
+        free_in_GB = int(torch.cuda.mem_get_info(device_index)[0] / 1024**3)
+        total_memory = int(torch.cuda.get_device_properties(device_index).total_memory / 1024**3)
+        logger.info(f"Total Memory: {total_memory}GB")
+        logger.info(f"Free GPU memory: {free_in_GB}GB")
+        if (int(free_in_GB) - 2) >= int(0.3 * total_memory):
+            off_load = False
+        return off_load
 
 
 def load_causal_lm_model(
@@ -289,75 +306,89 @@ def load_causal_lm_model(
     re_generate: bool = False,
 ):
     try:
-        model_choices_map = {
-            "h2ogpt-sql-nsql-llama-2-7B": "NumbersStation/nsql-llama-2-7B",
-            "h2ogpt-sql-sqlcoder2": "defog/sqlcoder2",
-        }
-        model_name = model_choices_map[model_type]
-        logger.info(f"Loading model: {model_name}")
-        device_index = 0
         # Load h2oGPT.SQL model
-        device = {"": device_index} if torch.cuda.is_available() else "cpu" if device == "auto" else device
-        total_memory = int(torch.cuda.get_device_properties(0).total_memory / 1024**3)
-        free_in_GB = int(torch.cuda.mem_get_info()[0] / 1024**3)
-        logger.info(f"Free GPU memory: {free_in_GB}GB")
+        # Index 0 is reserved for the default model
         n_gpus = torch.cuda.device_count()
         logger.info(f"Total GPUs: {n_gpus}")
-        _load_in_8bit = load_in_8bit
+        models = {}
+        tokenizers = {}
 
-        # 22GB (Least requirement on GPU) is a magic number for the current model size.
-        if off_load and re_generate and total_memory < 22:
-            # To prevent the system from crashing in-case memory runs low.
-            # TODO: Performance when offloading to CPU.
-            max_memory = {device_index: f"{4}GB"}
-            logger.info(f"Max Memory: {max_memory}, offloading to CPU")
-            with init_empty_weights():
-                config = AutoConfig.from_pretrained(model_name, cache_dir=cache_path, offload_folder=cache_path)
-                # A blank model with desired config.
-                model = AutoModelForCausalLM.from_config(config)
-                device = infer_auto_device_map(model, max_memory=max_memory)
-                device["lm_head"] = 0
-            _offload_state_dict = True
-            _llm_int8_enable_fp32_cpu_offload = True
-            _load_in_8bit = True
-            load_in_4bit = False
+        def _load_llm(model_type: str, device_index: int = 0, load_in_4bit=True):
+            device = {"": device_index} if torch.cuda.is_available() else "cpu" if device == "auto" else device
+            total_memory = int(torch.cuda.get_device_properties(device_index).total_memory / 1024**3)
+            free_in_GB = int(torch.cuda.mem_get_info(device_index)[0] / 1024**3)
+            logger.info(f"Free GPU memory: {free_in_GB}GB")
+            _load_in_8bit = load_in_8bit
+            model_name = model_type
+            logger.info(f"Loading model: {model_name} on device id: {device_index}")
+
+            # 22GB (Least requirement on GPU) is a magic number for the current model size.
+            if off_load and re_generate and total_memory < 22:
+                # To prevent the system from crashing in-case memory runs low.
+                # TODO: Performance when offloading to CPU.
+                max_memory = {device_index: f"{4}GB"}
+                logger.info(f"Max Memory: {max_memory}, offloading to CPU")
+                with init_empty_weights():
+                    config = AutoConfig.from_pretrained(model_name, cache_dir=cache_path, offload_folder=cache_path)
+                    # A blank model with desired config.
+                    model = AutoModelForCausalLM.from_config(config)
+                    device = infer_auto_device_map(model, max_memory=max_memory)
+                    device["lm_head"] = 0
+                _offload_state_dict = True
+                _llm_int8_enable_fp32_cpu_offload = True
+                _load_in_8bit = True
+                load_in_4bit = False
+            else:
+                max_memory = {device_index: f"{int(free_in_GB)-2}GB"}
+                _offload_state_dict = False
+                _llm_int8_enable_fp32_cpu_offload = False
+
+            if _load_in_8bit and _offload_state_dict and not load_in_4bit:
+                _load_in_8bit = False if "cpu" in device else True
+                logger.debug(
+                    f"Loading in 8 bit mode: {_load_in_8bit} with offloading state: {_llm_int8_enable_fp32_cpu_offload}"
+                )
+                model = AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    cache_dir=cache_path,
+                    device_map=device,
+                    load_in_8bit=_load_in_8bit,
+                    llm_int8_enable_fp32_cpu_offload=_llm_int8_enable_fp32_cpu_offload,
+                    offload_state_dict=_offload_state_dict,
+                    max_memory=max_memory,
+                    offload_folder=f"{cache_path}/weights/",
+                )
+            else:
+                logger.debug(f"Loading in 4 bit mode: {load_in_4bit} with device {device}")
+                nf4_config = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_quant_type="nf4",
+                    bnb_4bit_use_double_quant=True,
+                    bnb_4bit_compute_dtype=torch.bfloat16,
+                )
+
+                model = AutoModelForCausalLM.from_pretrained(
+                    model_name, cache_dir=cache_path, device_map=device, quantization_config=nf4_config
+                )
+                tokenizer = AutoTokenizer.from_pretrained(
+                    model_name, cache_dir=cache_path, device_map=device, use_fast=True
+                )
+                return model, tokenizer
+
+        if not model_type:  # if None, load all models
+            for device_index in range(n_gpus):
+                model_name = list(model_choices_map.values())[device_index]
+                model, tokenizer = _load_llm(model_name, device_index)
+                _name = list(model_choices_map.keys())[device_index]
+                models[_name] = model
+                tokenizers[_name] = tokenizer
         else:
-            max_memory = {device_index: f"{int(free_in_GB)-2}GB"}
-            _offload_state_dict = False
-            _llm_int8_enable_fp32_cpu_offload = False
-
-        if _load_in_8bit and _offload_state_dict and not load_in_4bit:
-            _load_in_8bit = False if "cpu" in device else True
-            logger.debug(
-                f"Loading in 8 bit mode: {_load_in_8bit} with offloading state: {_llm_int8_enable_fp32_cpu_offload}"
-            )
-            model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                cache_dir=cache_path,
-                device_map=device,
-                load_in_8bit=_load_in_8bit,
-                llm_int8_enable_fp32_cpu_offload=_llm_int8_enable_fp32_cpu_offload,
-                offload_state_dict=_offload_state_dict,
-                max_memory=max_memory,
-                offload_folder=f"{cache_path}/weights/",
-            )
-
-        else:
-            logger.debug(f"Loading in 4 bit mode: {load_in_4bit} with device {device}")
-            nf4_config = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_quant_type="nf4",
-                bnb_4bit_use_double_quant=True,
-                bnb_4bit_compute_dtype=torch.bfloat16,
-            )
-
-            model = AutoModelForCausalLM.from_pretrained(
-                model_name, cache_dir=cache_path, device_map=device, quantization_config=nf4_config
-            )
-
-        tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=cache_path, device_map=device, use_fast=True)
-
-        return model, tokenizer
+            model_name = model_choices_map[model_type]
+            d_index = model_device_map[model_type] if n_gpus > 1 else 0
+            model, tokenizer = _load_llm(model_name, d_index)
+            models[model_type] = model
+            tokenizers[model_type] = tokenizer
+        return models, tokenizers
     except Exception as e:
         logger.info(f"An error occurred while loading the model: {e}")
         return None, None
