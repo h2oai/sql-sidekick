@@ -15,8 +15,7 @@ from pandasql import sqldf
 from sentence_transformers import SentenceTransformer
 from sidekick.logger import logger
 from sklearn.metrics.pairwise import cosine_similarity
-from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
-                          BitsAndBytesConfig)
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 model_choices_map = {
     "h2ogpt-sql-sqlcoder2": "defog/sqlcoder2",
@@ -145,7 +144,9 @@ def remove_duplicates(
     return res
 
 
-def save_query(output_path: str, table_name: str, query, response, extracted_entity: Optional[dict] = ""):
+def save_query(
+    output_path: str, table_name: str, query, response, extracted_entity: Optional[dict] = "", is_invalid: bool = False
+):
     _response = response
     # Probably need to find a better way to extra the info rather than depending on key phrases
     if response and "Generated response for question,".lower() in response.lower():
@@ -155,7 +156,11 @@ def save_query(output_path: str, table_name: str, query, response, extracted_ent
     chat_history = {"Query": query, "Answer": _response, "Entity": extracted_entity}
 
     # Persist history for contextual reference wrt to the table.
-    dir_name = f"{output_path}/var/lib/tmp/.cache/{table_name}"
+    dir_name = (
+        f"{output_path}/var/lib/tmp/.cache/{table_name}"
+        if not is_invalid
+        else f"{output_path}/var/lib/tmp/.cache/{table_name}/invalid"
+    )
     make_dir(dir_name)
     with open(f"{dir_name}/history.jsonl", "a") as outfile:
         json.dump(chat_history, outfile)

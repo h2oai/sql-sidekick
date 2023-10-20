@@ -157,6 +157,10 @@ async def chat(q: Q):
             box=ui.box("vertical", height="500px"),
             name="chatbot",
             data=data(fields="content from_user", t="list", size=-50),
+            commands=[
+                ui.command(name="download_accept", label="Download QnA history", icon="Download"),
+                ui.command(name="download_reject", label="Download in-correct QnA history", icon="Download"),
+            ],
         ),
     ),
     add_card(
@@ -170,8 +174,8 @@ async def chat(q: Q):
                         ui.button(
                             name="regenerate",
                             icon="RepeatOne",
-                            caption="Attempts regeneration",
-                            label="Regenerate",
+                            caption="Attempts regeneration of the last response",
+                            label="Try Again",
                             primary=True,
                         ),
                         ui.button(
@@ -182,9 +186,15 @@ async def chat(q: Q):
                         ),
                         ui.button(
                             name="save_conversation",
-                            caption="Saves the conversation for future reference/to improve response",
-                            label="Save",
-                            icon="Save",
+                            caption="Saves the conversation in the history for future reference to improve response",
+                            label="Accept",
+                            icon="Emoji2",
+                        ),
+                        ui.button(
+                            name="save_rejected_conversation",
+                            caption="Saves the disappointed conversation to improve response.",
+                            label="Reject",
+                            icon="EmojiDisappointed",
                         ),
                     ],
                     justify="center",
@@ -629,11 +639,21 @@ async def on_event(q: Q):
         # Refresh response is triggered when user selects a table via dropdown
         event_handled = True
 
-    if q.args.save_conversation or (q.args.chatbot and "save the qna pair:" in q.args.chatbot.lower()):
+    if (
+        q.args.save_conversation
+        or q.args.save_rejected_conversation
+        or (q.args.chatbot and "save the qna pair:" in q.args.chatbot.lower())
+    ):
         question = q.client.query
         _val = q.client.llm_response
         # Currently, any manual input by the user is a Question by default
         table_name = q.user.table_name if q.user.table_name else "default"
+        _is_invalid = True if q.args.save_rejected_conversation else False
+        _msg = (
+            "Conversation saved successfully!"
+            if not _is_invalid
+            else "Sorry, we couldn't get it right, we will try to improve!"
+        )
         if (
             question is not None
             and "SELECT" in question
@@ -642,12 +662,10 @@ async def on_event(q: Q):
             _q = question.lower().split("q:")[1].split("r:")[0].strip()
             _r = question.lower().split("r:")[1].strip()
             logging.info(f"Saving conversation for question: {_q} and response: {_r}")
-            save_query(base_path, table_name, query=_q, response=_r)
-            _msg = "Conversation saved successfully!"
+            save_query(base_path, table_name, query=_q, response=_r, is_invalid=_is_invalid)
         elif question is not None and _val is not None and _val.strip() != "":
             logging.info(f"Saving conversation for question: {question} and response: {_val}")
-            save_query(base_path, table_name, query=question, response=_val)
-            _msg = "Conversation saved successfully!"
+            save_query(base_path, table_name, query=question, response=_val, is_invalid=_is_invalid)
         else:
             _msg = "Sorry, try generating a conversation to save."
         q.page["chat_card"].data += [_msg, False]
