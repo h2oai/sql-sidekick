@@ -85,6 +85,7 @@ Only use the column names from the CREATE TABLE statement.
 Adhere to these rules:
 - **Deliberately go through the question and database schema word by word** to appropriately answer the question
 - **Use Table Aliases** to prevent ambiguity. For example, `SELECT table1.col1, table2.col1 FROM table1 JOIN table2 ON table1.id = table2.id`.
+- Only use supplied table names: **{table_name}** for generation
 - When creating a ratio, always cast the numerator as float
 - Use COUNT(1) instead of COUNT(*)
 - If the question is asking for a rate, use COUNT to compute percentage
@@ -95,8 +96,10 @@ Adhere to these rules:
 - When using DESC keep NULLs at the end
 - If JSONB format found in Table schema, do pattern matching on keywords from the question and use SQL functions such as ->> or ->
 
+
+
 ### Input:
-For SQL TABLE '{table_name}' with sample question/answer pairs,\n({sample_queries}), create a SQL query to answer the following question:\n{question_txt}.
+For SQL TABLE '{table_name}' with sample question/answer pairs,\n({sample_queries}), create a SQL (dialect:SQLite) query to answer the following question:\n{question_txt}.
 This query will run on a database whose schema is represented in this string:
 CREATE TABLE '{table_name}' ({column_info}
 );
