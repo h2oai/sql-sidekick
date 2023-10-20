@@ -670,6 +670,31 @@ async def on_event(q: Q):
             _msg = "Sorry, try generating a conversation to save."
         q.page["chat_card"].data += [_msg, False]
         event_handled = True
+    elif q.args.download_accept:
+        result_path = f"{base_path}/var/lib/tmp/.cache/{q.user.table_name}/history.jsonl"
+        # Check if path exists
+        if Path(result_path).exists():
+            logging.info(f"Downloading accepted QnA history for table: {q.user.table_name}")
+            (server_path,) = await q.site.upload([result_path])
+            q.page["meta"].script = ui.inline_script(f'window.open("{server_path}", "_blank");')
+            os.remove(result_path)
+            _msg = "Download complete!"
+        else:
+            _msg = "No history found!"
+        q.page["chat_card"].data += [_msg, False]
+        event_handled = True
+    elif q.args.download_reject:
+        logging.info(f"Downloading rejected QnA history for table: {q.user.table_name}")
+        result_path = f"{base_path}/var/lib/tmp/.cache/{q.user.table_name}/invalid/history.jsonl"
+        if Path(result_path).exists():
+            (server_path,) = await q.site.upload([result_path])
+            q.page["meta"].script = ui.inline_script(f'window.open("{server_path}", "_blank");')
+            os.remove(result_path)
+            _msg = "Download complete!"
+        else:
+            _msg = "No history found!"
+        q.page["chat_card"].data += [_msg, False]
+        event_handled = True
     elif q.args.regenerate or q.args.regenerate_with_options:
         await chatbot(q)
         event_handled = True
