@@ -4,9 +4,9 @@
 
 **Actively Being Maintained:** Yes (Demo release: _In active RnD_)
 
-**Last Updated:** September, 2023
+**Last Updated:** October, 2023
 
 **Allows uploading and using new model and data:** Yes
 
 **Detailed Description:**
-An experimental demo to evaluate text-to-SQL capabilities of large language models (LLMs) to enable QnA for tabular data
+An experimental demo to evaluate text-to-SQL capabilities of large language models (LLMs) to enable QnA for structured data.

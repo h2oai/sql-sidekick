@@ -119,7 +119,7 @@ async def chat(q: Q):
         ui.form_card(
             box="horizontal",
             items=[
-                ui.text("Ask your questions:"),
+                ui.text("Ask Questions:"),
                 ui.inline(items=[ui.toggle(name="demo_mode", label="Demo", trigger=True)], justify="end"),
             ],
         ),

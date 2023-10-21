@@ -61,7 +61,7 @@ DEBUGGING_PROMPT = {
 }
 
 NSQL_QUERY_PROMPT = """
-For SQL TABLE '{table_name}' sample question/answer pairs,\n({sample_queries})
+For SQL TABLE '{table_name}' with sample question/answer pairs,\n({sample_queries})
 
 CREATE TABLE '{table_name}'({column_info}
 )
@@ -86,8 +86,9 @@ Adhere to these rules:
 - **Deliberately go through the question and database schema word by word** to appropriately answer the question
 - **Use Table Aliases** to prevent ambiguity. For example, `SELECT table1.col1, table2.col1 FROM table1 JOIN table2 ON table1.id = table2.id`.
 - Only use supplied table names: **{table_name}** for generation
+- Only use column names from the CREATE TABLE statement: **{column_info}** for generation
 - When creating a ratio, always cast the numerator as float
-- Use COUNT(1) instead of COUNT(*)
+- Always use COUNT(1) instead of COUNT(*)
 - If the question is asking for a rate, use COUNT to compute percentage
 - Avoid overly complex SQL queries
 - Avoid using the WITH statement
@@ -95,7 +96,6 @@ Adhere to these rules:
 - Prefer NOT EXISTS to LEFT JOIN ON null id
 - When using DESC keep NULLs at the end
 - If JSONB format found in Table schema, do pattern matching on keywords from the question and use SQL functions such as ->> or ->
-
 
 
 ### Input:
