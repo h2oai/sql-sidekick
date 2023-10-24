@@ -12,7 +12,8 @@ from h2o_wave import Q, app, data, handle_on, main, on, ui
 from h2o_wave.core import expando_to_dict
 from sidekick.prompter import db_setup_api, query_api
 from sidekick.query import SQLGenerator
-from sidekick.utils import get_table_keys, save_query, setup_dir, update_tables, TASK_CHOICE
+from sidekick.utils import (TASK_CHOICE, get_table_keys, save_query, setup_dir,
+                            update_tables)
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
@@ -478,16 +479,12 @@ async def datasets(q: Q):
 
 @on("#documentation")
 async def about(q: Q):
-    q.page["sidebar"].value = "#documentation"
-    clear_cards(q)
+    q.page["meta"].script = ui.inline_script(f"window.open('https://github.com/h2oai/sql-sidekick');")
 
 
 @on("#support")
-async def handle_page4(q: Q):
-    q.page["sidebar"].value = "#support"
-    # When routing, drop all the cards except of the main ones (header, sidebar, meta).
-    # Since this page is interactive, we want to update its card instead of recreating it every time, so ignore 'form' card on drop.
-    clear_cards(q, ["form"])
+async def on_support(q: Q):
+    q.page["meta"].script = ui.inline_script(f"window.open('https://github.com/h2oai/sql-sidekick/issues');")
 
 
 @on("submit_table")
