@@ -15,18 +15,23 @@ from pandasql import sqldf
 from sentence_transformers import SentenceTransformer
 from sidekick.logger import logger
 from sklearn.metrics.pairwise import cosine_similarity
-from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
+                          BitsAndBytesConfig)
 
-model_choices_map = {
+MODEL_CHOICE_MAP = {
     "h2ogpt-sql-sqlcoder2": "defog/sqlcoder2",
     "h2ogpt-sql-nsql-llama-2-7B": "NumbersStation/nsql-llama-2-7B",
 }
 
-model_device_map = {
+MODEL_DEVICE_MAP = {
     "h2ogpt-sql-sqlcoder2": 0,
     "h2ogpt-sql-nsql-llama-2-7B": 1,
 }
 
+TASK_CHOICE = {
+    "q_a": "Question/Answering",
+    "sqld": "SQL Debugging",
+}
 
 def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, device: Optional[str] = None):
     # Reference:
@@ -290,7 +295,7 @@ def is_resource_low(model_name: str):
         off_load = False
     else:
         n_gpus = torch.cuda.device_count()
-        device_index = model_device_map[model_name] if model_name and n_gpus > 1 else 0
+        device_index = MODEL_DEVICE_MAP[model_name] if model_name and n_gpus > 1 else 0
         logger.debug(f"Information on device: {device_index}")
         free_in_GB = int(torch.cuda.mem_get_info(device_index)[0] / 1024**3)
         total_memory = int(torch.cuda.get_device_properties(device_index).total_memory / 1024**3)
@@ -382,14 +387,14 @@ def load_causal_lm_model(
 
         if not model_type:  # if None, load all models
             for device_index in range(n_gpus):
-                model_name = list(model_choices_map.values())[device_index]
+                model_name = list(MODEL_CHOICE_MAP.values())[device_index]
                 model, tokenizer = _load_llm(model_name, device_index)
-                _name = list(model_choices_map.keys())[device_index]
+                _name = list(MODEL_CHOICE_MAP.keys())[device_index]
                 models[_name] = model
                 tokenizers[_name] = tokenizer
         else:
-            model_name = model_choices_map[model_type]
-            d_index = model_device_map[model_type] if n_gpus > 1 else 0
+            model_name = MODEL_CHOICE_MAP[model_type]
+            d_index = MODEL_DEVICE_MAP[model_type] if n_gpus > 1 else 0
             model, tokenizer = _load_llm(model_name, d_index)
             models[model_type] = model
             tokenizers[model_type] = tokenizer

@@ -452,6 +452,9 @@ def query_api(
             logger.info("Executing user provided SQL without re-generation...")
             res = question.strip().lower().split("execute sql:")[1].strip()
         else:
+            _check_cond = question.strip().lower().split("execute sql:")
+            if len(_check_cond) > 1:
+                question = question.strip().lower().split("execute sql:")[1].strip()
             res, alt_res = sql_g.generate_sql(table_names, question, model_name=model_name, _dialect=db_dialect)
         logger.info(f"Input query: {question}")
         logger.info(f"Generated response:\n\n{res}")
