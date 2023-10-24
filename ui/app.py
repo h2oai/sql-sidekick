@@ -12,7 +12,7 @@ from h2o_wave import Q, app, data, handle_on, main, on, ui
 from h2o_wave.core import expando_to_dict
 from sidekick.prompter import db_setup_api, query_api
 from sidekick.query import SQLGenerator
-from sidekick.utils import get_table_keys, save_query, setup_dir, update_tables
+from sidekick.utils import get_table_keys, save_query, setup_dir, update_tables, TASK_CHOICE
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
@@ -91,7 +91,7 @@ def clear_cards(q, ignore: Optional[List[str]] = []) -> None:
 async def chat(q: Q):
     q.page["sidebar"].value = "#chat"
 
-    if q.args.table_dropdown or q.args.model_choice_dropdown:
+    if q.args.table_dropdown or q.args.model_choice_dropdown or q.args.task_dropdown:
         # If a table/model is selected, the trigger causes refresh of the page
         # so we update chat history with table name selection and return
         # avoiding re-drawing.
@@ -113,6 +113,9 @@ async def chat(q: Q):
         ui.choice("h2ogpt-sql-sqlcoder2", "h2ogpt-sql-sqlcoder2"),
     ]
     q.user.model_choice_dropdown = "h2ogpt-sql-sqlcoder2"
+
+    task_choices = [ui.choice("q_a", "Question/Answering"), ui.choice("sqld", "SQL Debugging")]
+    q.user.task_choice_dropdown = "q_a"
     add_card(
         q,
         "background_card",
@@ -123,7 +126,7 @@ async def chat(q: Q):
                 ui.inline(items=[ui.toggle(name="demo_mode", label="Demo", trigger=True)], justify="end"),
             ],
         ),
-    )
+    ),
 
     add_card(
         q,
@@ -149,7 +152,24 @@ async def chat(q: Q):
                 ),
             ],
         ),
-    )
+    ),
+    add_card(
+        q,
+        "task_choice",
+        ui.form_card(
+            box="vertical",
+            items=[
+                ui.dropdown(
+                    name="task_dropdown",
+                    label="Task",
+                    required=True,
+                    choices=task_choices,
+                    value=q.user.task_choice_dropdown if q.user.task_choice_dropdown else None,
+                    trigger=True,
+                )
+            ],
+        ),
+    ),
     add_card(
         q,
         "chat_card",
@@ -228,11 +248,15 @@ async def chatbot(q: Q):
     if (
         f"Table {q.user.table_dropdown} selected" in q.args.chatbot
         or f"Model {q.user.model_choice_dropdown} selected" in q.args.chatbot
+        or f"Task {q.user.task_dropdown} selected" in q.args.chatbot
     ):
         return
 
     # Append bot response.
     question = f"{q.args.chatbot}"
+    # Check on task choice.
+    if q.user.task_dropdown == "sqld":
+        question = f"Execute SQL:\n{q.args.chatbot}"
     logging.info(f"Question: {question}")
 
     # For regeneration, currently there are 2 modes
@@ -638,7 +662,13 @@ async def on_event(q: Q):
         q.args.chatbot = f"Model {q.user.model_choice_dropdown} selected"
         # Refresh response is triggered when user selects a table via dropdown
         event_handled = True
-
+    if q.args.task_dropdown and not q.args.chatbot and q.user.task_dropdown != q.args.task_dropdown:
+        logging.info(f"User selected task: {q.args.task_dropdown}")
+        q.user.task_dropdown = q.args.task_dropdown
+        q.page["task_choice"].task_dropdown.value = q.user.task_dropdown
+        q.args.chatbot = f"Task '{TASK_CHOICE[q.user.task_dropdown]}' selected"
+        # Refresh response is triggered when user selects a table via dropdown
+        event_handled = True
     if (
         q.args.save_conversation
         or q.args.save_rejected_conversation
