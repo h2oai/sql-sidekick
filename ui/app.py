@@ -555,13 +555,16 @@ async def init(q: Q) -> None:
         items=[
             ui.nav_group(
                 "Menu",
-                items=[ui.nav_item(name="#datasets", label="Upload Dataset"), ui.nav_item(name="#chat", label="Chat")],
+                items=[
+                    ui.nav_item(name="#datasets", label="Upload Dataset", icon="Database"),
+                    ui.nav_item(name="#chat", label="Chat", icon="Chat"),
+                ],
             ),
             ui.nav_group(
                 "Help",
                 items=[
-                    ui.nav_item(name="#documentation", label="Documentation"),
-                    ui.nav_item(name="#support", label="Support"),
+                    ui.nav_item(name="#documentation", label="Documentation", icon="TextDocument"),
+                    ui.nav_item(name="#support", label="Support", icon="Telemarketer"),
                 ],
             ),
         ],
