@@ -99,7 +99,7 @@ Adhere to these rules:
 
 
 ### Input:
-For SQL TABLE '{table_name}' with sample question/answer pairs,\n({sample_queries}), create a SQL (dialect:SQLite) query to answer the following question:\n{question_txt}.
+For SQL TABLE '{table_name}' with sample question/answer pairs,\n({sample_queries}), create a valid SQL (dialect:SQLite) query to answer the following question:\n{question_txt}.
 This query will run on a database whose schema is represented in this string:
 CREATE TABLE '{table_name}' ({column_info}
 );

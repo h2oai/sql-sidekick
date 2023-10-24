@@ -584,6 +584,10 @@ class SQLGenerator:
                         _out = output_re.sequences[sorted_idx]
                         res = tokenizer.decode(_out[input_length:], skip_special_tokens=True)
                         result = res.replace("table_name", _table_name)
+                        # Remove the last semi-colon if exists at the end
+                        # we will add it later
+                        if result.endswith(";"):
+                            result = result.replace(";", "")
                         if "LIMIT".lower() not in result.lower():
                             res = "SELECT " + result.strip() + " LIMIT 100;"
                         else:
@@ -602,6 +606,8 @@ class SQLGenerator:
                 # COLLATE NOCASE is used to ignore case sensitivity, this might be specific to sqlite
                 _temp = _res.replace("table_name", table_name).split(";")[0]
 
+                if _temp.endswith(";"):
+                    _temp = _temp.replace(";", "")
                 if "LIMIT".lower() not in _temp.lower():
                     res = "SELECT " + _temp.strip() + " LIMIT 100;"
                 else:
