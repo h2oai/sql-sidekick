@@ -79,9 +79,9 @@ def generate_text_embeddings(model_path: str, x, model_obj=None, batch_size: int
     if model_obj is None:
         model_obj = load_embedding_model(model_path, device)
 
-    _sentences = [["Represent the Financial question for retrieving duplicate examples: ", _item] for _item in x]
+    _sentences = [["Represent this sentence for retrieving duplicate examples: ", _item] for _item in x]
 
-    res = model_obj.encode(_sentences)
+    res = model_obj.encode(_sentences, normalize_embeddings=True)
     return res
 
 
