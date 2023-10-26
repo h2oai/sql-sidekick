@@ -12,26 +12,17 @@ import sqlparse
 import torch
 import torch.nn.functional as F
 from langchain import OpenAI
-from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
+from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
+                         LLMPredictor, ServiceContext, SQLDatabase)
 from llama_index.indices.struct_store import SQLContextContainerBuilder
-from sidekick.configs.prompt_template import (
-    DEBUGGING_PROMPT,
-    NSQL_QUERY_PROMPT,
-    QUERY_PROMPT,
-    STARCODER2_PROMPT,
-    TASK_PROMPT,
-)
+from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
+                                              NSQL_QUERY_PROMPT, QUERY_PROMPT,
+                                              STARCODER2_PROMPT, TASK_PROMPT)
 from sidekick.logger import logger
-from sidekick.utils import (
-    _check_file_info,
-    filter_samples,
-    is_resource_low,
-    load_causal_lm_model,
-    load_embedding_model,
-    make_dir,
-    read_sample_pairs,
-    remove_duplicates,
-)
+from sidekick.utils import (_check_file_info, is_resource_low,
+                            load_causal_lm_model, load_embedding_model,
+                            make_dir, re_rank, read_sample_pairs,
+                            remove_duplicates, semantic_search)
 from sqlalchemy import create_engine
 
 
@@ -259,7 +250,7 @@ class SQLGenerator:
 
             # Filter closest samples to the input question, threshold = 0.45
             filtered_context = (
-                filter_samples(
+                semantic_search(
                     input_question,
                     updated_context,
                     m_path,
@@ -375,7 +366,7 @@ class SQLGenerator:
                 }
 
                 m_path = f"{self.path}/models/sentence_transformers/"
-                filtered_context = filter_samples(
+                filtered_context = semantic_search(
                     model_obj=self.similarity_model,
                     input_q=input_question,
                     probable_qs=list(_context.keys()),
@@ -401,7 +392,7 @@ class SQLGenerator:
 
                 # Filter closest samples to the input question, threshold = 0.9
                 filtered_context = (
-                    filter_samples(
+                    semantic_search(
                         input_q=input_question,
                         probable_qs=context_queries,
                         model_path=m_path,
@@ -414,9 +405,12 @@ class SQLGenerator:
                 )
                 logger.info(f"Number of possible contextual queries to question: {len(filtered_context)}")
                 # If QnA pairs > 5, we keep top 5 for focused context
+                # Most relevant match is closest to the generation post re-ranking
                 _samples = filtered_context
+                _samples = re_rank(input_question, _samples)
                 if len(filtered_context) > 5:
                     _samples = filtered_context[0:5][::-1]
+                    _samples = re_rank(input_question, _samples)
 
                 qna_samples = "\n".join(_samples)
 

@@ -33,6 +33,7 @@ TASK_CHOICE = {
     "sqld": "SQL Debugging",
 }
 
+
 def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, device: Optional[str] = None):
     # Reference:
     # 1. https://www.sbert.net/docs/pretrained_models.html#sentence-embedding-models
@@ -85,7 +86,19 @@ def generate_text_embeddings(model_path: str, x, model_obj=None, batch_size: int
     return res
 
 
-def filter_samples(
+def re_rank(question: str, input_x: list):
+    # Currently using question length as final step to re-rank, might change in future
+    input_pqs = [_se.strip().lower().split("answer:")[0].strip() for _se in input_x[0:5]]
+    _dist = np.array([len(_in.split()) for _in in input_pqs])
+
+    query_len = len(question.lower().split())
+    logger.debug(f"Question length: {query_len}")
+    sorted_ = np.argsort(abs(_dist - query_len))[::-1].tolist()
+    res = list(np.array(input_x)[sorted_])
+    return res
+
+
+def semantic_search(
     input_q: str,
     probable_qs: list,
     model_path: str,
