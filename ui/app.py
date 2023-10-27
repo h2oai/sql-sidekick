@@ -232,6 +232,8 @@ One could start by learning about the dataset by asking questions like:
 
         q.args.chatbot = _msg
         q.page["chat_card"].data += [q.args.chatbot, False]
+    if q.args.demo_mode:
+        q.page["chat_card"].data += [q.args.chatbot, False]
     logging.info(f"Chatbot response: {q.args.chatbot}")
 
 
@@ -502,6 +504,7 @@ async def submit_table(q: Q):
         q.page["select_tables"].table_dropdown.value = table_name
     else:
         q.page["select_tables"].table_dropdown.value = q.user.table_name
+    await q.page.save()
 
 
 async def init(q: Q) -> None:
@@ -754,6 +757,10 @@ async def on_event(q: Q):
             f"Demo mode is enabled.\nTry below example questions for the selected data to get started,\n{sample_qs}"
         )
         q.page["chat_card"].data += [q.args.chatbot, True]
+        q.args.table_dropdown = None
+        q.args.model_choice_dropdown = None
+        q.args.task_dropdown = None
+        await chat(q)
         event_handled = True
     else:  # default chatbot event
         await handle_on(q)
