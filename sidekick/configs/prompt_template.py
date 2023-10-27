@@ -104,7 +104,18 @@ This query will run on a database whose schema is represented in this string:
 CREATE TABLE '{table_name}' ({column_info}
 );
 
--- Table '{table_name}', {context}, has sample values ({data_info_detailed})
+-- Table '{table_name}', with following {context}, has sample values ({data_info_detailed})
 
 ### Response:
 SELECT"""
+
+
+AquilaSQL7B_PROMPT = """
+A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions related to **{table_name}**.
+###Human:
+Please write sql query statements for '{table_name}' with sample question/answer pairs,\n({sample_queries}) for the following questions:\n{question_txt}.
+This query will run on a database whose schema is represented in this string:
+The table name is '{table_name}' and the the attributes it contains are ({column_info}
+);
+Table '{table_name}', with following {context}, has sample values ({data_info_detailed})
+###Assistant:"""

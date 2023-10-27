@@ -12,8 +12,7 @@ from h2o_wave import Q, app, data, handle_on, main, on, ui
 from h2o_wave.core import expando_to_dict
 from sidekick.prompter import db_setup_api, query_api
 from sidekick.query import SQLGenerator
-from sidekick.utils import (TASK_CHOICE, get_table_keys, save_query, setup_dir,
-                            update_tables)
+from sidekick.utils import TASK_CHOICE, MODEL_CHOICE_MAP, get_table_keys, save_query, setup_dir, update_tables
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
@@ -109,13 +108,10 @@ async def chat(q: Q):
                 original_name = meta_data[table].get("original_name", q.user.original_name)
                 table_names.append(ui.choice(table, f"{original_name}"))
 
-    model_choices = [
-        ui.choice("h2ogpt-sql-nsql-llama-2-7B", "h2ogpt-sql-nsql-llama-2-7B"),
-        ui.choice("h2ogpt-sql-sqlcoder2", "h2ogpt-sql-sqlcoder2"),
-    ]
+    model_choices = [ui.choice(_key, _val) for _key, _val in MODEL_CHOICE_MAP.items()]
     q.user.model_choice_dropdown = "h2ogpt-sql-sqlcoder2"
 
-    task_choices = [ui.choice("q_a", "Question/Answering"), ui.choice("sqld", "SQL Debugging")]
+    task_choices = [ui.choice(_k, _v) for _k, _v in TASK_CHOICE.items()]
     q.user.task_choice_dropdown = "q_a"
     add_card(
         q,

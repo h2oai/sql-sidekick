@@ -21,11 +21,13 @@ from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
 MODEL_CHOICE_MAP = {
     "h2ogpt-sql-sqlcoder2": "defog/sqlcoder2",
     "h2ogpt-sql-nsql-llama-2-7B": "NumbersStation/nsql-llama-2-7B",
+    "h2ogpt-sql-AquilaSQL-7B-bilingual": "BAAI/AquilaSQL-7B",
 }
 
 MODEL_DEVICE_MAP = {
     "h2ogpt-sql-sqlcoder2": 0,
     "h2ogpt-sql-nsql-llama-2-7B": 1,
+    "h2ogpt-sql-AquilaSQL-7B-bilingual": 2,
 }
 
 TASK_CHOICE = {
@@ -319,7 +321,7 @@ def is_resource_low(model_name: str):
         return off_load
 
 
-def load_causal_lm_model(
+def load_model(
     model_type: str,
     cache_path: str,
     device: str,
@@ -352,9 +354,11 @@ def load_causal_lm_model(
                 max_memory = {device_index: f"{4}GB"}
                 logger.info(f"Max Memory: {max_memory}, offloading to CPU")
                 with init_empty_weights():
-                    config = AutoConfig.from_pretrained(model_name, cache_dir=cache_path, offload_folder=cache_path)
+                    config = AutoConfig.from_pretrained(
+                        model_name, cache_dir=cache_path, trust_remote_code=True, offload_folder=cache_path
+                    )
                     # A blank model with desired config.
-                    model = AutoModelForCausalLM.from_config(config)
+                    model = AutoModelForCausalLM.from_config(config, trust_remote_code=True)
                     device = infer_auto_device_map(model, max_memory=max_memory)
                     device["lm_head"] = 0
                 _offload_state_dict = True
@@ -391,10 +395,14 @@ def load_causal_lm_model(
                 )
 
                 model = AutoModelForCausalLM.from_pretrained(
-                    model_name, cache_dir=cache_path, device_map=device, quantization_config=nf4_config
+                    model_name,
+                    cache_dir=cache_path,
+                    device_map=device,
+                    quantization_config=nf4_config,
+                    trust_remote_code=True,
                 )
                 tokenizer = AutoTokenizer.from_pretrained(
-                    model_name, cache_dir=cache_path, device_map=device, use_fast=True
+                    model_name, cache_dir=cache_path, device_map=device, use_fast=True, trust_remote_code=True
                 )
                 return model, tokenizer
 

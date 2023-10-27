@@ -17,12 +17,13 @@ from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
 from llama_index.indices.struct_store import SQLContextContainerBuilder
 from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
                                               NSQL_QUERY_PROMPT, QUERY_PROMPT,
-                                              STARCODER2_PROMPT, TASK_PROMPT)
+                                              STARCODER2_PROMPT, TASK_PROMPT,
+                                              AquilaSQL7B_PROMPT)
 from sidekick.logger import logger
 from sidekick.utils import (_check_file_info, is_resource_low,
-                            load_causal_lm_model, load_embedding_model,
-                            make_dir, re_rank, read_sample_pairs,
-                            remove_duplicates, semantic_search)
+                            load_embedding_model, load_model, make_dir,
+                            re_rank, read_sample_pairs, remove_duplicates,
+                            semantic_search)
 from sqlalchemy import create_engine
 
 
@@ -65,7 +66,7 @@ class SQLGenerator:
         if cls._instance is None or (cls._instance and not cls._instance.models.get(model_name, None)):
             if cls._instance is None:
                 cls._instance = super().__new__(cls)
-            cls._instance.models, cls._instance.tokenizers = load_causal_lm_model(
+            cls._instance.models, cls._instance.tokenizers = load_model(
                 model_name,
                 cache_path=f"{job_path}/models/",
                 device=device,
@@ -454,6 +455,8 @@ class SQLGenerator:
                 query_prompt_format = STARCODER2_PROMPT
                 if model_name == "h2ogpt-sql-nsql-llama-2-7B":
                     query_prompt_format = NSQL_QUERY_PROMPT
+                elif model_name == "h2ogpt-sql-AquilaSQL-7B-bilingual":
+                    query_prompt_format = AquilaSQL7B_PROMPT
 
                 query = query_prompt_format.format(
                     table_name=_table_name,
@@ -498,16 +501,19 @@ class SQLGenerator:
                 # Greedy search for quick response
                 model.eval()
                 device_type = "cuda" if torch.cuda.is_available() else "cpu"
+                stop_tokens = ["###", "[UNK]", "</s>", "<|endoftext|>"]
 
                 if not self.is_regenerate_with_options and not self.is_regenerate:
                     # Greedy decoding
                     output = model.generate(
                         **inputs.to(device_type),
-                        max_new_tokens=300,
+                        max_new_tokens=512,
                         temperature=0.5,
                         output_scores=True,
                         do_sample=True,
                         return_dict_in_generate=True,
+                        eos_token_id=100007,
+                        bad_words_ids=[[tokenizer.encode(token)[0] for token in stop_tokens]],
                     )
 
                     generated_tokens = output.sequences[:, input_length:][0]
