@@ -357,6 +357,7 @@ async def fileupload(q: Q):
     sample_schema = q.args.data_schema
     sample_qa = q.args.sample_qa
 
+    remove_chars = [" ", "-"]
     org_table_name = usr_table_name = None
     if (
         q.args.table_name == "" or q.args.table_name is None and sample_data
@@ -366,7 +367,9 @@ async def fileupload(q: Q):
         q.args.table_name = org_table_name
     if q.args.table_name:
         org_table_name = q.args.table_name
-        usr_table_name = q.args.table_name.strip().lower().replace(" ", "_")
+        usr_table_name = org_table_name.strip().lower()
+        for _c in remove_chars:
+            usr_table_name = usr_table_name.replace(_c, "_")
 
     logging.info(f"Upload initiated for {org_table_name} with scheme input: {sample_schema}")
     if sample_data is None:
@@ -753,7 +756,7 @@ async def on_event(q: Q):
         6. What is the average sleep duration for each age group?
         7. What is the effect of Physical Activity Level on Quality of Sleep?
         """
-        q.args.chatbot = (
+        q.args.chatbot += (
             f"Demo mode is enabled.\nTry below example questions for the selected data to get started,\n{sample_qs}"
         )
         q.page["chat_card"].data += [q.args.chatbot, True]
