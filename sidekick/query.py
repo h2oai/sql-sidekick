@@ -74,6 +74,7 @@ class SQLGenerator:
             )
             cls._instance.model_name = "h2ogpt-sql-sqlcoder2" if not model_name else model_name
             model_embed_path = f"{job_path}/models/sentence_transformers"
+            cls._instance.models[cls._instance.model_name].current_temperature = 0.5
             device = "cuda" if torch.cuda.is_available() else "cpu" if device == "auto" else device
             cls._instance.similarity_model = load_embedding_model(model_path=model_embed_path, device=device)
         return cls._instance
@@ -499,11 +500,20 @@ class SQLGenerator:
                 model.eval()
                 device_type = "cuda" if torch.cuda.is_available() else "cpu"
 
+                possible_temp_gt_5 = [0.6, 0.75, 0.8, 0.9, 1.0]
+                possible_temp_lt_5 = [0.1, 0.2, 0.3, 0.4]
+                random_temperature = model.current_temperature
+                random_seed = random.randint(0, 50)
+                torch.manual_seed(random_seed)
+                if model.current_temperature >= 0.5:
+                    random_temperature = np.random.choice(possible_temp_lt_5, 1)[0]
+                else:
+                    random_temperature = np.random.choice(possible_temp_gt_5, 1)[0]
                 if not self.is_regenerate_with_options and not self.is_regenerate:
                     # Greedy decoding
                     output = model.generate(
                         **inputs.to(device_type),
-                        max_new_tokens=300,
+                        max_new_tokens=512,
                         temperature=0.5,
                         output_scores=True,
                         do_sample=True,
@@ -514,31 +524,24 @@ class SQLGenerator:
                 elif self.is_regenerate and not self.is_regenerate_with_options:
                     # throttle temperature for different result
                     logger.info("Regeneration requested on previous query ...")
-                    random_seed = random.randint(0, 50)
-                    torch.manual_seed(random_seed)
-                    possible_temp_choice = [0.1, 0.2, 0.3, 0.6, 0.75, 0.9, 1.0]
-                    random_temperature = np.random.choice(possible_temp_choice, 1)[0]
                     logger.debug(f"Selected temperature for fast regeneration : {random_temperature}")
                     output = model.generate(
                         **inputs.to(device_type),
-                        max_new_tokens=300,
+                        max_new_tokens=512,
                         temperature=random_temperature,
                         output_scores=True,
                         do_sample=True,
                         return_dict_in_generate=True,
                     )
                     generated_tokens = output.sequences[:, input_length:][0]
+                    model.current_temperature = random_temperature
                 else:
                     logger.info("Regeneration with options requested on previous query ...")
                     # Diverse beam search decoding to explore more options
-                    random_seed = random.randint(0, 50)
-                    torch.manual_seed(random_seed)
-                    possible_temp_choice = [0.1, 0.3, 0.5, 0.6, 0.75, 0.9, 1.0]
-                    random_temperature = np.random.choice(possible_temp_choice, 1)[0]
                     logger.debug(f"Selected temperature for diverse beam search: {random_temperature}")
                     output_re = model.generate(
                         **inputs.to(device_type),
-                        max_new_tokens=300,
+                        max_new_tokens=512,
                         temperature=random_temperature,
                         top_k=5,
                         top_p=0.9,
