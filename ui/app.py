@@ -343,6 +343,7 @@ async def chatbot(q: Q):
 @on("file_upload")
 async def fileupload(q: Q):
     q.page["dataset"].error_bar.visible = False
+    q.page["dataset"].error_upload_bar.visible = False
     q.page["dataset"].success_bar.visible = False
     q.page["dataset"].progress_bar.visible = True
 
@@ -360,7 +361,7 @@ async def fileupload(q: Q):
     remove_chars = [" ", "-"]
     org_table_name = usr_table_name = None
     if (
-        q.args.table_name == "" or q.args.table_name is None and sample_data
+        (q.args.table_name == "" or q.args.table_name is None) and sample_data and len(sample_data) > 0
     ):  # User did not provide a table name, use the filename as table name
         org_table_name = sample_data[0].split(".")[0].split("/")[-1]
         logging.info(f"Using provided filename as table name: {org_table_name}")
@@ -374,6 +375,7 @@ async def fileupload(q: Q):
     logging.info(f"Upload initiated for {org_table_name} with scheme input: {sample_schema}")
     if sample_data is None:
         q.page["dataset"].error_bar.visible = True
+        q.page["dataset"].error_upload_bar.visible = False
         q.page["dataset"].progress_bar.visible = False
     else:
         if sample_data:
@@ -396,27 +398,39 @@ async def fileupload(q: Q):
             "samples_path": usr_samples_path,
             "samples_qa": usr_sample_qa,
         }
-        logging.info(f"Table metadata: {table_metadata}")
-        update_tables(f"{tmp_path}/data/tables.json", table_metadata)
+        try:
+            logging.info(f"Table metadata: {table_metadata}")
+            update_tables(f"{tmp_path}/data/tables.json", table_metadata)
 
-        q.user.table_name = usr_table_name
-        q.user.table_samples_path = usr_samples_path
-        q.user.table_info_path = usr_info_path
-        q.user.sample_qna_path = usr_sample_qa
+            q.user.table_name = usr_table_name
+            q.user.table_samples_path = usr_samples_path
+            q.user.table_info_path = usr_info_path
+            q.user.sample_qna_path = usr_sample_qa
 
-        db_resp = db_setup_api(
-            db_name=q.user.db_name,
-            hostname=q.user.host_name,
-            user_name=q.user.user_name,
-            password=q.user.password,
-            port=q.user.port,
-            table_info_path=q.user.table_info_path,
-            table_samples_path=q.user.table_samples_path,
-            table_name=q.user.table_name,
-        )
-        logging.info(f"DB updates: \n {db_resp}")
-        q.page["dataset"].progress_bar.visible = False
-        q.page["dataset"].success_bar.visible = True
+            db_resp = db_setup_api(
+                db_name=q.user.db_name,
+                hostname=q.user.host_name,
+                user_name=q.user.user_name,
+                password=q.user.password,
+                port=q.user.port,
+                table_info_path=q.user.table_info_path,
+                table_samples_path=q.user.table_samples_path,
+                table_name=q.user.table_name,
+            )
+            logging.info(f"DB updates: \n {db_resp}")
+            if "error" in str(db_resp).lower():
+                q.page["dataset"].error_upload_bar.visible = True
+                q.page["dataset"].error_bar.visible = False
+                q.page["dataset"].progress_bar.visible = False
+            else:
+                q.page["dataset"].progress_bar.visible = False
+                q.page["dataset"].success_bar.visible = True
+        except Exception as e:
+            logging.error(f"Something went wrong while uploading the dataset: {e}")
+            q.page["dataset"].error_upload_bar.visible = True
+            q.page["dataset"].error_bar.visible = False
+            q.page["dataset"].progress_bar.visible = False
+            return
 
 
 @on("#datasets")
@@ -434,7 +448,13 @@ async def datasets(q: Q):
                 ui.message_bar(
                     name="error_bar",
                     type="error",
-                    text="Please input table name, data & schema files to upload!",
+                    text="Please input table name and upload data to get started!",
+                    visible=False,
+                ),
+                ui.message_bar(
+                    name="error_upload_bar",
+                    type="error",
+                    text="Upload failed; something went wrong. Please check the dataset name/column name for special characters and try again!",
                     visible=False,
                 ),
                 ui.message_bar(name="success_bar", type="success", text="Files Uploaded Successfully!", visible=False),
