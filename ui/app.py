@@ -99,7 +99,8 @@ async def chat(q: Q):
         q.page["chat_card"].data += [q.args.chatbot, False]
         return
 
-    clear_cards(q)  # When routing, drop all the cards except of the main ones (header, sidebar, meta).
+    if not q.args.chatbot:
+        clear_cards(q)  # When routing, drop all the cards except of the main ones (header, sidebar, meta).
     table_names = []
     tables, _ = get_table_keys(f"{tmp_path}/data/tables.json", None)
     if len(tables) > 0:
@@ -171,19 +172,21 @@ async def chat(q: Q):
             ],
         ),
     ),
-    add_card(
-        q,
-        "chat_card",
-        ui.chatbot_card(
-            box=ui.box("vertical", height="500px"),
-            name="chatbot",
-            data=data(fields="content from_user", t="list", size=-50),
-            commands=[
-                ui.command(name="download_accept", label="Download QnA history", icon="Download"),
-                ui.command(name="download_reject", label="Download in-correct QnA history", icon="Download"),
-            ],
+    if not q.args.chatbot:
+        add_card(
+            q,
+            "chat_card",
+            ui.chatbot_card(
+                box=ui.box("vertical", height="500px"),
+                name="chatbot",
+                data=data(fields="content from_user", t="list", size=-50),
+                commands=[
+                    ui.command(name="download_accept", label="Download QnA history", icon="Download"),
+                    ui.command(name="download_reject", label="Download in-correct QnA history", icon="Download"),
+                ],
+                events=["scroll"],
+            ),
         ),
-    ),
     add_card(
         q,
         "additional_actions",
@@ -229,10 +232,7 @@ async def chat(q: Q):
 To get started, please select a table from the dropdown and ask your question.
 One could start by learning about the dataset by asking questions like:
 - Describe data."""
-
         q.args.chatbot = _msg
-        q.page["chat_card"].data += [q.args.chatbot, False]
-    if q.args.demo_mode:
         q.page["chat_card"].data += [q.args.chatbot, False]
     logging.info(f"Chatbot response: {q.args.chatbot}")
 
@@ -776,10 +776,10 @@ async def on_event(q: Q):
         6. What is the average sleep duration for each age group?
         7. What is the effect of Physical Activity Level on Quality of Sleep?
         """
-        q.args.chatbot += (
+        q.args.chatbot = (
             f"Demo mode is enabled.\nTry below example questions for the selected data to get started,\n{sample_qs}"
         )
-        q.page["chat_card"].data += [q.args.chatbot, True]
+        q.page["chat_card"].data += [q.args.chatbot, False]
         q.args.table_dropdown = None
         q.args.model_choice_dropdown = None
         q.args.task_dropdown = None

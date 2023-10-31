@@ -1,4 +1,3 @@
-import multiprocessing
 import os
 import shlex
 import subprocess
@@ -9,20 +8,12 @@ from huggingface_hub import snapshot_download
 print(f"Download model...")
 base_path = (Path(__file__).parent).resolve()
 
-MODEL_CHOICE_MAP = {
-    "h2ogpt-sql-sqlcoder2": "defog/sqlcoder2",
-    "h2ogpt-sql-nsql-llama-2-7B": "NumbersStation/nsql-llama-2-7B",
-}
-
-
-def f(model_id):
-    print(f"Downloading {model_id}...")
-    snapshot_download(repo_id=model_id, cache_dir=f"{base_path}/models/")
-
-
-with multiprocessing.Pool(len(MODEL_CHOICE_MAP)) as pool:
-    _ = pool.map(f, [_m for _m in MODEL_CHOICE_MAP.values()])
-
+# Model 1:
+print("Downloading model 1...")
+snapshot_download(repo_id="NumbersStation/nsql-llama-2-7B", cache_dir=f"{base_path}/models/")
+# Model 2:
+print("Downloading model 2...")
+snapshot_download(repo_id="defog/sqlcoder2", cache_dir=f"{base_path}/models/")
 print(f"Download embedding model...")
 snapshot_download(repo_id="BAAI/bge-base-en", cache_dir=f"{base_path}/models/sentence_transformers/")
 
