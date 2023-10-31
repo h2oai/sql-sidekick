@@ -99,7 +99,8 @@ async def chat(q: Q):
         q.page["chat_card"].data += [q.args.chatbot, False]
         return
 
-    clear_cards(q)  # When routing, drop all the cards except of the main ones (header, sidebar, meta).
+    if not q.args.chatbot:
+        clear_cards(q)  # When routing, drop all the cards except of the main ones (header, sidebar, meta).
     table_names = []
     tables, _ = get_table_keys(f"{tmp_path}/data/tables.json", None)
     if len(tables) > 0:
@@ -171,19 +172,21 @@ async def chat(q: Q):
             ],
         ),
     ),
-    add_card(
-        q,
-        "chat_card",
-        ui.chatbot_card(
-            box=ui.box("vertical", height="500px"),
-            name="chatbot",
-            data=data(fields="content from_user", t="list", size=-50),
-            commands=[
-                ui.command(name="download_accept", label="Download QnA history", icon="Download"),
-                ui.command(name="download_reject", label="Download in-correct QnA history", icon="Download"),
-            ],
+    if not q.args.chatbot:
+        add_card(
+            q,
+            "chat_card",
+            ui.chatbot_card(
+                box=ui.box("vertical", height="500px"),
+                name="chatbot",
+                data=data(fields="content from_user", t="list", size=-50),
+                commands=[
+                    ui.command(name="download_accept", label="Download QnA history", icon="Download"),
+                    ui.command(name="download_reject", label="Download in-correct QnA history", icon="Download"),
+                ],
+                events=["scroll"],
+            ),
         ),
-    ),
     add_card(
         q,
         "additional_actions",
@@ -229,10 +232,7 @@ async def chat(q: Q):
 To get started, please select a table from the dropdown and ask your question.
 One could start by learning about the dataset by asking questions like:
 - Describe data."""
-
         q.args.chatbot = _msg
-        q.page["chat_card"].data += [q.args.chatbot, False]
-    if q.args.demo_mode:
         q.page["chat_card"].data += [q.args.chatbot, False]
     logging.info(f"Chatbot response: {q.args.chatbot}")
 
@@ -343,6 +343,7 @@ async def chatbot(q: Q):
 @on("file_upload")
 async def fileupload(q: Q):
     q.page["dataset"].error_bar.visible = False
+    q.page["dataset"].error_upload_bar.visible = False
     q.page["dataset"].success_bar.visible = False
     q.page["dataset"].progress_bar.visible = True
 
@@ -357,20 +358,24 @@ async def fileupload(q: Q):
     sample_schema = q.args.data_schema
     sample_qa = q.args.sample_qa
 
+    remove_chars = [" ", "-"]
     org_table_name = usr_table_name = None
     if (
-        q.args.table_name == "" or q.args.table_name is None and sample_data
+        (q.args.table_name == "" or q.args.table_name is None) and sample_data and len(sample_data) > 0
     ):  # User did not provide a table name, use the filename as table name
         org_table_name = sample_data[0].split(".")[0].split("/")[-1]
         logging.info(f"Using provided filename as table name: {org_table_name}")
         q.args.table_name = org_table_name
     if q.args.table_name:
         org_table_name = q.args.table_name
-        usr_table_name = q.args.table_name.strip().lower().replace(" ", "_")
+        usr_table_name = org_table_name.strip().lower()
+        for _c in remove_chars:
+            usr_table_name = usr_table_name.replace(_c, "_")
 
     logging.info(f"Upload initiated for {org_table_name} with scheme input: {sample_schema}")
     if sample_data is None:
         q.page["dataset"].error_bar.visible = True
+        q.page["dataset"].error_upload_bar.visible = False
         q.page["dataset"].progress_bar.visible = False
     else:
         if sample_data:
@@ -393,27 +398,39 @@ async def fileupload(q: Q):
             "samples_path": usr_samples_path,
             "samples_qa": usr_sample_qa,
         }
-        logging.info(f"Table metadata: {table_metadata}")
-        update_tables(f"{tmp_path}/data/tables.json", table_metadata)
+        try:
+            logging.info(f"Table metadata: {table_metadata}")
+            update_tables(f"{tmp_path}/data/tables.json", table_metadata)
 
-        q.user.table_name = usr_table_name
-        q.user.table_samples_path = usr_samples_path
-        q.user.table_info_path = usr_info_path
-        q.user.sample_qna_path = usr_sample_qa
+            q.user.table_name = usr_table_name
+            q.user.table_samples_path = usr_samples_path
+            q.user.table_info_path = usr_info_path
+            q.user.sample_qna_path = usr_sample_qa
 
-        db_resp = db_setup_api(
-            db_name=q.user.db_name,
-            hostname=q.user.host_name,
-            user_name=q.user.user_name,
-            password=q.user.password,
-            port=q.user.port,
-            table_info_path=q.user.table_info_path,
-            table_samples_path=q.user.table_samples_path,
-            table_name=q.user.table_name,
-        )
-        logging.info(f"DB updates: \n {db_resp}")
-        q.page["dataset"].progress_bar.visible = False
-        q.page["dataset"].success_bar.visible = True
+            db_resp = db_setup_api(
+                db_name=q.user.db_name,
+                hostname=q.user.host_name,
+                user_name=q.user.user_name,
+                password=q.user.password,
+                port=q.user.port,
+                table_info_path=q.user.table_info_path,
+                table_samples_path=q.user.table_samples_path,
+                table_name=q.user.table_name,
+            )
+            logging.info(f"DB updates: \n {db_resp}")
+            if "error" in str(db_resp).lower():
+                q.page["dataset"].error_upload_bar.visible = True
+                q.page["dataset"].error_bar.visible = False
+                q.page["dataset"].progress_bar.visible = False
+            else:
+                q.page["dataset"].progress_bar.visible = False
+                q.page["dataset"].success_bar.visible = True
+        except Exception as e:
+            logging.error(f"Something went wrong while uploading the dataset: {e}")
+            q.page["dataset"].error_upload_bar.visible = True
+            q.page["dataset"].error_bar.visible = False
+            q.page["dataset"].progress_bar.visible = False
+            return
 
 
 @on("#datasets")
@@ -431,7 +448,13 @@ async def datasets(q: Q):
                 ui.message_bar(
                     name="error_bar",
                     type="error",
-                    text="Please input table name, data & schema files to upload!",
+                    text="Please input table name and upload data to get started!",
+                    visible=False,
+                ),
+                ui.message_bar(
+                    name="error_upload_bar",
+                    type="error",
+                    text="Upload failed; something went wrong. Please check the dataset name/column name for special characters and try again!",
                     visible=False,
                 ),
                 ui.message_bar(name="success_bar", type="success", text="Files Uploaded Successfully!", visible=False),
@@ -756,7 +779,7 @@ async def on_event(q: Q):
         q.args.chatbot = (
             f"Demo mode is enabled.\nTry below example questions for the selected data to get started,\n{sample_qs}"
         )
-        q.page["chat_card"].data += [q.args.chatbot, True]
+        q.page["chat_card"].data += [q.args.chatbot, False]
         q.args.table_dropdown = None
         q.args.model_choice_dropdown = None
         q.args.task_dropdown = None
