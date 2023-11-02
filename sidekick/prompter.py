@@ -18,9 +18,14 @@ from sidekick.db_config import DBConfig
 from sidekick.memory import EntityMemory
 from sidekick.query import SQLGenerator
 from sidekick.schema_generator import generate_schema
-from sidekick.utils import (_execute_sql, check_vulnerability,
-                            execute_query_pd, extract_table_names, save_query,
-                            setup_dir)
+from sidekick.utils import (
+    _execute_sql,
+    check_vulnerability,
+    execute_query_pd,
+    extract_table_names,
+    save_query,
+    setup_dir,
+)
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
@@ -243,17 +248,17 @@ def db_setup_api(
             click.echo(echo_msg)
 
         if err is None:
-            return (
-                f"Created a Database {db_name}. Inserted sample values from {table_samples_path} into table {table_name}, please ask questions!",
-                None,
+            click.echo(
+                f"Created a Database {db_name}. Inserted sample values from {table_samples_path} into table {table_name}, please ask questions!"
             )
+            return res, None
         else:
-            return None, err
+            return 0, err
     except Exception as e:
-        echo_msg = f"Error creating database. Check configuration parameters.\n: {e}"
-        click.echo(echo_msg)
+        error_msg = f"Error creating database. Check configuration parameters.\n: {e}"
+        click.echo(error_msg)
         if not is_command:
-            return echo_msg
+            return 0, error_msg
 
 
 @cli.group("learn")
