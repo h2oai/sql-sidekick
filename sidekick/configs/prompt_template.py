@@ -80,7 +80,7 @@ SELECT"""
 # https://colab.research.google.com/drive/13BIKsqHnPOBcQ-ba2p77L5saiepTIwu0#scrollTo=0eI-VpCkf-fN
 STARCODER2_PROMPT = """
 ### Instructions:
-Your task is convert a question into a SQL query, given a sqlite database schema.
+Your task is convert a question into a valid SQLite SQL query, given a sqlite database schema. Let's work this out step by step to be sure we have the right answer.
 Only use the column names from the CREATE TABLE statement.
 Adhere to these rules:
 - **Deliberately go through the question and database schema word by word** to appropriately answer the question
