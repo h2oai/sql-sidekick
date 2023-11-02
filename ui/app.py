@@ -12,8 +12,7 @@ from h2o_wave import Q, app, data, handle_on, main, on, ui
 from h2o_wave.core import expando_to_dict
 from sidekick.prompter import db_setup_api, query_api
 from sidekick.query import SQLGenerator
-from sidekick.utils import (TASK_CHOICE, get_table_keys, save_query, setup_dir,
-                            update_tables)
+from sidekick.utils import TASK_CHOICE, get_table_keys, save_query, setup_dir, update_tables
 
 # Load the config file and initialize required paths
 base_path = (Path(__file__).parent / "../").resolve()
@@ -407,7 +406,7 @@ async def fileupload(q: Q):
             q.user.table_info_path = usr_info_path
             q.user.sample_qna_path = usr_sample_qa
 
-            db_resp = db_setup_api(
+            n_rows, db_resp = db_setup_api(
                 db_name=q.user.db_name,
                 hostname=q.user.host_name,
                 user_name=q.user.user_name,
@@ -418,6 +417,7 @@ async def fileupload(q: Q):
                 table_name=q.user.table_name,
             )
             logging.info(f"DB updates: \n {db_resp}")
+            q.args.n_rows = n_rows
             if "error" in str(db_resp).lower():
                 q.page["dataset"].error_upload_bar.visible = True
                 q.page["dataset"].error_bar.visible = False
@@ -457,7 +457,12 @@ async def datasets(q: Q):
                     text="Upload failed; something went wrong. Please check the dataset name/column name for special characters and try again!",
                     visible=False,
                 ),
-                ui.message_bar(name="success_bar", type="success", text="Files Uploaded Successfully!", visible=False),
+                ui.message_bar(
+                    name="success_bar",
+                    type="success",
+                    text=f"Data successfully uploaded, it has {q.args.n_rows} rows!",
+                    visible=False,
+                ),
                 ui.file_upload(
                     name="sample_data",
                     label="Dataset",
@@ -648,7 +653,7 @@ def upload_demo_examples(q: Q):
         q.user.table_info_path = f"{sample_data_path}/table_info.jsonl"
         q.user.sample_qna_path = None
 
-        db_resp = db_setup_api(
+        n_rows, db_resp = db_setup_api(
             db_name=q.user.db_name,
             hostname=q.user.host_name,
             user_name=q.user.user_name,
@@ -660,6 +665,7 @@ def upload_demo_examples(q: Q):
         )
         logging.info(f"DB updated with demo examples: \n {db_resp}")
     q.args.table_dropdown = usr_table_name
+    return n_rows
 
 
 async def on_event(q: Q):
@@ -757,7 +763,7 @@ async def on_event(q: Q):
     elif q.args.demo_mode:
         logging.info(f"Switching to demo mode!")
         # If demo datasets are not present, register them.
-        upload_demo_examples(q)
+        _ = upload_demo_examples(q)
         logging.info(f"Demo dataset selected: {q.user.table_name}")
         await submit_table(q)
         sample_qs = """
