@@ -175,7 +175,7 @@ class DBConfig:
                 logger.debug(f"Inserting chunk: {idx}")
                 chunk.columns = self.column_names
                 # Make sure column names in the data-frame match the schema
-                chunk.to_sql(self.table_name, engine, if_exists="replace", index=False, method="multi")
+                chunk.to_sql(self.table_name, engine, if_exists="append", index=False, method="multi")
 
             logger.info(f"Data inserted into table: {self.table_name}")
             # Fetch the number of rows from the table

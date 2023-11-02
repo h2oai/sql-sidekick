@@ -12,17 +12,27 @@ import sqlparse
 import torch
 import torch.nn.functional as F
 from langchain import OpenAI
-from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
-                         LLMPredictor, ServiceContext, SQLDatabase)
+from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
 from llama_index.indices.struct_store import SQLContextContainerBuilder
-from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
-                                              NSQL_QUERY_PROMPT, QUERY_PROMPT,
-                                              STARCODER2_PROMPT, TASK_PROMPT)
+from sidekick.configs.prompt_template import (
+    DEBUGGING_PROMPT,
+    NSQL_QUERY_PROMPT,
+    QUERY_PROMPT,
+    STARCODER2_PROMPT,
+    TASK_PROMPT,
+)
 from sidekick.logger import logger
-from sidekick.utils import (_check_file_info, is_resource_low,
-                            load_causal_lm_model, load_embedding_model,
-                            make_dir, re_rank, read_sample_pairs,
-                            remove_duplicates, semantic_search)
+from sidekick.utils import (
+    _check_file_info,
+    is_resource_low,
+    load_causal_lm_model,
+    load_embedding_model,
+    make_dir,
+    re_rank,
+    read_sample_pairs,
+    remove_duplicates,
+    semantic_search,
+)
 from sqlalchemy import create_engine
 
 
