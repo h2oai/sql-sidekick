@@ -39,6 +39,7 @@ class DBConfig:
         self.base_path = base_path
         self.column_names = []
         if dialect == "sqlite":
+            logger.debug(f"Creating SQLite DB: sqlite:///{base_path}/db/sqlite/{db_name}.db")
             self._url = f"sqlite:///{base_path}/db/sqlite/{db_name}.db"
         else:
             self._url = f"{self.dialect}://{self.user_name}:{self.password}@{self.hostname}:{self.port}/"
@@ -181,9 +182,10 @@ class DBConfig:
             # Fetch the number of rows from the table
             sample_query = f"SELECT COUNT(*) AS ROWS FROM {self.table_name} LIMIT 1"
             num_rows = pd.read_sql_query(sample_query, engine)
-            logger.info(f"Number of rows inserted: {num_rows.values[0][0]}")
+            res = num_rows.values[0][0]
+            logger.info(f"Number of rows inserted: {res}")
             engine.dispose()
-            return num_rows, None
+            return res, None
         except SQLAlchemyError as sqla_error:
             logger.debug("SQLAlchemy error:", sqla_error)
             return None, sqla_error

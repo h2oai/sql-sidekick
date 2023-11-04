@@ -29,8 +29,8 @@ MODEL_DEVICE_MAP = {
 }
 
 TASK_CHOICE = {
-    "q_a": "Question/Answering",
-    "sqld": "SQL Debugging",
+    "q_a": "Ask Questions",
+    "sqld": "Debugging",
 }
 
 
@@ -60,6 +60,7 @@ def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, devic
 
 
 def load_embedding_model(model_path: str, device: str):
+    logger.debug(f"Loading embedding model from: {model_path}")
     model_name_path = glob.glob(f"{model_path}/models--BAAI--bge-base-en/snapshots/*/")[0]
 
     sentence_model = SentenceTransformer(model_name_path, cache_folder=model_path, device=device)
@@ -186,7 +187,7 @@ def save_query(
 
 
 def setup_dir(base_path: str):
-    dir_list = ["var/lib/tmp/data", "var/lib/tmp/jobs", "var/lib/tmp/.cache", "models/weights"]
+    dir_list = ["var/lib/tmp/data", "var/lib/tmp/jobs", "var/lib/tmp/.cache", "models", "db/sqlite"]
     for _dl in dir_list:
         p = Path(f"{base_path}/{_dl}")
         if not p.is_dir():
@@ -344,7 +345,7 @@ def load_causal_lm_model(
             _load_in_8bit = load_in_8bit
             model_name = model_type
             logger.info(f"Loading model: {model_name} on device id: {device_index}")
-
+            logger.debug(f"Model cache: {cache_path}")
             # 22GB (Least requirement on GPU) is a magic number for the current model size.
             if off_load and re_generate and total_memory < 22:
                 # To prevent the system from crashing in-case memory runs low.

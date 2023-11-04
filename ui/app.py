@@ -15,8 +15,10 @@ from sidekick.query import SQLGenerator
 from sidekick.utils import TASK_CHOICE, get_table_keys, save_query, setup_dir, update_tables
 
 # Load the config file and initialize required paths
-base_path = (Path(__file__).parent / "../").resolve()
-env_settings = toml.load(f"{base_path}/ui/app_config.toml")
+app_base_path = (Path(__file__).parent / "../").resolve()
+env_settings = toml.load(f"{app_base_path}/ui/app_config.toml")
+# Below check is to handle the case when the app is running on the h2o.ai cloud or locally
+base_path = app_base_path if os.path.isdir("./.sidekickvenv/bin/") else "/meta_data"
 tmp_path = f"{base_path}/var/lib/tmp"
 
 ui_title = env_settings["WAVE_UI"]["TITLE"]
@@ -45,7 +47,7 @@ initialize_models()
 
 
 async def user_variable(q: Q):
-    db_settings = toml.load(f"{base_path}/sidekick/configs/env.toml")
+    db_settings = toml.load(f"{app_base_path}/sidekick/configs/env.toml")
 
     q.user.db_dialect = db_settings["DB-DIALECT"]["DB_TYPE"]
     q.user.host_name = db_settings["LOCAL_DB_CONFIG"]["HOST_NAME"]
@@ -115,7 +117,7 @@ async def chat(q: Q):
     ]
     q.user.model_choice_dropdown = "h2ogpt-sql-sqlcoder2"
 
-    task_choices = [ui.choice("q_a", "Question/Answering"), ui.choice("sqld", "SQL Debugging")]
+    task_choices = [ui.choice("q_a", "Ask Questions"), ui.choice("sqld", "Debugging")]
     q.user.task_choice_dropdown = "q_a"
     add_card(
         q,
@@ -162,7 +164,7 @@ async def chat(q: Q):
             items=[
                 ui.dropdown(
                     name="task_dropdown",
-                    label="Task",
+                    label="Mode",
                     required=True,
                     choices=task_choices,
                     value=q.user.task_choice_dropdown if q.user.task_choice_dropdown else None,
@@ -250,7 +252,7 @@ async def chatbot(q: Q):
     if (
         f"Table {q.user.table_dropdown} selected" in q.args.chatbot
         or f"Model {q.user.model_choice_dropdown} selected" in q.args.chatbot
-        or f"Task {q.user.task_dropdown} selected" in q.args.chatbot
+        or f"{q.user.task_dropdown} mode selected" in q.args.chatbot
     ):
         return
 
@@ -417,13 +419,13 @@ async def fileupload(q: Q):
                 table_name=q.user.table_name,
             )
             logging.info(f"DB updates: \n {db_resp}")
-            q.args.n_rows = n_rows
             if "error" in str(db_resp).lower():
                 q.page["dataset"].error_upload_bar.visible = True
                 q.page["dataset"].error_bar.visible = False
                 q.page["dataset"].progress_bar.visible = False
             else:
                 q.page["dataset"].progress_bar.visible = False
+                q.page["dataset"].success_bar.text = f"Data successfully uploaded, it has {n_rows:,} rows!"
                 q.page["dataset"].success_bar.visible = True
         except Exception as e:
             logging.error(f"Something went wrong while uploading the dataset: {e}")
@@ -460,7 +462,7 @@ async def datasets(q: Q):
                 ui.message_bar(
                     name="success_bar",
                     type="success",
-                    text=f"Data successfully uploaded, it has {q.args.n_rows} rows!",
+                    text=f"Data successfully uploaded!",
                     visible=False,
                 ),
                 ui.file_upload(
@@ -653,7 +655,7 @@ def upload_demo_examples(q: Q):
         q.user.table_info_path = f"{sample_data_path}/table_info.jsonl"
         q.user.sample_qna_path = None
 
-        n_rows, db_resp = db_setup_api(
+        _, db_resp = db_setup_api(
             db_name=q.user.db_name,
             hostname=q.user.host_name,
             user_name=q.user.user_name,
@@ -665,7 +667,6 @@ def upload_demo_examples(q: Q):
         )
         logging.info(f"DB updated with demo examples: \n {db_resp}")
     q.args.table_dropdown = usr_table_name
-    return n_rows
 
 
 async def on_event(q: Q):
@@ -698,7 +699,7 @@ async def on_event(q: Q):
         logging.info(f"User selected task: {q.args.task_dropdown}")
         q.user.task_dropdown = q.args.task_dropdown
         q.page["task_choice"].task_dropdown.value = q.user.task_dropdown
-        q.args.chatbot = f"Task '{TASK_CHOICE[q.user.task_dropdown]}' selected"
+        q.args.chatbot = f"'{TASK_CHOICE[q.user.task_dropdown]}' mode selected"
         # Refresh response is triggered when user selects a table via dropdown
         event_handled = True
     if (
@@ -763,7 +764,7 @@ async def on_event(q: Q):
     elif q.args.demo_mode:
         logging.info(f"Switching to demo mode!")
         # If demo datasets are not present, register them.
-        _ = upload_demo_examples(q)
+        upload_demo_examples(q)
         logging.info(f"Demo dataset selected: {q.user.table_name}")
         await submit_table(q)
         sample_qs = """

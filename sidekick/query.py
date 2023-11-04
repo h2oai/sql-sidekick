@@ -75,6 +75,7 @@ class SQLGenerator:
         if cls._instance is None or (cls._instance and not cls._instance.models.get(model_name, None)):
             if cls._instance is None:
                 cls._instance = super().__new__(cls)
+                cls._instance.current_temps = {}
             cls._instance.models, cls._instance.tokenizers = load_causal_lm_model(
                 model_name,
                 cache_path=f"{job_path}/models/",
@@ -84,7 +85,7 @@ class SQLGenerator:
             )
             cls._instance.model_name = "h2ogpt-sql-sqlcoder2" if not model_name else model_name
             model_embed_path = f"{job_path}/models/sentence_transformers"
-            cls._instance.models[cls._instance.model_name].current_temperature = 0.5
+            cls._instance.current_temps[cls._instance.model_name] = 0.5
             device = "cuda" if torch.cuda.is_available() else "cpu" if device == "auto" else device
             cls._instance.similarity_model = load_embedding_model(model_path=model_embed_path, device=device)
         return cls._instance
@@ -479,6 +480,7 @@ class SQLGenerator:
                 tokenizer = self.tokenizers[model_name]
                 inputs = tokenizer([query], return_tensors="pt")
                 model = self.models[model_name]
+                current_temperature = self.current_temps.get(model_name, 0.5)
                 input_length = 1 if model.config.is_encoder_decoder else inputs.input_ids.shape[1]
                 logger.info(f"Context length: {input_length}")
 
@@ -512,19 +514,25 @@ class SQLGenerator:
 
                 possible_temp_gt_5 = [0.6, 0.75, 0.8, 0.9, 1.0]
                 possible_temp_lt_5 = [0.1, 0.2, 0.3, 0.4]
-                random_temperature = model.current_temperature
                 random_seed = random.randint(0, 50)
                 torch.manual_seed(random_seed)
-                if model.current_temperature >= 0.5:
+
+                if current_temperature >= 0.5:
                     random_temperature = np.random.choice(possible_temp_lt_5, 1)[0]
                 else:
                     random_temperature = np.random.choice(possible_temp_gt_5, 1)[0]
+                import pdb
+
+                pdb.set_trace()
                 if not self.is_regenerate_with_options and not self.is_regenerate:
                     # Greedy decoding
+                    # Reset temperature to 0.5
+                    current_temperature = 0.5
+                    logger.debug(f"Generation with default temperature : {current_temperature}")
                     output = model.generate(
                         **inputs.to(device_type),
                         max_new_tokens=512,
-                        temperature=0.5,
+                        temperature=current_temperature,
                         output_scores=True,
                         do_sample=True,
                         return_dict_in_generate=True,
@@ -544,7 +552,8 @@ class SQLGenerator:
                         return_dict_in_generate=True,
                     )
                     generated_tokens = output.sequences[:, input_length:][0]
-                    model.current_temperature = random_temperature
+                    self.current_temps[model_name] = random_temperature
+                    logger.debug(f"Temperature saved: {self.current_temps[model_name]}")
                 else:
                     logger.info("Regeneration with options requested on previous query ...")
                     # Diverse beam search decoding to explore more options

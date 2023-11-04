@@ -4,7 +4,7 @@
 
 **Actively Being Maintained:** Yes (Demo release: _In active RnD_)
 
-**Last Updated:** October, 2023
+**Last Updated:** November, 2023
 
 **Allows uploading and using new model and data:** Yes
 

@@ -4,11 +4,11 @@ title = "SQL-Sidekick"
 description = "QnA with tabular data using NLQ"
 LongDescription = "about.md"
 Tags = ["DATA_SCIENCE", "MACHINE_LEARNING", "NLP"]
-Version = "0.1.3"
+Version = "0.1.4"
 
 [Runtime]
 MemoryLimit = "64Gi"
-MemoryReservation = "16Gi"
+MemoryReservation = "64Gi"
 module = "start"
 VolumeMount = "/meta_data"
 VolumeSize = "100Gi"

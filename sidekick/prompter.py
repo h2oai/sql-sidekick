@@ -28,12 +28,14 @@ from sidekick.utils import (
 )
 
 # Load the config file and initialize required paths
-base_path = (Path(__file__).parent / "../").resolve()
-env_settings = toml.load(f"{base_path}/sidekick/configs/env.toml")
+app_base_path = (Path(__file__).parent / "../").resolve()
+# Below check is to handle the case when the app is running on the h2o.ai cloud or locally
+base_path = app_base_path if os.path.isdir("./.sidekickvenv/bin/") else "/meta_data"
+env_settings = toml.load(f"{app_base_path}/sidekick/configs/env.toml")
 db_dialect = env_settings["DB-DIALECT"]["DB_TYPE"]
 model_name = env_settings["MODEL_INFO"]["MODEL_NAME"]
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
-__version__ = "0.0.4"
+__version__ = "0.1.4"
 
 
 def color(fore="", back="", text=None):
@@ -189,7 +191,7 @@ def db_setup_api(
         # env_settings["TABLE_INFO"]["TABLE_SAMPLES_PATH"] = table_samples_path
 
         # Update settings file for future use.
-        f = open(f"{base_path}/sidekick/configs/env.toml", "w")
+        f = open(f"{app_base_path}/sidekick/configs/env.toml", "w")
         toml.dump(env_settings, f)
         f.close()
         path = f"{base_path}/var/lib/tmp/data"
@@ -391,7 +393,7 @@ def query_api(
             env_settings["MODEL_INFO"]["OPENAI_API_KEY"] = api_key
 
             # Update settings file for future use.
-            f = open(f"{base_path}/sidekick/configs/env.toml", "w")
+            f = open(f"{app_base_path}/sidekick/configs/env.toml", "w")
             toml.dump(env_settings, f)
             f.close()
         openai.api_key = api_key

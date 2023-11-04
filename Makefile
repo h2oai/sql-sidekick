@@ -10,7 +10,6 @@ setup: download_demo_data ## Setup
 	./.sidekickvenv/bin/python3 -m pip install --upgrade pip
 	./.sidekickvenv/bin/python3 -m pip install wheel
 	./.sidekickvenv/bin/python3 -m pip install -r requirements.txt
-	mkdir -p ./db/sqlite
 	mkdir -p ./examples/demo/
 
 download_models:
