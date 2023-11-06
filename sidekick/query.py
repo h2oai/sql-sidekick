@@ -521,9 +521,7 @@ class SQLGenerator:
                     random_temperature = np.random.choice(possible_temp_lt_5, 1)[0]
                 else:
                     random_temperature = np.random.choice(possible_temp_gt_5, 1)[0]
-                import pdb
 
-                pdb.set_trace()
                 if not self.is_regenerate_with_options and not self.is_regenerate:
                     # Greedy decoding
                     # Reset temperature to 0.5
