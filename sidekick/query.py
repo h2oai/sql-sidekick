@@ -12,27 +12,17 @@ import sqlparse
 import torch
 import torch.nn.functional as F
 from langchain import OpenAI
-from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
+from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
+                         LLMPredictor, ServiceContext, SQLDatabase)
 from llama_index.indices.struct_store import SQLContextContainerBuilder
-from sidekick.configs.prompt_template import (
-    DEBUGGING_PROMPT,
-    NSQL_QUERY_PROMPT,
-    QUERY_PROMPT,
-    STARCODER2_PROMPT,
-    TASK_PROMPT,
-)
+from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
+                                              NSQL_QUERY_PROMPT, QUERY_PROMPT,
+                                              STARCODER2_PROMPT, TASK_PROMPT)
 from sidekick.logger import logger
-from sidekick.utils import (
-    _check_file_info,
-    is_resource_low,
-    load_causal_lm_model,
-    load_embedding_model,
-    make_dir,
-    re_rank,
-    read_sample_pairs,
-    remove_duplicates,
-    semantic_search,
-)
+from sidekick.utils import (_check_file_info, is_resource_low,
+                            load_causal_lm_model, load_embedding_model,
+                            make_dir, re_rank, read_sample_pairs,
+                            remove_duplicates, semantic_search)
 from sqlalchemy import create_engine
 
 
@@ -340,12 +330,12 @@ class SQLGenerator:
                 index = GPTSQLStructStoreIndex(
                     [], sql_database=self.sql_database, table_name=table_names, service_context=service_context_gpt3
                 )
-                res = self.generate_response(context_container, sql_index=index, input_prompt=query_str)
+                result = self.generate_response(context_container, sql_index=index, input_prompt=query_str)
                 try:
                     # Check if `SQL` is formatted ---> ``` SQL_text ```
-                    if "```" in str(res):
+                    if "```" in str(result):
                         res = (
-                            str(res)
+                            str(result)
                             .split("```", 1)[1]
                             .split(";", 1)[0]
                             .strip()
@@ -354,8 +344,9 @@ class SQLGenerator:
                             .strip()
                         )
                     else:
-                        res = str(res).split("Explanation:", 1)[0].strip()
-                    res = sqlglot.transpile(res, read=_dialect)
+                        res = str(result).split("Explanation:", 1)[0].strip()
+                    res = sqlglot.transpile(res, identify=True, read=_dialect)[0]
+                    result = res
                 except (sqlglot.errors.ParseError, ValueError, RuntimeError) as e:
                     logger.info("We did the best we could, there might be still be some error:\n")
                     logger.info(f"Realized query so far:\n {res}")
@@ -635,7 +626,7 @@ class SQLGenerator:
                 # Reference ticket: https://github.com/tobymao/sqlglot/issues/2011
                 result = res
                 try:
-                    result = sqlglot.transpile(res, identify=True, write="sqlite")[0]
+                    result = sqlglot.transpile(res, identify=True, write=_dialect)[0]
                 except (sqlglot.errors.ParseError, ValueError, RuntimeError) as e:
                     logger.info("We did the best we could, there might be still be some error:\n")
                     logger.info(f"Realized query so far:\n {res}")
