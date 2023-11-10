@@ -391,7 +391,7 @@ def query_api(
             f = open(f"{app_base_path}/sidekick/configs/env.toml", "w")
             toml.dump(env_settings, f)
             f.close()
-    if (model_name == 'gpt-3.5-turbo-0301' or model_name == 'gpt-3.5-turbo-1106'):
+    if ('gpt-3.5' in model_name or 'gpt-4' in model_name):
         openai.api_key = api_key
 
     try:

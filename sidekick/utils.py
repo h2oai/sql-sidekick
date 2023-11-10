@@ -21,7 +21,10 @@ from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
 MODEL_CHOICE_MAP = {
     "h2ogpt-sql-sqlcoder2": "defog/sqlcoder2",
     "h2ogpt-sql-nsql-llama-2-7B": "NumbersStation/nsql-llama-2-7B",
-    "gpt-3.5-turbo-0301": "gpt-3.5-turbo-0301",
+    "gpt-3.5-turbo": "gpt-3.5-turbo-1106",
+    "gpt-4-8k": "gpt-4",
+    "gpt-4-1106-preview-128k": "gpt-4-1106-preview"
+
 }
 
 MODEL_DEVICE_MAP = {

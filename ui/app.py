@@ -12,7 +12,8 @@ from h2o_wave import Q, app, data, handle_on, main, on, ui
 from h2o_wave.core import expando_to_dict
 from sidekick.prompter import db_setup_api, query_api
 from sidekick.query import SQLGenerator
-from sidekick.utils import TASK_CHOICE, get_table_keys, save_query, setup_dir, update_tables
+from sidekick.utils import (MODEL_CHOICE_MAP, TASK_CHOICE, get_table_keys,
+                            save_query, setup_dir, update_tables)
 
 # Load the config file and initialize required paths
 app_base_path = (Path(__file__).parent / "../").resolve()
@@ -111,14 +112,17 @@ async def chat(q: Q):
                 original_name = meta_data[table].get("original_name", q.user.original_name)
                 table_names.append(ui.choice(table, f"{original_name}"))
 
-    model_choices = [
-        ui.choice("h2ogpt-sql-nsql-llama-2-7B", "h2ogpt-sql-nsql-llama-2-7B"),
-        ui.choice("h2ogpt-sql-sqlcoder2", "h2ogpt-sql-sqlcoder2"),
-    ]
+    model_choices = [ui.choice(_key, _key) for _key in MODEL_CHOICE_MAP.keys()]
     q.user.model_choice_dropdown = "h2ogpt-sql-sqlcoder2"
 
     task_choices = [ui.choice("q_a", "Ask Questions"), ui.choice("sqld", "Debugging")]
     q.user.task_choice_dropdown = "q_a"
+
+    chat_card_command_items = [
+        ui.command(name="download_accept", label="Download QnA history", icon="Download"),
+        ui.command(name="download_reject", label="Download in-correct QnA history", icon="Download"),
+    ]
+
     add_card(
         q,
         "background_card",
@@ -252,7 +256,7 @@ async def chatbot(q: Q):
     if (
         f"Table {q.user.table_dropdown} selected" in q.args.chatbot
         or f"Model {q.user.model_choice_dropdown} selected" in q.args.chatbot
-        or f"{q.user.task_dropdown} mode selected" in q.args.chatbot
+        or f"mode selected" in q.args.chatbot
     ):
         return
 
@@ -687,7 +691,6 @@ async def on_event(q: Q):
     if (
         q.args.model_choice_dropdown
         and not q.args.chatbot
-        and q.user.model_choice_dropdown != q.args.model_choice_dropdown
     ):
         logging.info(f"User selected model type: {q.args.model_choice_dropdown}")
         q.user.model_choice_dropdown = q.args.model_choice_dropdown
@@ -736,7 +739,9 @@ async def on_event(q: Q):
     elif q.args.download_accept:
         result_path = f"{base_path}/var/lib/tmp/.cache/{q.user.table_name}/history.jsonl"
         # Check if path exists
-        if Path(result_path).exists():
+        # If the model selected is GPT models from openAI then disable download
+        # We don't want to use those for further improvements externally.
+        if Path(result_path).exists() and "gpt-4" not in q.user.model_choice_dropdown and "gpt-3.5-turbo" not in q.user.model_choice_dropdown:
             logging.info(f"Downloading accepted QnA history for table: {q.user.table_name}")
             (server_path,) = await q.site.upload([result_path])
             q.page["meta"].script = ui.inline_script(f'window.open("{server_path}", "_blank");')
@@ -746,7 +751,7 @@ async def on_event(q: Q):
             _msg = "No history found!"
         q.page["chat_card"].data += [_msg, False]
         event_handled = True
-    elif q.args.download_reject:
+    elif q.args.download_reject and "gpt-4" not in q.user.model_choice_dropdown and "gpt-3.5" not in q.user.model_choice_dropdown:
         logging.info(f"Downloading rejected QnA history for table: {q.user.table_name}")
         result_path = f"{base_path}/var/lib/tmp/.cache/{q.user.table_name}/invalid/history.jsonl"
         if Path(result_path).exists():
