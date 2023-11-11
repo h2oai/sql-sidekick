@@ -18,14 +18,9 @@ from sidekick.db_config import DBConfig
 from sidekick.memory import EntityMemory
 from sidekick.query import SQLGenerator
 from sidekick.schema_generator import generate_schema
-from sidekick.utils import (
-    _execute_sql,
-    check_vulnerability,
-    execute_query_pd,
-    extract_table_names,
-    save_query,
-    setup_dir,
-)
+from sidekick.utils import (_execute_sql, check_vulnerability,
+                            execute_query_pd, extract_table_names, save_query,
+                            setup_dir)
 
 # Load the config file and initialize required paths
 app_base_path = (Path(__file__).parent / "../").resolve()
@@ -372,30 +367,31 @@ def query_api(
             json.dump(table_context, outfile, indent=4, sort_keys=False)
     logger.info(f"Table in use: {table_names}")
     # Check if env.toml file exists
-    api_key = None
-    if "h2ogpt-sql" not in model_name:
+    api_key = os.getenv("OPENAI_API_KEY", None)
+    if (model_name == 'gpt-3.5-turbo-0301' or model_name == 'gpt-3.5-turbo-1106') and api_key is None:
         api_key = env_settings["MODEL_INFO"]["OPENAI_API_KEY"]
-        if api_key is None or api_key == "":
-            if os.getenv("OPENAI_API_KEY") is None or os.getenv("OPENAI_API_KEY") == "":
-                if is_command:
-                    val = input(
-                        color(
-                            F.GREEN, "", "Looks like API key is not set, would you like to set OPENAI_API_KEY? (y/n):"
-                        )
+        if api_key is None:
+            if is_command:
+                val = input(
+                    color(
+                        F.GREEN, "", "Looks like API key is not set, would you like to set OPENAI_API_KEY? (y/n):"
                     )
-                    if val.lower() == "y":
-                        api_key = input(color(F.GREEN, "", "Enter OPENAI_API_KEY :"))
+                )
+                if val.lower() == "y":
+                    api_key = input(color(F.GREEN, "", "Enter OPENAI_API_KEY :"))
 
             if api_key is None and is_command:
                 return ["Looks like API key is not set, please set OPENAI_API_KEY!"], err
 
-            os.environ["OPENAI_API_KEY"] = api_key
+            if os.getenv("OPENAI_API_KEY", None) is None:
+                os.environ["OPENAI_API_KEY"] = api_key
             env_settings["MODEL_INFO"]["OPENAI_API_KEY"] = api_key
 
             # Update settings file for future use.
             f = open(f"{app_base_path}/sidekick/configs/env.toml", "w")
             toml.dump(env_settings, f)
             f.close()
+    if ('gpt-3.5' in model_name or 'gpt-4' in model_name):
         openai.api_key = api_key
 
     try:

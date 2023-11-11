@@ -12,7 +12,10 @@ from h2o_wave import Q, app, data, handle_on, main, on, ui
 from h2o_wave.core import expando_to_dict
 from sidekick.prompter import db_setup_api, query_api
 from sidekick.query import SQLGenerator
-from sidekick.utils import TASK_CHOICE, get_table_keys, save_query, setup_dir, update_tables
+from sidekick.utils import (MODEL_CHOICE_MAP_DEFAULT,
+                            MODEL_CHOICE_MAP_EVAL_MODE, TASK_CHOICE,
+                            get_table_keys, save_query, setup_dir,
+                            update_tables)
 
 # Load the config file and initialize required paths
 app_base_path = (Path(__file__).parent / "../").resolve()
@@ -64,6 +67,9 @@ async def user_variable(q: Q):
     q.user.sample_qna_path = table_info["samples_qa"] if len(tables) > 0 else None
     q.user.table_name = tables[0] if len(tables) > 0 else None
 
+    q.user.model_choices = MODEL_CHOICE_MAP_DEFAULT
+    q.user.eval_mode = False
+
     logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s")
 
 
@@ -111,14 +117,18 @@ async def chat(q: Q):
                 original_name = meta_data[table].get("original_name", q.user.original_name)
                 table_names.append(ui.choice(table, f"{original_name}"))
 
-    model_choices = [
-        ui.choice("h2ogpt-sql-nsql-llama-2-7B", "h2ogpt-sql-nsql-llama-2-7B"),
-        ui.choice("h2ogpt-sql-sqlcoder2", "h2ogpt-sql-sqlcoder2"),
-    ]
+    MODEL_CHOICE_MAP = q.user.model_choices
+    model_choices = [ui.choice(_key, _key) for _key in MODEL_CHOICE_MAP.keys()]
     q.user.model_choice_dropdown = "h2ogpt-sql-sqlcoder2"
 
     task_choices = [ui.choice("q_a", "Ask Questions"), ui.choice("sqld", "Debugging")]
     q.user.task_choice_dropdown = "q_a"
+
+    chat_card_command_items = [
+        ui.command(name="download_accept", label="Download QnA history", icon="Download"),
+        ui.command(name="download_reject", label="Download in-correct QnA history", icon="Download"),
+    ]
+
     add_card(
         q,
         "background_card",
@@ -252,7 +262,7 @@ async def chatbot(q: Q):
     if (
         f"Table {q.user.table_dropdown} selected" in q.args.chatbot
         or f"Model {q.user.model_choice_dropdown} selected" in q.args.chatbot
-        or f"{q.user.task_dropdown} mode selected" in q.args.chatbot
+        or f"mode selected" in q.args.chatbot
     ):
         return
 
@@ -434,6 +444,22 @@ async def fileupload(q: Q):
             q.page["dataset"].progress_bar.visible = False
             return
 
+@on("#settings")
+async def on_settings(q: Q):
+    q.page["sidebar"].value = "#settings"
+    clear_cards(q)  # When routing, drop all the cards except of the main ones (header, sidebar, meta).
+    add_card(q, "settings_header", ui.form_card(box="horizontal", title="Configure", items=[]))
+
+    toggle_state = q.user.eval_mode if q.user.eval_mode else False
+    add_card(
+        q,
+        "dataset",
+        ui.form_card(
+            box="vertical",
+            items=[
+                ui.toggle(name='eval_mode', label='Eval Mode', value=toggle_state)]
+        ))
+
 
 @on("#datasets")
 async def datasets(q: Q):
@@ -588,6 +614,7 @@ async def init(q: Q) -> None:
                 items=[
                     ui.nav_item(name="#datasets", label="Upload Dataset", icon="Database"),
                     ui.nav_item(name="#chat", label="Chat", icon="Chat"),
+                    ui.nav_item(name="#settings", label="Settings", icon="Settings")
                 ],
             ),
             ui.nav_group(
@@ -677,7 +704,13 @@ async def on_event(q: Q):
         q.args.chatbot = "try harder"
     elif q.args.regenerate:
         q.args.chatbot = "regenerate"
+    q.user.eval_mode  = False
 
+    if q.args.eval_mode:
+        q.user.eval_mode = True
+        q.user.model_choices = MODEL_CHOICE_MAP_EVAL_MODE
+        await chat(q)
+        event_handled = True
     if q.args.table_dropdown and not q.args.chatbot and q.user.table_name != q.args.table_dropdown:
         logging.info(f"User selected table: {q.args.table_dropdown}")
         await submit_table(q)
@@ -687,7 +720,6 @@ async def on_event(q: Q):
     if (
         q.args.model_choice_dropdown
         and not q.args.chatbot
-        and q.user.model_choice_dropdown != q.args.model_choice_dropdown
     ):
         logging.info(f"User selected model type: {q.args.model_choice_dropdown}")
         q.user.model_choice_dropdown = q.args.model_choice_dropdown
@@ -736,7 +768,9 @@ async def on_event(q: Q):
     elif q.args.download_accept:
         result_path = f"{base_path}/var/lib/tmp/.cache/{q.user.table_name}/history.jsonl"
         # Check if path exists
-        if Path(result_path).exists():
+        # If the model selected is GPT models from openAI then disable download
+        # We don't want to use those for further improvements externally.
+        if Path(result_path).exists() and "gpt-4" not in q.user.model_choice_dropdown and "gpt-3.5-turbo" not in q.user.model_choice_dropdown:
             logging.info(f"Downloading accepted QnA history for table: {q.user.table_name}")
             (server_path,) = await q.site.upload([result_path])
             q.page["meta"].script = ui.inline_script(f'window.open("{server_path}", "_blank");')
@@ -746,7 +780,7 @@ async def on_event(q: Q):
             _msg = "No history found!"
         q.page["chat_card"].data += [_msg, False]
         event_handled = True
-    elif q.args.download_reject:
+    elif q.args.download_reject and "gpt-4" not in q.user.model_choice_dropdown and "gpt-3.5" not in q.user.model_choice_dropdown:
         logging.info(f"Downloading rejected QnA history for table: {q.user.table_name}")
         result_path = f"{base_path}/var/lib/tmp/.cache/{q.user.table_name}/invalid/history.jsonl"
         if Path(result_path).exists():

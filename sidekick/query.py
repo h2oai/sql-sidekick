@@ -12,27 +12,19 @@ import sqlparse
 import torch
 import torch.nn.functional as F
 from langchain import OpenAI
-from llama_index import GPTSimpleVectorIndex, GPTSQLStructStoreIndex, LLMPredictor, ServiceContext, SQLDatabase
+from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
+                         LLMPredictor, ServiceContext, SQLDatabase)
 from llama_index.indices.struct_store import SQLContextContainerBuilder
-from sidekick.configs.prompt_template import (
-    DEBUGGING_PROMPT,
-    NSQL_QUERY_PROMPT,
-    QUERY_PROMPT,
-    STARCODER2_PROMPT,
-    TASK_PROMPT,
-)
+from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
+                                              NSQL_QUERY_PROMPT, QUERY_PROMPT,
+                                              STARCODER2_PROMPT, TASK_PROMPT)
 from sidekick.logger import logger
-from sidekick.utils import (
-    _check_file_info,
-    is_resource_low,
-    load_causal_lm_model,
-    load_embedding_model,
-    make_dir,
-    re_rank,
-    read_sample_pairs,
-    remove_duplicates,
-    semantic_search,
-)
+from sidekick.utils import (MODEL_CHOICE_MAP_DEFAULT,
+                            MODEL_CHOICE_MAP_EVAL_MODE, _check_file_info,
+                            is_resource_low, load_causal_lm_model,
+                            load_embedding_model, make_dir, re_rank,
+                            read_sample_pairs, remove_duplicates,
+                            semantic_search)
 from sqlalchemy import create_engine
 
 
@@ -58,35 +50,40 @@ class SQLGenerator:
         # If GPU > 1, load multiple models in memory separately on each device.
         # TODO
         # Support remote model loading as an option
+
         if (
             offloading
             and is_regenerate_with_options
             or (n_gpus == 1 and cls._instance and cls._instance.model_name and cls._instance.model_name != model_name)
         ):
-            if cls._instance.models.get(cls._instance.model_name, None):
+            if ("gpt-3.5" not in cls._instance.model_name or "gpt-4" not in cls._instance.model_name) and ("gpt-3.5" not in model_name or "gpt-4" not in model_name) and cls._instance.models and cls._instance.models.get(cls._instance.model_name, None):
                 _name = cls._instance.model_name
                 del cls._instance.models[_name]
                 cls._instance.models[_name] = None
+                del cls._instance.tokenizers[_name]
+                cls._instance.tokenizers[_name] = None
 
-            gc.collect()
-            torch.cuda.empty_cache()
+                gc.collect()
+                torch.cuda.empty_cache()
             logger.info(f"Low memory: {offloading}/ Model re-initialization: {is_regenerate_with_options}")
 
-        if cls._instance is None or (cls._instance and not cls._instance.models.get(model_name, None)):
+        if cls._instance is None or (cls._instance and cls._instance.models and not cls._instance.models.get(model_name, None)) or not cls._instance.tokenizers or (not cls._instance.tokenizers and cls._instance.tokenizers.get(model_name, None)):
             if cls._instance is None:
                 cls._instance = super().__new__(cls)
                 cls._instance.current_temps = {}
-            cls._instance.models, cls._instance.tokenizers = load_causal_lm_model(
-                model_name,
-                cache_path=f"{job_path}/models/",
-                device=device,
-                off_load=offloading,
-                re_generate=is_regenerate_with_options,
-            )
+            if not model_name or (model_name is not None and "gpt-3.5" not in model_name or "gpt-4" not in model_name):
+                cls._instance.models, cls._instance.tokenizers = load_causal_lm_model(
+                    model_name,
+                    cache_path=f"{job_path}/models/",
+                    device=device,
+                    off_load=offloading,
+                    re_generate=is_regenerate_with_options,
+                )
             cls._instance.model_name = "h2ogpt-sql-sqlcoder2" if not model_name else model_name
             model_embed_path = f"{job_path}/models/sentence_transformers"
             cls._instance.current_temps[cls._instance.model_name] = 0.5
             device = "cuda" if torch.cuda.is_available() else "cpu" if device == "auto" else device
+
             cls._instance.similarity_model = load_embedding_model(model_path=model_embed_path, device=device)
         return cls._instance
 
@@ -117,7 +114,8 @@ class SQLGenerator:
         self.is_regenerate_with_options = is_regenerate_with_options
         self.is_regenerate = is_regenerate
         self.device = device
-        self.table_name = None
+        self.table_name = None,
+        self.eval_mode = False
 
     def clear(self):
         del SQLGenerator._instance
@@ -201,10 +199,13 @@ class SQLGenerator:
             query_txt = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
             logger.debug(f"Query Text:\n {query_txt}")
 
-            # TODO ADD local model
+            MODEL_CHOICE_MAP = MODEL_CHOICE_MAP_EVAL_MODE
+            m_name = MODEL_CHOICE_MAP.get(self.model_name)
             completion = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo-0301",
+                model=m_name,
                 messages=query_txt,
+                max_tokens=512,
+                seed=42
             )
             res = completion.choices[0].message["content"]
             return res
@@ -234,9 +235,12 @@ class SQLGenerator:
                     # Role and content
                     query_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
 
+                    m_name = MODEL_CHOICE_MAP.get(self.model_name)
                     completion = openai.ChatCompletion.create(
-                        model="gpt-3.5-turbo-0301",
+                        model=m_name,
                         messages=query_msg,
+                        max_tokens=512,
+                        seed=42
                     )
                     res = completion.choices[0].message["content"]
                     if "SELECT" not in res:
@@ -328,7 +332,8 @@ class SQLGenerator:
                 )
 
                 # Reference: https://github.com/jerryjliu/llama_index/issues/987
-                llm_predictor_gpt3 = LLMPredictor(llm=OpenAI(temperature=0.5, model_name=model_name))
+                m_name = MODEL_CHOICE_MAP[model_name]
+                llm_predictor_gpt3 = LLMPredictor(llm=OpenAI(temperature=0, model_name=m_name, max_tokens=512, seed=42))
                 service_context_gpt3 = ServiceContext.from_defaults(
                     llm_predictor=llm_predictor_gpt3, chunk_size_limit=512
                 )
@@ -340,12 +345,13 @@ class SQLGenerator:
                 index = GPTSQLStructStoreIndex(
                     [], sql_database=self.sql_database, table_name=table_names, service_context=service_context_gpt3
                 )
-                res = self.generate_response(context_container, sql_index=index, input_prompt=query_str)
+
+                result = self.generate_response(context_container, sql_index=index, input_prompt=query_str)
                 try:
                     # Check if `SQL` is formatted ---> ``` SQL_text ```
-                    if "```" in str(res):
+                    if "```" in str(result):
                         res = (
-                            str(res)
+                            str(result)
                             .split("```", 1)[1]
                             .split(";", 1)[0]
                             .strip()
@@ -354,8 +360,9 @@ class SQLGenerator:
                             .strip()
                         )
                     else:
-                        res = str(res).split("Explanation:", 1)[0].strip()
-                    res = sqlglot.transpile(res, read=_dialect)
+                        res = str(result).split("Explanation:", 1)[0].strip()
+                    res = sqlglot.transpile(res, identify=True, read=_dialect)[0]
+                    result = res
                 except (sqlglot.errors.ParseError, ValueError, RuntimeError) as e:
                     logger.info("We did the best we could, there might be still be some error:\n")
                     logger.info(f"Realized query so far:\n {res}")
@@ -635,7 +642,7 @@ class SQLGenerator:
                 # Reference ticket: https://github.com/tobymao/sqlglot/issues/2011
                 result = res
                 try:
-                    result = sqlglot.transpile(res, identify=True, write="sqlite")[0]
+                    result = sqlglot.transpile(res, identify=True, write=_dialect)[0]
                 except (sqlglot.errors.ParseError, ValueError, RuntimeError) as e:
                     logger.info("We did the best we could, there might be still be some error:\n")
                     logger.info(f"Realized query so far:\n {res}")
