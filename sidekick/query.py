@@ -19,7 +19,8 @@ from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
                                               NSQL_QUERY_PROMPT, QUERY_PROMPT,
                                               STARCODER2_PROMPT, TASK_PROMPT)
 from sidekick.logger import logger
-from sidekick.utils import (MODEL_CHOICE_MAP, _check_file_info,
+from sidekick.utils import (MODEL_CHOICE_MAP_DEFAULT,
+                            MODEL_CHOICE_MAP_EVAL_MODE, _check_file_info,
                             is_resource_low, load_causal_lm_model,
                             load_embedding_model, make_dir, re_rank,
                             read_sample_pairs, remove_duplicates,
@@ -113,7 +114,8 @@ class SQLGenerator:
         self.is_regenerate_with_options = is_regenerate_with_options
         self.is_regenerate = is_regenerate
         self.device = device
-        self.table_name = None
+        self.table_name = None,
+        self.eval_mode = False
 
     def clear(self):
         del SQLGenerator._instance
@@ -197,6 +199,7 @@ class SQLGenerator:
             query_txt = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
             logger.debug(f"Query Text:\n {query_txt}")
 
+            MODEL_CHOICE_MAP = MODEL_CHOICE_MAP_EVAL_MODE
             m_name = MODEL_CHOICE_MAP.get(self.model_name)
             completion = openai.ChatCompletion.create(
                 model=m_name,

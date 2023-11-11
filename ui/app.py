@@ -12,8 +12,10 @@ from h2o_wave import Q, app, data, handle_on, main, on, ui
 from h2o_wave.core import expando_to_dict
 from sidekick.prompter import db_setup_api, query_api
 from sidekick.query import SQLGenerator
-from sidekick.utils import (MODEL_CHOICE_MAP, TASK_CHOICE, get_table_keys,
-                            save_query, setup_dir, update_tables)
+from sidekick.utils import (MODEL_CHOICE_MAP_DEFAULT,
+                            MODEL_CHOICE_MAP_EVAL_MODE, TASK_CHOICE,
+                            get_table_keys, save_query, setup_dir,
+                            update_tables)
 
 # Load the config file and initialize required paths
 app_base_path = (Path(__file__).parent / "../").resolve()
@@ -65,6 +67,9 @@ async def user_variable(q: Q):
     q.user.sample_qna_path = table_info["samples_qa"] if len(tables) > 0 else None
     q.user.table_name = tables[0] if len(tables) > 0 else None
 
+    q.user.model_choices = MODEL_CHOICE_MAP_DEFAULT
+    q.user.eval_mode = False
+
     logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s")
 
 
@@ -112,6 +117,7 @@ async def chat(q: Q):
                 original_name = meta_data[table].get("original_name", q.user.original_name)
                 table_names.append(ui.choice(table, f"{original_name}"))
 
+    MODEL_CHOICE_MAP = q.user.model_choices
     model_choices = [ui.choice(_key, _key) for _key in MODEL_CHOICE_MAP.keys()]
     q.user.model_choice_dropdown = "h2ogpt-sql-sqlcoder2"
 
@@ -438,6 +444,22 @@ async def fileupload(q: Q):
             q.page["dataset"].progress_bar.visible = False
             return
 
+@on("#settings")
+async def on_settings(q: Q):
+    q.page["sidebar"].value = "#settings"
+    clear_cards(q)  # When routing, drop all the cards except of the main ones (header, sidebar, meta).
+    add_card(q, "settings_header", ui.form_card(box="horizontal", title="Configure", items=[]))
+
+    toggle_state = q.user.eval_mode if q.user.eval_mode else False
+    add_card(
+        q,
+        "dataset",
+        ui.form_card(
+            box="vertical",
+            items=[
+                ui.toggle(name='eval_mode', label='Eval Mode', value=toggle_state)]
+        ))
+
 
 @on("#datasets")
 async def datasets(q: Q):
@@ -592,6 +614,7 @@ async def init(q: Q) -> None:
                 items=[
                     ui.nav_item(name="#datasets", label="Upload Dataset", icon="Database"),
                     ui.nav_item(name="#chat", label="Chat", icon="Chat"),
+                    ui.nav_item(name="#settings", label="Settings", icon="Settings")
                 ],
             ),
             ui.nav_group(
@@ -681,7 +704,13 @@ async def on_event(q: Q):
         q.args.chatbot = "try harder"
     elif q.args.regenerate:
         q.args.chatbot = "regenerate"
+    q.user.eval_mode  = False
 
+    if q.args.eval_mode:
+        q.user.eval_mode = True
+        q.user.model_choices = MODEL_CHOICE_MAP_EVAL_MODE
+        await chat(q)
+        event_handled = True
     if q.args.table_dropdown and not q.args.chatbot and q.user.table_name != q.args.table_dropdown:
         logging.info(f"User selected table: {q.args.table_dropdown}")
         await submit_table(q)
