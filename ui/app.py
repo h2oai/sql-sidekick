@@ -207,6 +207,12 @@ async def chat(q: Q):
                 ui.buttons(
                     [
                         ui.button(
+                            name="suggest",
+                            icon="",
+                            caption="Suggests possible questions one could start with",
+                            label="Need ideas",
+                        ),
+                        ui.button(
                             name="regenerate",
                             icon="RepeatOne",
                             caption="Attempts regeneration of the last response",
@@ -278,7 +284,9 @@ async def chatbot(q: Q):
     # 2. "Try harder mode (THM)" Slow approach by using the diverse beam search
     llm_response = None
     try:
-        if q.args.chatbot and q.args.chatbot.lower() == "db setup":
+        if q.args.chatbot and (q.args.chatbot.lower() == "recommend questions" or q.args.chatbot.lower() == "recommend qs"):
+            llm_response = "I am still building the capability to suggest questions."
+        elif q.args.chatbot and q.args.chatbot.lower() == "db setup":
             llm_response, err = db_setup_api(
                 db_name=q.user.db_name,
                 hostname=q.user.host_name,
@@ -706,6 +714,10 @@ async def on_event(q: Q):
         q.args.chatbot = "regenerate"
     q.user.eval_mode  = False
 
+    if q.args.suggest:
+        q.args.chatbot = "recommend questions"
+        await chatbot(q)
+        event_handled = True
     if q.args.eval_mode:
         q.user.eval_mode = True
         q.user.model_choices = MODEL_CHOICE_MAP_EVAL_MODE

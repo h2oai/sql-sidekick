@@ -43,6 +43,7 @@ accelerate = "0.21.0"
 bitsandbytes = "0.41.0"
 InstructorEmbedding = "^1.0.1"
 
+
 [tool.poetry.scripts]
 sql-sidekick = "sidekick.prompter:cli"
 
