@@ -108,3 +108,19 @@ CREATE TABLE '{table_name}' ({column_info}
 
 ### Response:
 SELECT"""
+
+
+RECOMMENDATION_PROMPT="""
+Generate 10 simple questions for the given dataset.
+Only use the specified column names mentioned in *Data Schema*.
+
+### Data Schema:
+{data_schema}
+
+
+Output: ordered numeric list of questions
+
+
+### Response:
+1.
+"""

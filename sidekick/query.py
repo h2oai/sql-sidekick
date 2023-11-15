@@ -41,6 +41,7 @@ class SQLGenerator:
         job_path: str = "./",
         device: str = "auto",
         is_regenerate: bool = False,
+        eval_mode = False,
         is_regenerate_with_options: bool = False,
     ):
         # TODO: If openai model then only tokenizer needs to be loaded.
@@ -234,7 +235,7 @@ class SQLGenerator:
                     user_prompt = DEBUGGING_PROMPT["user_prompt"].format(ex_traceback=ex_traceback, qry_txt=qry_txt)
                     # Role and content
                     query_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
-
+                    MODEL_CHOICE_MAP = MODEL_CHOICE_MAP_EVAL_MODE if self.eval_mode else MODEL_CHOICE_MAP_DEFAULT
                     m_name = MODEL_CHOICE_MAP.get(self.model_name)
                     completion = openai.ChatCompletion.create(
                         model=m_name,
@@ -332,6 +333,7 @@ class SQLGenerator:
                 )
 
                 # Reference: https://github.com/jerryjliu/llama_index/issues/987
+                MODEL_CHOICE_MAP = MODEL_CHOICE_MAP_EVAL_MODE if self.eval_mode else MODEL_CHOICE_MAP_DEFAULT
                 m_name = MODEL_CHOICE_MAP[model_name]
                 llm_predictor_gpt3 = LLMPredictor(llm=OpenAI(temperature=0, model_name=m_name, max_tokens=512, seed=42))
                 service_context_gpt3 = ServiceContext.from_defaults(

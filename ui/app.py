@@ -10,7 +10,7 @@ import toml
 import torch
 from h2o_wave import Q, app, data, handle_on, main, on, ui
 from h2o_wave.core import expando_to_dict
-from sidekick.prompter import db_setup_api, query_api
+from sidekick.prompter import db_setup_api, query_api, recommend_suggestions
 from sidekick.query import SQLGenerator
 from sidekick.utils import (MODEL_CHOICE_MAP_DEFAULT,
                             MODEL_CHOICE_MAP_EVAL_MODE, TASK_CHOICE,
@@ -19,14 +19,17 @@ from sidekick.utils import (MODEL_CHOICE_MAP_DEFAULT,
 
 # Load the config file and initialize required paths
 app_base_path = (Path(__file__).parent / "../").resolve()
-env_settings = toml.load(f"{app_base_path}/ui/app_config.toml")
+app_settings = toml.load(f"{app_base_path}/ui/app_config.toml")
 # Below check is to handle the case when the app is running on the h2o.ai cloud or locally
 base_path = app_base_path if os.path.isdir("./.sidekickvenv/bin/") else "/meta_data"
 tmp_path = f"{base_path}/var/lib/tmp"
 
-ui_title = env_settings["WAVE_UI"]["TITLE"]
-ui_description = env_settings["WAVE_UI"]["SUB_TITLE"]
+ui_title = app_settings["WAVE_UI"]["TITLE"]
+ui_description = app_settings["WAVE_UI"]["SUB_TITLE"]
 
+
+# env variables
+env_settings = toml.load(f"{app_base_path}/sidekick/configs/env.toml")
 
 # Pre-initialize the models for faster response
 def initialize_models():
@@ -285,7 +288,7 @@ async def chatbot(q: Q):
     llm_response = None
     try:
         if q.args.chatbot and (q.args.chatbot.lower() == "recommend questions" or q.args.chatbot.lower() == "recommend qs"):
-            llm_response = "I am still building the capability to suggest questions."
+            llm_response = recommend_suggestions(cache_path=q.user.table_info_path, table_name=q.user.table_name)
         elif q.args.chatbot and q.args.chatbot.lower() == "db setup":
             llm_response, err = db_setup_api(
                 db_name=q.user.db_name,
@@ -465,6 +468,14 @@ async def on_settings(q: Q):
         ui.form_card(
             box="vertical",
             items=[
+                ui.textbox(name='textbox_remote_url', label='Recommendation Remote URL',
+                      value=''),
+                ui.textbox(name='textbox_h2o_api_key', label='H2O API Key',
+                      value=''),
+                ui.textbox(name='textbox_openai_api_key', label='OpenAI API Key',
+                      value=''),
+                ui.button(name="submit_url_keys", label="Submit", primary=True),
+                ui.separator(label='Others'),
                 ui.toggle(name='eval_mode', label='Eval Mode', value=toggle_state)]
         ))
 
@@ -660,7 +671,7 @@ def on_shutdown():
 def upload_demo_examples(q: Q):
     upload_action = True
     cur_dir = os.getcwd()
-    sample_data_path = f"{cur_dir}/examples/demo/"
+    sample_data_path = f"{cur_dir}/examples/demo"
     org_table_name = "Sleep health and lifestyle study"
     usr_table_name = org_table_name.lower().replace(" ", "_")
 
@@ -715,13 +726,27 @@ async def on_event(q: Q):
     q.user.eval_mode  = False
 
     if q.args.suggest:
-        q.args.chatbot = "recommend questions"
+        q.args.chatbot = "Recommend questions"
         await chatbot(q)
         event_handled = True
     if q.args.eval_mode:
         q.user.eval_mode = True
         q.user.model_choices = MODEL_CHOICE_MAP_EVAL_MODE
         await chat(q)
+        event_handled = True
+    if q.args.submit_url_keys:
+        # Read/Update env variable
+        if q.args.textbox_remote_url:
+            env_settings["MODEL_INFO"]["RECOMMENDATION_MODEL_REMOTE_URL"] = q.args.textbox_remote_url
+        if q.args.textbox_h2o_api_key:
+            env_settings["MODEL_INFO"]["H2OAI_KEY"] = q.args.textbox_h2o_api_key
+        if q.args.textbox_openai_api_key:
+            env_settings["MODEL_INFO"]["OPENAI_API_KEY"] = q.args.textbox_openai_api_key
+
+        # Update settings file for future use.
+        f = open(f"{app_base_path}/sidekick/configs/env.toml", "w")
+        toml.dump(env_settings, f)
+        f.close()
         event_handled = True
     if q.args.table_dropdown and not q.args.chatbot and q.user.table_name != q.args.table_dropdown:
         logging.info(f"User selected table: {q.args.table_dropdown}")
