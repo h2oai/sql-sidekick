@@ -508,19 +508,18 @@ def generate_suggestions(remote_url, client_key:str, table_name: str, column_nam
     # Check if remote url contains h2o.ai/openai endpoints
     if not remote_url or not client_key:
         results = "Currently not supported."
+    else:
+        column_info = ','.join(column_names)
+        input_prompt  = RECOMMENDATION_PROMPT.format(data_schema=column_info
+        )
 
-    column_info = ','.join(column_names)
-    input_prompt  = RECOMMENDATION_PROMPT.format(data_schema=column_info
-    )
-
-    client = H2OGPTE(address=remote_url, api_key=client_key)
-    text_completion = client.answer_question(
-        system_prompt=f"Act as a data analyst, based on below data schema help answer the question",
-        text_context_list=[],
-        question=input_prompt,
-        llm='h2oai/h2ogpt-4096-llama2-70b-chat'
-    )
-
-    _res = text_completion.content.split("\n")[2:]
-    results = "\n".join(_res)
+        client = H2OGPTE(address=remote_url, api_key=client_key)
+        text_completion = client.answer_question(
+            system_prompt=f"Act as a data analyst, based on below data schema help answer the question",
+            text_context_list=[],
+            question=input_prompt,
+            llm='h2oai/h2ogpt-4096-llama2-70b-chat'
+        )
+        _res = text_completion.content.split("\n")[2:]
+        results = "\n".join(_res)
     return results

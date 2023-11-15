@@ -125,6 +125,9 @@ def update_table_info(cache_path: str, table_info_path: str = None, table_name: 
 
 # Experimental, might be deprecated in future.
 def recommend_suggestions(cache_path: str, table_name: str, remote_url: str= None, client_key:str=None):
+    # Reload .env info
+    env_settings = toml.load(f"{app_base_path}/sidekick/configs/env.toml")
+
     column_names = []
     if Path(cache_path).exists():
         with open(cache_path, "r") as in_file:
@@ -135,8 +138,11 @@ def recommend_suggestions(cache_path: str, table_name: str, remote_url: str= Non
                         col_name = data["Column Name"]
                         column_names.append(col_name)
 
-    r_url = h2o_remote_url if not remote_url else remote_url
-    _key = h2o_key if not client_key else client_key
+    r_url = _key =  None
+    if not remote_url:
+        r_url = env_settings["MODEL_INFO"]["RECOMMENDATION_MODEL_REMOTE_URL"]
+    if not client_key:
+        _key = env_settings["MODEL_INFO"]["H2OAI_KEY"]
 
     result = generate_suggestions(remote_url=r_url, client_key=_key, table_name=table_name, column_names=column_names)
     return result
@@ -414,6 +420,7 @@ def query_api(
             f.close()
     if ('gpt-3.5' in model_name or 'gpt-4' in model_name):
         openai.api_key = api_key
+        logger.info(f"OpenAI key found.")
 
     try:
         # Set context
@@ -448,7 +455,7 @@ def query_api(
         )
         if "h2ogpt-sql" not in model_name:
             sql_g._tasks = sql_g.generate_tasks(table_names, question)
-            results.extend(["List of Actions Generated: \n", sql_g._tasks, "\n"])
+            results.extend(["I am thinking step by step: \n", sql_g._tasks, "\n"])
             click.echo(sql_g._tasks)
 
             updated_tasks = None
