@@ -289,6 +289,7 @@ async def chatbot(q: Q):
     try:
         if q.args.chatbot and (q.args.chatbot.lower() == "recommend questions" or q.args.chatbot.lower() == "recommend qs"):
             llm_response = recommend_suggestions(cache_path=q.user.table_info_path, table_name=q.user.table_name)
+            logging.info(f"Recommended Questions:\n{llm_response}")
         elif q.args.chatbot and q.args.chatbot.lower() == "db setup":
             llm_response, err = db_setup_api(
                 db_name=q.user.db_name,
@@ -361,6 +362,27 @@ async def chatbot(q: Q):
     q.client.llm_response = llm_response
     q.page["chat_card"].data += [llm_response, False]
 
+
+@on("submit_url_keys")
+async def submit_url_keys(q: Q):
+    # Read/Update env variable
+    if q.args.textbox_remote_url:
+        env_settings["MODEL_INFO"]["RECOMMENDATION_MODEL_REMOTE_URL"] = q.args.textbox_remote_url
+        os.environ["RECOMMENDATION_MODEL_REMOTE_URL"] = q.args.textbox_remote_url
+    if q.args.textbox_h2o_api_key:
+        env_settings["MODEL_INFO"]["H2OAI_KEY"] = q.args.textbox_h2o_api_key
+        os.environ["H2OAI_KEY"] = q.args.textbox_h2o_api_key
+    if q.args.textbox_openai_api_key:
+        env_settings["MODEL_INFO"]["OPENAI_API_KEY"] = q.args.textbox_openai_api_key
+        os.environ["OPENAI_API_KEY"]  = q.args.textbox_openai_api_key
+
+    # Update settings file for future use.
+    f = open(f"{app_base_path}/sidekick/configs/env.toml", "w")
+    toml.dump(env_settings, f)
+    f.close()
+    q.page["settings"].success_add_bar.visible = True
+    await q.page.save()
+    return
 
 @on("file_upload")
 async def fileupload(q: Q):
@@ -464,17 +486,29 @@ async def on_settings(q: Q):
     toggle_state = q.user.eval_mode if q.user.eval_mode else False
     add_card(
         q,
-        "dataset",
+        "settings",
         ui.form_card(
             box="vertical",
             items=[
                 ui.textbox(name='textbox_remote_url', label='Recommendation Remote URL',
-                      value=''),
+                      value='https://playground.h2ogpte.h2o.ai'),
                 ui.textbox(name='textbox_h2o_api_key', label='H2O API Key',
                       value=''),
                 ui.textbox(name='textbox_openai_api_key', label='OpenAI API Key',
                       value=''),
-                ui.button(name="submit_url_keys", label="Submit", primary=True),
+                ui.button(name="submit_url_keys", label="Add", primary=True),
+                ui.message_bar(
+                    name="error_add_bar",
+                    type="error",
+                    text="Check the credentials provided.",
+                    visible=False,
+                ),
+                ui.message_bar(
+                    name="success_add_bar",
+                    type="success",
+                    text=f"Information added successfully!",
+                    visible=False,
+                ),
                 ui.separator(label='Others'),
                 ui.toggle(name='eval_mode', label='Eval Mode', value=toggle_state)]
         ))
@@ -733,20 +767,6 @@ async def on_event(q: Q):
         q.user.eval_mode = True
         q.user.model_choices = MODEL_CHOICE_MAP_EVAL_MODE
         await chat(q)
-        event_handled = True
-    if q.args.submit_url_keys:
-        # Read/Update env variable
-        if q.args.textbox_remote_url:
-            env_settings["MODEL_INFO"]["RECOMMENDATION_MODEL_REMOTE_URL"] = q.args.textbox_remote_url
-        if q.args.textbox_h2o_api_key:
-            env_settings["MODEL_INFO"]["H2OAI_KEY"] = q.args.textbox_h2o_api_key
-        if q.args.textbox_openai_api_key:
-            env_settings["MODEL_INFO"]["OPENAI_API_KEY"] = q.args.textbox_openai_api_key
-
-        # Update settings file for future use.
-        f = open(f"{app_base_path}/sidekick/configs/env.toml", "w")
-        toml.dump(env_settings, f)
-        f.close()
         event_handled = True
     if q.args.table_dropdown and not q.args.chatbot and q.user.table_name != q.args.table_dropdown:
         logging.info(f"User selected table: {q.args.table_dropdown}")
