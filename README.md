@@ -50,3 +50,7 @@ Commands:
   learn      Helps in learning and building memory.
   query      Asks question and returns SQL
 ```
+
+## UI
+<img width="1670" alt="Screen Shot 2023-11-15 at 6 19 14 PM" src="https://github.com/h2oai/sql-sidekick/assets/1318029/5cf8a3ef-0d36-4416-ae2f-52672024fead">
+
