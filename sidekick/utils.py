@@ -321,7 +321,7 @@ def is_resource_low(model_name: str):
         off_load = False
     else:
         n_gpus = torch.cuda.device_count()
-        device_index = MODEL_DEVICE_MAP[model_name] if model_name and n_gpus > 1 else 0
+        device_index = MODEL_DEVICE_MAP.get(model_name, 0) if model_name and "gpt-3.5" not in model_name or "gpt-4" not in model_name and n_gpus > 1 else 0
         logger.debug(f"Information on device: {device_index}")
         free_in_GB = int(torch.cuda.mem_get_info(device_index)[0] / 1024**3)
         total_memory = int(torch.cuda.get_device_properties(device_index).total_memory / 1024**3)
