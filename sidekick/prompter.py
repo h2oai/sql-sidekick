@@ -127,8 +127,12 @@ def update_table_info(cache_path: str, table_info_path: str = None, table_name: 
 def recommend_suggestions(cache_path: str, table_name: str, remote_url: str= None, client_key:str=None):
     # Reload .env info
     env_settings = toml.load(f"{app_base_path}/sidekick/configs/env.toml")
-
+    path = f"{base_path}/var/lib/tmp/data"
     column_names = []
+    if cache_path is None:
+        logger.debug(f"Retrieve meta information for table {table_name}")
+        cache_path = _get_table_info(path, table_name)
+        logger.debug(f"Updated table info path: {cache_path}")
     if Path(cache_path).exists():
         with open(cache_path, "r") as in_file:
             for line in in_file:
