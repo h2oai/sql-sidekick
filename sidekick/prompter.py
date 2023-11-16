@@ -457,7 +457,7 @@ def query_api(
             is_regenerate_with_options=is_regen_with_options,
             is_regenerate=is_regenerate,
         )
-        if "h2ogpt-sql" not in model_name:
+        if "h2ogpt-sql" not in model_name and not _execute_sql(question):
             sql_g._tasks = sql_g.generate_tasks(table_names, question)
             results.extend(["I am thinking step by step: \n", sql_g._tasks, "\n"])
             click.echo(sql_g._tasks)
