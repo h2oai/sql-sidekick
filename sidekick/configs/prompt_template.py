@@ -38,7 +38,9 @@ QUERY_PROMPT = """
                 ### *Tasks for table {_table_name}*:\n{_tasks}
                 ### *Policies for SQL generation*:
                 # Avoid overly complex SQL queries
-                # Use values that are explicitly mentioned in the question.
+                # Use values and column names that are explicitly mentioned in the question or in the *Data* section.
+                # Do not query for columns that do not exist
+                # Validate column names with the table name when needed
                 # Don't use aggregate and window function together
                 # Use COUNT(1) instead of COUNT(*)
                 # Return with LIMIT 100
@@ -70,7 +72,7 @@ Table '{table_name}' has sample values ({data_info_detailed})
 
 
 
--- Using valid SQLite, answer the following questions (check for typos, grammatical and spelling errors and fix them) with the information for '{table_name}' provided above; for final SQL only use column names from the CREATE TABLE.
+-- Using valid and syntactically correct SQLite query, answer the following questions (check for typos, grammatical and spelling errors and fix them) with the information for '{table_name}' provided above; for final SQL only use column names from the CREATE TABLE (Do not query for columns that do not exist).
 
 
 -- Using reference for TABLES '{table_name}' {context}; {question_txt}?
@@ -108,3 +110,19 @@ CREATE TABLE '{table_name}' ({column_info}
 
 ### Response:
 SELECT"""
+
+
+RECOMMENDATION_PROMPT="""
+Generate 10 simple questions for the given dataset.
+Only use the specified column names mentioned in *Data Schema*.
+
+### Data Schema:
+{data_schema}
+
+
+Output: ordered numeric list of questions
+
+
+### Response:
+1.
+"""

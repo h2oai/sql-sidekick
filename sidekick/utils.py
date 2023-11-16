@@ -10,9 +10,11 @@ import numpy as np
 import pandas as pd
 import torch
 from accelerate import infer_auto_device_map, init_empty_weights
+from h2ogpte import H2OGPTE
 from InstructorEmbedding import INSTRUCTOR
 from pandasql import sqldf
 from sentence_transformers import SentenceTransformer
+from sidekick.configs.prompt_template import RECOMMENDATION_PROMPT
 from sidekick.logger import logger
 from sklearn.metrics.pairwise import cosine_similarity
 from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
@@ -411,13 +413,13 @@ def load_causal_lm_model(
 
         if not model_type:  # if None, load all models
             for device_index in range(n_gpus):
-                model_name = list(MODEL_CHOICE_MAP.values())[device_index]
+                model_name = list(MODEL_CHOICE_MAP_DEFAULT.values())[device_index]
                 model, tokenizer = _load_llm(model_name, device_index)
-                _name = list(MODEL_CHOICE_MAP.keys())[device_index]
+                _name = list(MODEL_CHOICE_MAP_DEFAULT.keys())[device_index]
                 models[_name] = model
                 tokenizers[_name] = tokenizer
         else:
-            model_name = MODEL_CHOICE_MAP[model_type]
+            model_name = MODEL_CHOICE_MAP_DEFAULT[model_type]
             d_index = MODEL_DEVICE_MAP[model_type] if n_gpus > 1 else 0
             model, tokenizer = _load_llm(model_name, d_index)
             models[model_type] = model
@@ -499,3 +501,25 @@ def check_vulnerability(input_query: str):
         _detected_patterns = ", ".join([str(elem) for elem in _pd])
         _msg = f"The input question has malicious patterns, **{_detected_patterns}** that could lead to SQL Injection.\nSorry, I will not be able to provide an answer.\nPlease try rephrasing the question."
     return res, _msg
+
+
+def generate_suggestions(remote_url, client_key:str, table_name: str, column_names: list):
+    results = []
+    # Check if remote url contains h2o.ai/openai endpoints
+    if not remote_url or not client_key:
+        results = "Currently not supported."
+    else:
+        column_info = ','.join(column_names)
+        input_prompt  = RECOMMENDATION_PROMPT.format(data_schema=column_info
+        )
+
+        client = H2OGPTE(address=remote_url, api_key=client_key)
+        text_completion = client.answer_question(
+            system_prompt=f"Act as a data analyst, based on below data schema help answer the question",
+            text_context_list=[],
+            question=input_prompt,
+            llm='h2oai/h2ogpt-4096-llama2-70b-chat'
+        )
+        _res = text_completion.content.split("\n")[2:]
+        results = "\n".join(_res)
+    return results

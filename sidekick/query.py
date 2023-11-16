@@ -11,10 +11,12 @@ import sqlglot
 import sqlparse
 import torch
 import torch.nn.functional as F
-from langchain import OpenAI
-from llama_index import (GPTSimpleVectorIndex, GPTSQLStructStoreIndex,
-                         LLMPredictor, ServiceContext, SQLDatabase)
+from llama_index.llms import OpenAI as LOpenAI
+from llama_index.indices.struct_store.sql import GPTSQLStructStoreIndex
+from llama_index import (GPTVectorStoreIndex,
+                         ServiceContext, SQLDatabase)
 from llama_index.indices.struct_store import SQLContextContainerBuilder
+from openai import OpenAI
 from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
                                               NSQL_QUERY_PROMPT, QUERY_PROMPT,
                                               STARCODER2_PROMPT, TASK_PROMPT)
@@ -41,6 +43,7 @@ class SQLGenerator:
         job_path: str = "./",
         device: str = "auto",
         is_regenerate: bool = False,
+        eval_mode = False,
         is_regenerate_with_options: bool = False,
     ):
         # TODO: If openai model then only tokenizer needs to be loaded.
@@ -116,6 +119,7 @@ class SQLGenerator:
         self.device = device
         self.table_name = None,
         self.eval_mode = False
+        self.openai_client = OpenAI() if openai.api_key else None
 
     def clear(self):
         del SQLGenerator._instance
@@ -138,7 +142,7 @@ class SQLGenerator:
             openai.api_key = self.openai_key
 
         table_schema_index = self.context_builder.derive_index_from_context(
-            GPTSimpleVectorIndex,
+            GPTVectorStoreIndex,
         )
         if persist:
             table_schema_index.save_to_disk(f"{self.path}/sql_index_check.json")
@@ -197,17 +201,17 @@ class SQLGenerator:
             )
             # Role and content
             query_txt = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
-            logger.debug(f"Query Text:\n {query_txt}")
 
             MODEL_CHOICE_MAP = MODEL_CHOICE_MAP_EVAL_MODE
             m_name = MODEL_CHOICE_MAP.get(self.model_name)
-            completion = openai.ChatCompletion.create(
+
+            completion = self.openai_client.chat.completions.create(
                 model=m_name,
                 messages=query_txt,
                 max_tokens=512,
                 seed=42
             )
-            res = completion.choices[0].message["content"]
+            res = completion.choices[0].message.content
             return res
         except Exception as se:
             _, ex_value, _ = sys.exc_info()
@@ -215,11 +219,12 @@ class SQLGenerator:
             return res
 
     def generate_response(
-        self, context_container, sql_index, input_prompt, attempt_fix_on_error: bool = True, _dialect: str = "sqlite"
+        self, sql_index, input_prompt, attempt_fix_on_error: bool = True, _dialect: str = "sqlite"
     ):
         try:
-            response = sql_index.query(input_prompt, sql_context_container=context_container)
-            res = response.extra_info["sql_query"]
+            _sql_index = sql_index.as_query_engine()
+            response = _sql_index.query(input_prompt)
+            res = response.metadata["sql_query"]
             return res
         except Exception as se:
             # Take the SQL and make an attempt for correction
@@ -234,15 +239,15 @@ class SQLGenerator:
                     user_prompt = DEBUGGING_PROMPT["user_prompt"].format(ex_traceback=ex_traceback, qry_txt=qry_txt)
                     # Role and content
                     query_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
-
-                    m_name = MODEL_CHOICE_MAP.get(self.model_name)
-                    completion = openai.ChatCompletion.create(
+                    MODEL_CHOICE_MAP = MODEL_CHOICE_MAP_EVAL_MODE
+                    m_name = MODEL_CHOICE_MAP.get(self.model_name, "gpt-3.5-turbo-1106")
+                    completion = self.openai_client.chat.completions.create(
                         model=m_name,
                         messages=query_msg,
                         max_tokens=512,
                         seed=42
                     )
-                    res = completion.choices[0].message["content"]
+                    res = completion.choices[0].message.content
                     if "SELECT" not in res:
                         res = qry_txt
                     return res
@@ -331,22 +336,24 @@ class SQLGenerator:
                     _tasks=_tasks,
                 )
 
+                logger.debug(f"Query Text:\n {query_str}")
                 # Reference: https://github.com/jerryjliu/llama_index/issues/987
-                m_name = MODEL_CHOICE_MAP[model_name]
-                llm_predictor_gpt3 = LLMPredictor(llm=OpenAI(temperature=0, model_name=m_name, max_tokens=512, seed=42))
+                MODEL_CHOICE_MAP = MODEL_CHOICE_MAP_EVAL_MODE
+                m_name = MODEL_CHOICE_MAP.get(model_name, "gpt-3.5-turbo-1106")
+
+                llm_predictor_gpt3 = LOpenAI(temperature=0, model_name=m_name, max_tokens=512, seed=42)
                 service_context_gpt3 = ServiceContext.from_defaults(
-                    llm_predictor=llm_predictor_gpt3, chunk_size_limit=512
+                    llm=llm_predictor_gpt3, chunk_size_limit=512
                 )
 
                 table_schema_index = self.build_index(persist=False)
                 self.context_builder.query_index_for_context(table_schema_index, query_str, store_context_str=True)
-                context_container = self.context_builder.build_context_container()
 
                 index = GPTSQLStructStoreIndex(
                     [], sql_database=self.sql_database, table_name=table_names, service_context=service_context_gpt3
                 )
 
-                result = self.generate_response(context_container, sql_index=index, input_prompt=query_str)
+                result = self.generate_response(sql_index=index, input_prompt=query_str)
                 try:
                     # Check if `SQL` is formatted ---> ``` SQL_text ```
                     if "```" in str(result):
@@ -435,8 +442,8 @@ class SQLGenerator:
 
                 contextual_context_val = ", ".join(contextual_context)
                 column_names = columns_w_type.strip().split(",")
-                clmn_names = [i.split("(")[0].strip() for i in column_names]
-                clmn_types = [i.split("(")[1].strip().replace(")", "") for i in column_names]
+                clmn_names = [i.split("(")[0].strip() for i in column_names if i]
+                clmn_types = [i.split("(")[1].strip().replace(")", "") for i in column_names if i]
                 clmn_info_map = dict(zip(clmn_names, clmn_types))
 
                 context_columns = []

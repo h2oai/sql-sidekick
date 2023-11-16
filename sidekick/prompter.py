@@ -19,9 +19,10 @@ from sidekick.memory import EntityMemory
 from sidekick.query import SQLGenerator
 from sidekick.schema_generator import generate_schema
 from sidekick.utils import (_execute_sql, check_vulnerability,
-                            execute_query_pd, extract_table_names, save_query,
-                            setup_dir)
+                            execute_query_pd, extract_table_names,
+                            generate_suggestions, save_query, setup_dir)
 
+__version__ = "0.1.5"
 # Load the config file and initialize required paths
 app_base_path = (Path(__file__).parent / "../").resolve()
 # Below check is to handle the case when the app is running on the h2o.ai cloud or locally
@@ -29,8 +30,10 @@ base_path = app_base_path if os.path.isdir("./.sidekickvenv/bin/") else "/meta_d
 env_settings = toml.load(f"{app_base_path}/sidekick/configs/env.toml")
 db_dialect = env_settings["DB-DIALECT"]["DB_TYPE"]
 model_name = env_settings["MODEL_INFO"]["MODEL_NAME"]
+h2o_remote_url = env_settings["MODEL_INFO"]["RECOMMENDATION_MODEL_REMOTE_URL"]
+h2o_key = env_settings["MODEL_INFO"]["H2OAI_KEY"]
+
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
-__version__ = "0.1.4"
 
 
 def color(fore="", back="", text=None):
@@ -119,6 +122,34 @@ def update_table_info(cache_path: str, table_info_path: str = None, table_name: 
     table_metadata["data_table_map"] = {}
     with open(f"{cache_path}/table_context.json", "w") as outfile:
         json.dump(table_metadata, outfile, indent=4, sort_keys=False)
+
+# Experimental, might be deprecated in future.
+def recommend_suggestions(cache_path: str, table_name: str, remote_url: str= None, client_key:str=None):
+    # Reload .env info
+    env_settings = toml.load(f"{app_base_path}/sidekick/configs/env.toml")
+    path = f"{base_path}/var/lib/tmp/data"
+    column_names = []
+    if cache_path is None:
+        logger.debug(f"Retrieve meta information for table {table_name}")
+        cache_path = _get_table_info(path, table_name)
+        logger.debug(f"Updated table info path: {cache_path}")
+    if Path(cache_path).exists():
+        with open(cache_path, "r") as in_file:
+            for line in in_file:
+                if line.strip():
+                    data = json.loads(line)
+                    if "Column Name" in data and "Column Type" in data:
+                        col_name = data["Column Name"]
+                        column_names.append(col_name)
+
+    r_url = _key =  None
+    if not remote_url:
+        r_url = env_settings["MODEL_INFO"]["RECOMMENDATION_MODEL_REMOTE_URL"]
+    if not client_key:
+        _key = env_settings["MODEL_INFO"]["H2OAI_KEY"]
+
+    result = generate_suggestions(remote_url=r_url, client_key=_key, table_name=table_name, column_names=column_names)
+    return result
 
 
 @configure.command(
@@ -393,6 +424,7 @@ def query_api(
             f.close()
     if ('gpt-3.5' in model_name or 'gpt-4' in model_name):
         openai.api_key = api_key
+        logger.info(f"OpenAI key found.")
 
     try:
         # Set context
@@ -427,7 +459,7 @@ def query_api(
         )
         if "h2ogpt-sql" not in model_name:
             sql_g._tasks = sql_g.generate_tasks(table_names, question)
-            results.extend(["List of Actions Generated: \n", sql_g._tasks, "\n"])
+            results.extend(["I am thinking step by step: \n", sql_g._tasks, "\n"])
             click.echo(sql_g._tasks)
 
             updated_tasks = None
