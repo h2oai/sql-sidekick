@@ -11,11 +11,10 @@ import sqlglot
 import sqlparse
 import torch
 import torch.nn.functional as F
-from llama_index.llms import OpenAI as LOpenAI
-from llama_index.indices.struct_store.sql import GPTSQLStructStoreIndex
-from llama_index import (GPTVectorStoreIndex,
-                         ServiceContext, SQLDatabase)
+from llama_index import GPTVectorStoreIndex, ServiceContext, SQLDatabase
 from llama_index.indices.struct_store import SQLContextContainerBuilder
+from llama_index.indices.struct_store.sql import GPTSQLStructStoreIndex
+from llama_index.llms import OpenAI as LOpenAI
 from openai import OpenAI
 from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
                                               NSQL_QUERY_PROMPT, QUERY_PROMPT,
@@ -314,6 +313,7 @@ class SQLGenerator:
         alternate_queries = []
         describe_keywords = ["describe table", "describe", "describe table schema", "describe data"]
         enable_describe_qry = any([True for _dk in describe_keywords if _dk in input_question.lower()])
+
         if input_question is not None and enable_describe_qry:
             result = f"""SELECT "name" from PRAGMA_TABLE_INFO("{table_name}")"""
         else:
