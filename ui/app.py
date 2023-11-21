@@ -10,7 +10,8 @@ import toml
 import torch
 from h2o_wave import Q, app, data, handle_on, main, on, ui
 from h2o_wave.core import expando_to_dict
-from sidekick.prompter import db_setup_api, query_api, recommend_suggestions
+from sidekick.prompter import (data_preview, db_setup_api, query_api,
+                               recommend_suggestions)
 from sidekick.query import SQLGenerator
 from sidekick.utils import (MODEL_CHOICE_MAP_DEFAULT,
                             MODEL_CHOICE_MAP_EVAL_MODE, TASK_CHOICE,
@@ -79,6 +80,17 @@ async def user_variable(q: Q):
 async def client_variable(q: Q):
     q.client.query = None
 
+# Reference: https://wave.h2o.ai/docs/examples/table-markdown-pandas/
+def make_markdown_row(values):
+    return f"| {' | '.join([str(x) for x in values])} |"
+
+
+def make_markdown_table(fields, rows):
+    return '\n'.join([
+        make_markdown_row(fields),
+        make_markdown_row('-' * len(fields)),
+        '\n'.join([make_markdown_row(row) for row in rows]),
+    ])
 
 # Use for page cards that should be removed when navigating away.
 # For pages that should be always present on screen use q.page[key] = ...
@@ -287,7 +299,13 @@ async def chatbot(q: Q):
     # 2. "Try harder mode (THM)" Slow approach by using the diverse beam search
     llm_response = None
     try:
-        if q.args.chatbot and (q.args.chatbot.lower() == "recommend questions" or q.args.chatbot.lower() == "recommend qs"):
+        if q.args.chatbot and ("preview data" in q.args.chatbot.lower() or "data preview" in q.args.chatbot.lower() or "preview" in q.args.chatbot.lower()) or f"preview {q.user.table_name}" in q.args.chatbot.lower():
+            _response_df = data_preview(q.user.table_name)
+            # Format as markdown table
+            df_markdown = make_markdown_table(fields = _response_df.columns.tolist(), rows=_response_df.values.tolist())
+            n_cols = len(_response_df.columns)
+            llm_response = f"The selected dataset has total number of {n_cols} columns.\nBelow is quick preview:\n{df_markdown}"
+        elif q.args.chatbot and (q.args.chatbot.lower() == "recommend questions" or q.args.chatbot.lower() == "recommend qs"):
             llm_response = recommend_suggestions(cache_path=q.user.table_info_path, table_name=q.user.table_name)
             logging.info(f"Recommended Questions:\n{llm_response}")
         elif q.args.chatbot and q.args.chatbot.lower() == "db setup":
