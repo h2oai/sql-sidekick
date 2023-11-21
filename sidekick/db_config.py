@@ -164,6 +164,14 @@ class DBConfig:
         engine = create_engine(self._url)
         return sqlalchemy.inspect(engine).has_table(self.table_name)
 
+    def data_preview(self, table_name):
+        if table_name:
+            query_str = f"SELECT * FROM {table_name} LIMIT 10"
+            result = self.execute_query_db(query_str)
+        else:
+            result = "Table not found. Make sure uploaded dataset is registered."
+        return result
+
     def add_samples(self, data_csv_path=None):
         conn_str = self._url
         try:

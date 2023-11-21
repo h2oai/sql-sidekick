@@ -6,6 +6,7 @@ from pathlib import Path
 
 import click
 import openai
+import pandas as pd
 import sqlparse
 import toml
 import torch
@@ -362,6 +363,22 @@ def query(question: str, table_info_path: str, sample_qna_path: str):
         is_command=True,
     )
 
+def data_preview(table_name):
+    hostname = env_settings["LOCAL_DB_CONFIG"]["HOST_NAME"]
+    user_name = env_settings["LOCAL_DB_CONFIG"]["USER_NAME"]
+    password = env_settings["LOCAL_DB_CONFIG"]["PASSWORD"]
+    port = env_settings["LOCAL_DB_CONFIG"]["PORT"]
+    db_name = env_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
+
+    db_obj = DBConfig(
+        db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect
+    )
+    if not db_obj.table_name:
+        db_obj.table_name = table_name
+    q_res = db_obj.data_preview(table_name)
+    # Convert result to data-frame
+    res = pd.DataFrame(q_res[0]) if q_res and q_res[0] else None
+    return res
 
 def query_api(
     question: str,
