@@ -263,7 +263,8 @@ async def chat(q: Q):
         _msg = """Welcome to the SQL Sidekick!\nI am an AI assistant, i am here to help you find answers to questions on structured data.
 To get started, please select a table from the dropdown and ask your question.
 One could start by learning about the dataset by asking questions like:
-- Describe data."""
+- Describe data.
+- Preview."""
         q.args.chatbot = _msg
         q.page["chat_card"].data += [q.args.chatbot, False]
     logging.info(f"Chatbot response: {q.args.chatbot}")
@@ -884,7 +885,7 @@ async def on_event(q: Q):
         and the presence or absence of sleep disorders\n
         Reference: https://www.kaggle.com/datasets/uom190346a/sleep-health-and-lifestyle-dataset \n
         Example questions:\n
-        1. Describe data. Tip: For more detailed insights on the data try AutoInsights on the Cloud marketplace.
+        1. Describe data/Preview data. Tip: For more detailed insights on the data try AutoInsights on the Cloud marketplace.
         2. What is the average sleep duration for each gender?
         3. How does average sleep duration vary across different age groups?
         4. What are the most common occupations among individuals in the dataset?
