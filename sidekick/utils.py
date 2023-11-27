@@ -507,7 +507,7 @@ def generate_suggestions(remote_url, client_key:str, table_name: str, column_nam
     results = []
     # Check if remote url contains h2o.ai/openai endpoints
     if not remote_url or not client_key:
-        results = "Currently not supported."
+        results = "Currently not supported or remote API key is missing."
     else:
         column_info = ','.join(column_names)
         input_prompt  = RECOMMENDATION_PROMPT.format(data_schema=column_info
