@@ -308,6 +308,8 @@ async def chatbot(q: Q):
             llm_response = f"The selected dataset has total number of {n_cols} columns.\nBelow is quick preview:\n{df_markdown}"
         elif q.args.chatbot and (q.args.chatbot.lower() == "recommend questions" or q.args.chatbot.lower() == "recommend qs"):
             llm_response = recommend_suggestions(cache_path=q.user.table_info_path, table_name=q.user.table_name)
+            if not llm_response:
+                llm_response = "Something went wrong, check the API Keys provided."
             logging.info(f"Recommended Questions:\n{llm_response}")
         elif q.args.chatbot and q.args.chatbot.lower() == "db setup":
             llm_response, err = db_setup_api(

@@ -1,9 +1,7 @@
 import gc
 import json
 import os
-import string
 from pathlib import Path
-
 import click
 import openai
 import pandas as pd
@@ -148,9 +146,13 @@ def recommend_suggestions(cache_path: str, table_name: str, remote_url: str= Non
         r_url = env_settings["MODEL_INFO"]["RECOMMENDATION_MODEL_REMOTE_URL"]
     if not client_key:
         _key = env_settings["MODEL_INFO"]["H2OAI_KEY"]
-
-    result = generate_suggestions(remote_url=r_url, client_key=_key, table_name=table_name, column_names=column_names)
+    try:
+        result = generate_suggestions(remote_url=r_url, client_key=_key, table_name=table_name, column_names=column_names)
+    except Exception as e:
+        logger.error(f"Something went wrong,\n{e}")
+        result = None
     return result
+
 
 
 @configure.command(
@@ -608,13 +610,13 @@ def query_api(
                 save_query(base_path, query=question, response=_val)
             else:
                 click.echo("Exiting...")
-    except (MemoryError, RuntimeError) as e:
+    except (MemoryError, RuntimeError, AttributeError) as e:
         logger.error(f"Something went wrong while generating response: {e}")
         del sql_g
         gc.collect()
         torch.cuda.empty_cache()
         alt_res, err = None, None
-        results = ["Something went wrong while generating response. Please try again."]
+        results = ["Something went wrong while generating response. Please check the supplied API Keys and try again."]
     return results, alt_res, err
 
 
