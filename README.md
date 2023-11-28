@@ -53,15 +53,13 @@ Commands:
 
 ## UI
 ### Steps to start locally
-(*steps `2-7` might be temporary)
 1. Download wave serve [0.26.3](https://github.com/h2oai/wave/releases/tag/v0.26.3)
-2. git clone git@github.com:h2oai/sql-sidekick.git
-3. cd sql-sidekick
-4. make setup
-5. source ./.sidekickvenv/bin/activate
-6. poetry update
-7. poetry install
-8. make run
+2. `tar -xzf wave-0.26.3-linux-amd64`; `./waved -max-request-size="20M"`
+3. Download the latest bundle: https://github.com/h2oai/sql-sidekick/releases/latest
+4. unzip `ai.h2o.wave.sql-sidekick.x.x.x.wave`
+5. make setup
+6. source ./.sidekickvenv/bin/activate
+7. make run
 <img width="1670" alt="Screen Shot 2023-11-15 at 6 19 14 PM" src="https://github.com/h2oai/sql-sidekick/assets/1318029/5cf8a3ef-0d36-4416-ae2f-52672024fead">
 
 Citation
