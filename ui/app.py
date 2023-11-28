@@ -10,7 +10,7 @@ import toml
 import torch
 from h2o_wave import Q, app, data, handle_on, main, on, ui
 from h2o_wave.core import expando_to_dict
-from sidekick.prompter import (data_preview, db_setup_api, query_api,
+from sidekick.prompter import (ask, data_preview, db_setup,
                                recommend_suggestions)
 from sidekick.query import SQLGenerator
 from sidekick.utils import (MODEL_CHOICE_MAP_DEFAULT,
@@ -312,7 +312,7 @@ async def chatbot(q: Q):
                 llm_response = "Something went wrong, check the API Keys provided."
             logging.info(f"Recommended Questions:\n{llm_response}")
         elif q.args.chatbot and q.args.chatbot.lower() == "db setup":
-            llm_response, err = db_setup_api(
+            llm_response, err = db_setup(
                 db_name=q.user.db_name,
                 hostname=q.user.host_name,
                 user_name=q.user.user_name,
@@ -326,7 +326,7 @@ async def chatbot(q: Q):
             # Attempts to regenerate response on the last supplied query
             logging.info(f"Attempt for regeneration")
             if q.client.query is not None and q.client.query.strip() != "":
-                llm_response, alt_response, err = query_api(
+                llm_response, alt_response, err = ask(
                     question=q.client.query,
                     sample_queries_path=q.user.sample_qna_path,
                     table_info_path=q.user.table_info_path,
@@ -345,7 +345,7 @@ async def chatbot(q: Q):
             # Attempts to regenerate response on the last supplied query
             logging.info(f"Attempt for regeneration with options.")
             if q.client.query is not None and q.client.query.strip() != "":
-                llm_response, alt_response, err = query_api(
+                llm_response, alt_response, err = ask(
                     question=q.client.query,
                     sample_queries_path=q.user.sample_qna_path,
                     table_info_path=q.user.table_info_path,
@@ -367,7 +367,7 @@ async def chatbot(q: Q):
                 )
         else:
             q.client.query = question
-            llm_response, alt_response, err = query_api(
+            llm_response, alt_response, err = ask(
                 question=q.client.query,
                 sample_queries_path=q.user.sample_qna_path,
                 table_info_path=q.user.table_info_path,
@@ -472,7 +472,7 @@ async def fileupload(q: Q):
             q.user.table_info_path = usr_info_path
             q.user.sample_qna_path = usr_sample_qa
 
-            n_rows, db_resp = db_setup_api(
+            n_rows, db_resp = db_setup(
                 db_name=q.user.db_name,
                 hostname=q.user.host_name,
                 user_name=q.user.user_name,
@@ -756,7 +756,7 @@ def upload_demo_examples(q: Q):
         q.user.table_info_path = f"{sample_data_path}/table_info.jsonl"
         q.user.sample_qna_path = None
 
-        _, db_resp = db_setup_api(
+        _, db_resp = db_setup(
             db_name=q.user.db_name,
             hostname=q.user.host_name,
             user_name=q.user.user_name,

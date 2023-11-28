@@ -21,7 +21,7 @@ from sidekick.utils import (_execute_sql, check_vulnerability,
                             execute_query_pd, extract_table_names,
                             generate_suggestions, save_query, setup_dir)
 
-__version__ = "0.1.5"
+__version__ = "0.1.7"
 # Load the config file and initialize required paths
 app_base_path = (Path(__file__).parent / "../").resolve()
 # Below check is to handle the case when the app is running on the h2o.ai cloud or locally
@@ -179,8 +179,8 @@ def generate_input_schema(data_path, output_path):
 )
 @click.option("--port", "-P", default=5432, help="Database port", prompt="Enter port (default 5432)")
 @click.option("--table-info-path", "-t", help="Table info path", default=None)
-def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: int, table_info_path: str):
-    db_setup_api(
+def db_setup_cli(db_name: str, hostname: str, user_name: str, password: str, port: int, table_info_path: str):
+    db_setup(
         db_name=db_name,
         hostname=hostname,
         user_name=user_name,
@@ -193,7 +193,7 @@ def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: i
     )
 
 
-def db_setup_api(
+def db_setup(
     db_name: str,
     hostname: str,
     user_name: str,
@@ -357,7 +357,7 @@ def update_context():
 @click.option("--sample_qna_path", "-s", help="Samples path", default=None)
 def query(question: str, table_info_path: str, sample_qna_path: str):
     """Asks question and returns SQL."""
-    query_api(
+    ask(
         question=question,
         table_info_path=table_info_path,
         sample_queries_path=sample_qna_path,
@@ -382,7 +382,7 @@ def data_preview(table_name):
     res = pd.DataFrame(q_res[0]) if q_res and q_res[0] else None
     return res
 
-def query_api(
+def ask(
     question: str,
     table_info_path: str,
     sample_queries_path: str,
