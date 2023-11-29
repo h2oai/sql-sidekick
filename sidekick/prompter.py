@@ -25,7 +25,7 @@ __version__ = "0.1.7"
 # Load the config file and initialize required paths
 app_base_path = (Path(__file__).parent / "../").resolve()
 # Below check is to handle the case when the app is running on the h2o.ai cloud or locally
-base_path = app_base_path if os.path.isdir("./.sidekickvenv/bin/") else "/meta_data"
+default_base_path = app_base_path if os.path.isdir("./.sidekickvenv/bin/") else "/meta_data"
 env_settings = toml.load(f"{app_base_path}/sidekick/configs/env.toml")
 db_dialect = env_settings["DB-DIALECT"]["DB_TYPE"]
 model_name = env_settings["MODEL_INFO"]["MODEL_NAME"]
@@ -226,9 +226,7 @@ def db_setup(
             f = open(env_config_fname, "w")
             toml.dump(env_settings, f)
             f.close()
-        if local_base_path:
-            # Override base-path
-            base_path = local_base_path
+        base_path = local_base_path if local_base_path else default_base_path
         path = f"{base_path}/var/lib/tmp/data"
         # For current session
         db_obj = DBConfig(db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect)
@@ -319,7 +317,7 @@ def _add_context(entity_memory: EntityMemory):
 
 @learn.command("add-samples", help="Helps add contextual query/answer pairs.")
 def add_query_response():
-    em = EntityMemory(k=5, path=base_path)
+    em = EntityMemory(k=5, path=default_base_path)
     _add_context(em)
     _more = "y"
     while _more.lower() != "n" or _more.lower() != "no":
@@ -334,13 +332,13 @@ def add_query_response():
 def update_context():
     """Helps learn context for generation."""
     # Book-keeping
-    setup_dir(base_path)
+    setup_dir(default_base_path)
 
     context_dict = """{\n"<new_context_key>": "<new_context_value>"\n}
     """
-    content_file_path = f"{base_path}/var/lib/tmp/data/context.json"
+    content_file_path = f"{default_base_path}/var/lib/tmp/data/context.json"
     context_str = context_dict
-    if Path(f"{base_path}/var/lib/tmp/data/context.json").exists():
+    if Path(f"{default_base_path}/var/lib/tmp/data/context.json").exists():
         context_dict = json.load(open(content_file_path, "r"))
         context_dict["<new_context_key>"] = "<new_context_value"
         context_str = json.dumps(context_dict, indent=4, sort_keys=True, default=str)
@@ -350,7 +348,7 @@ def update_context():
         context_dict = json.loads(updated_context)
         if "<new_context_key>" in context_dict:
             del context_dict["<new_context_key>"]
-        path = f"{base_path}/var/lib/tmp/data/"
+        path = f"{default_base_path}/var/lib/tmp/data/"
         with open(f"{path}/context.json", "w") as outfile:
             json.dump(context_dict, outfile, indent=4, sort_keys=False)
     else:
@@ -379,7 +377,7 @@ def data_preview(table_name):
     db_name = env_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
 
     db_obj = DBConfig(
-        db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect
+        db_name, hostname, user_name, password, port, base_path=default_base_path, dialect=db_dialect
     )
     if not db_obj.table_name:
         db_obj.table_name = table_name
@@ -397,11 +395,13 @@ def ask(
     is_regenerate: bool = False,
     is_regen_with_options: bool = False,
     is_command: bool = False,
+    local_base_path = None
 ):
     """Asks question and returns SQL."""
     results = []
     err = None  # TODO - Need to handle errors if occurred
     # Book-keeping
+    base_path = local_base_path if local_base_path else default_base_path
     setup_dir(base_path)
 
     # Check if table exists
