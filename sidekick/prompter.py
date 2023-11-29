@@ -96,7 +96,7 @@ def _get_table_info(cache_path: str, table_name: str = None):
                 if table_info_path is None:
                     # if table_info_path is None, generate default schema n set path
                     data_path = current_meta["samples_path"]
-                    table_info_path = generate_schema(data_path, f"{cache_path}/{table_name}_table_info.jsonl")
+                    _, table_info_path = generate_schema(data_path, f"{cache_path}/{table_name}_table_info.jsonl")
         table_metadata = {"schema_info_path": table_info_path}
         with open(f"{cache_path}/table_context.json", "w") as outfile:
             json.dump(table_metadata, outfile, indent=4, sort_keys=False)
@@ -161,7 +161,7 @@ def recommend_suggestions(cache_path: str, table_name: str, remote_url: str= Non
 @click.option("--data_path", default="data.csv", help="Enter the path of csv", type=str)
 @click.option("--output_path", default="table_info.jsonl", help="Enter the path of generated schema in jsonl", type=str)
 def generate_input_schema(data_path, output_path):
-    o_path = generate_schema(data_path, output_path)
+    _, o_path = generate_schema(data_path, output_path)
     click.echo(f"Schema generated for the input data at {o_path}")
 
 
@@ -203,26 +203,32 @@ def db_setup(
     table_samples_path: str,
     table_name: str,
     is_command: bool = False,
+    local_base_path = None
 ):
     """Creates context for the new Database"""
     click.echo(f" Information supplied:\n {db_name}, {hostname}, {user_name}, {password}, {port}")
     try:
         res = err = None
-        env_settings["LOCAL_DB_CONFIG"]["HOST_NAME"] = hostname
-        env_settings["LOCAL_DB_CONFIG"]["USER_NAME"] = user_name
-        env_settings["LOCAL_DB_CONFIG"]["PASSWORD"] = password
-        env_settings["LOCAL_DB_CONFIG"]["PORT"] = port
-        env_settings["LOCAL_DB_CONFIG"]["DB_NAME"] = db_name
-
         # To-DO
         # --- Need to remove the below keys from ENV toml --- #
         # env_settings["TABLE_INFO"]["TABLE_INFO_PATH"] = table_info_path
         # env_settings["TABLE_INFO"]["TABLE_SAMPLES_PATH"] = table_samples_path
 
         # Update settings file for future use.
-        f = open(f"{app_base_path}/sidekick/configs/env.toml", "w")
-        toml.dump(env_settings, f)
-        f.close()
+        # Check if the env.toml exists.
+        env_config_fname = f"{app_base_path}/sidekick/configs/env.toml"
+        if Path(env_config_fname).exists():
+            env_settings["LOCAL_DB_CONFIG"]["HOST_NAME"] = hostname
+            env_settings["LOCAL_DB_CONFIG"]["USER_NAME"] = user_name
+            env_settings["LOCAL_DB_CONFIG"]["PASSWORD"] = password
+            env_settings["LOCAL_DB_CONFIG"]["PORT"] = port
+            env_settings["LOCAL_DB_CONFIG"]["DB_NAME"] = db_name
+            f = open(env_config_fname, "w")
+            toml.dump(env_settings, f)
+            f.close()
+        if local_base_path:
+            # Override base-path
+            base_path = local_base_path
         path = f"{base_path}/var/lib/tmp/data"
         # For current session
         db_obj = DBConfig(db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect)

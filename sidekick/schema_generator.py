@@ -1,7 +1,9 @@
 import json
-import re
-import pandas as pd
 import random
+import re
+from pathlib import Path
+
+import pandas as pd
 
 
 def generate_schema(data_path, output_path):
@@ -34,8 +36,11 @@ def generate_schema(data_path, output_path):
             schema_list.append({"Column Name": new_key, "Column Type": value})
 
     # Save the schema information to a JSONL format
+    if not Path(output_path).exists():
+        f = Path(output_path)
+        f.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
         for item in schema_list:
             json.dump(item, f)
             f.write("\n")
-    return output_path
+    return schema_list, output_path
