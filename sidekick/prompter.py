@@ -1,4 +1,5 @@
 import gc
+import importlib.metadata
 import json
 import os
 from pathlib import Path
@@ -21,7 +22,8 @@ from sidekick.utils import (_execute_sql, check_vulnerability,
                             execute_query_pd, extract_table_names,
                             generate_suggestions, save_query, setup_dir)
 
-__version__ = "0.1.7"
+__version__ = importlib.metadata.version('sql-sidekick')
+
 # Load the config file and initialize required paths
 app_base_path = (Path(__file__).parent / "../").resolve()
 # Below check is to handle the case when the app is running on the h2o.ai cloud or locally
@@ -126,7 +128,7 @@ def update_table_info(cache_path: str, table_info_path: str = None, table_name: 
 def recommend_suggestions(cache_path: str, table_name: str, remote_url: str= None, client_key:str=None):
     # Reload .env info
     env_settings = toml.load(f"{app_base_path}/sidekick/configs/env.toml")
-    path = f"{base_path}/var/lib/tmp/data"
+    path = f"{default_base_path}/var/lib/tmp/data"
     column_names = []
     if cache_path is None:
         logger.debug(f"Retrieve meta information for table {table_name}")
