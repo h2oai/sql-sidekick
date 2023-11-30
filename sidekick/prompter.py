@@ -3,6 +3,7 @@ import importlib.metadata
 import json
 import os
 from pathlib import Path
+
 import click
 import openai
 import pandas as pd
@@ -77,7 +78,7 @@ def enter_file_path(table: str):
 def set_loglevel(set_level):
     env_settings["LOGGING"]["LOG-LEVEL"] = set_level
     # Update settings file for future use.
-    f = open(f"{base_path}/sidekick/configs/env.toml", "w")
+    f = open(f"{default_base_path}/sidekick/configs/env.toml", "w")
     toml.dump(env_settings, f)
     f.close()
 
@@ -397,6 +398,7 @@ def ask(
     is_regenerate: bool = False,
     is_regen_with_options: bool = False,
     is_command: bool = False,
+    execute_query: bool = True,
     local_base_path = None
 ):
     """Asks question and returns SQL."""
@@ -547,12 +549,18 @@ def ask(
             results.extend([f"**Generated response for question,**\n{question}\n", syntax_highlight, "\n"])
             logger.info(f"Alternate responses:\n\n{alt_res}")
 
-            exe_sql = click.prompt("Would you like to execute the generated SQL (y/n)?") if is_command else "y"
+            exe_sql = "y"
+            if not execute_query:
+                if is_command:
+                    exe_sql = click.prompt("Would you like to execute the generated SQL (y/n)?")
+                else:
+                    exe_sql = "n"
+
+            _val = updated_sql if updated_sql else res
             if exe_sql.lower() == "y" or exe_sql.lower() == "yes":
                 # For the time being, the default option is Pandas, but the user can be asked to select Database or pandas DF later.
                 q_res = None
                 option = "DB"  # or DB
-                _val = updated_sql if updated_sql else res
                 if option == "DB":
                     hostname = env_settings["LOCAL_DB_CONFIG"]["HOST_NAME"]
                     user_name = env_settings["LOCAL_DB_CONFIG"]["USER_NAME"]
@@ -560,6 +568,7 @@ def ask(
                     port = env_settings["LOCAL_DB_CONFIG"]["PORT"]
                     db_name = env_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
 
+                    #TODO This call maybe redundant n might need some cleaning
                     db_obj = DBConfig(
                         db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect
                     )
