@@ -1,7 +1,9 @@
 import gc
+import importlib.metadata
 import json
 import os
 from pathlib import Path
+
 import click
 import openai
 import pandas as pd
@@ -21,11 +23,12 @@ from sidekick.utils import (_execute_sql, check_vulnerability,
                             execute_query_pd, extract_table_names,
                             generate_suggestions, save_query, setup_dir)
 
-__version__ = "0.1.5"
+__version__ = importlib.metadata.version('sql-sidekick')
+
 # Load the config file and initialize required paths
 app_base_path = (Path(__file__).parent / "../").resolve()
 # Below check is to handle the case when the app is running on the h2o.ai cloud or locally
-base_path = app_base_path if os.path.isdir("./.sidekickvenv/bin/") else "/meta_data"
+default_base_path = app_base_path if os.path.isdir("./.sidekickvenv/bin/") else "/meta_data"
 env_settings = toml.load(f"{app_base_path}/sidekick/configs/env.toml")
 db_dialect = env_settings["DB-DIALECT"]["DB_TYPE"]
 model_name = env_settings["MODEL_INFO"]["MODEL_NAME"]
@@ -75,7 +78,7 @@ def enter_file_path(table: str):
 def set_loglevel(set_level):
     env_settings["LOGGING"]["LOG-LEVEL"] = set_level
     # Update settings file for future use.
-    f = open(f"{base_path}/sidekick/configs/env.toml", "w")
+    f = open(f"{default_base_path}/sidekick/configs/env.toml", "w")
     toml.dump(env_settings, f)
     f.close()
 
@@ -96,7 +99,7 @@ def _get_table_info(cache_path: str, table_name: str = None):
                 if table_info_path is None:
                     # if table_info_path is None, generate default schema n set path
                     data_path = current_meta["samples_path"]
-                    table_info_path = generate_schema(data_path, f"{cache_path}/{table_name}_table_info.jsonl")
+                    _, table_info_path = generate_schema(data_path, f"{cache_path}/{table_name}_table_info.jsonl")
         table_metadata = {"schema_info_path": table_info_path}
         with open(f"{cache_path}/table_context.json", "w") as outfile:
             json.dump(table_metadata, outfile, indent=4, sort_keys=False)
@@ -126,7 +129,7 @@ def update_table_info(cache_path: str, table_info_path: str = None, table_name: 
 def recommend_suggestions(cache_path: str, table_name: str, remote_url: str= None, client_key:str=None):
     # Reload .env info
     env_settings = toml.load(f"{app_base_path}/sidekick/configs/env.toml")
-    path = f"{base_path}/var/lib/tmp/data"
+    path = f"{default_base_path}/var/lib/tmp/data"
     column_names = []
     if cache_path is None:
         logger.debug(f"Retrieve meta information for table {table_name}")
@@ -161,7 +164,7 @@ def recommend_suggestions(cache_path: str, table_name: str, remote_url: str= Non
 @click.option("--data_path", default="data.csv", help="Enter the path of csv", type=str)
 @click.option("--output_path", default="table_info.jsonl", help="Enter the path of generated schema in jsonl", type=str)
 def generate_input_schema(data_path, output_path):
-    o_path = generate_schema(data_path, output_path)
+    _, o_path = generate_schema(data_path, output_path)
     click.echo(f"Schema generated for the input data at {o_path}")
 
 
@@ -179,8 +182,8 @@ def generate_input_schema(data_path, output_path):
 )
 @click.option("--port", "-P", default=5432, help="Database port", prompt="Enter port (default 5432)")
 @click.option("--table-info-path", "-t", help="Table info path", default=None)
-def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: int, table_info_path: str):
-    db_setup_api(
+def db_setup_cli(db_name: str, hostname: str, user_name: str, password: str, port: int, table_info_path: str):
+    db_setup(
         db_name=db_name,
         hostname=hostname,
         user_name=user_name,
@@ -193,7 +196,7 @@ def db_setup(db_name: str, hostname: str, user_name: str, password: str, port: i
     )
 
 
-def db_setup_api(
+def db_setup(
     db_name: str,
     hostname: str,
     user_name: str,
@@ -203,26 +206,30 @@ def db_setup_api(
     table_samples_path: str,
     table_name: str,
     is_command: bool = False,
+    local_base_path = None
 ):
     """Creates context for the new Database"""
     click.echo(f" Information supplied:\n {db_name}, {hostname}, {user_name}, {password}, {port}")
     try:
         res = err = None
-        env_settings["LOCAL_DB_CONFIG"]["HOST_NAME"] = hostname
-        env_settings["LOCAL_DB_CONFIG"]["USER_NAME"] = user_name
-        env_settings["LOCAL_DB_CONFIG"]["PASSWORD"] = password
-        env_settings["LOCAL_DB_CONFIG"]["PORT"] = port
-        env_settings["LOCAL_DB_CONFIG"]["DB_NAME"] = db_name
-
         # To-DO
         # --- Need to remove the below keys from ENV toml --- #
         # env_settings["TABLE_INFO"]["TABLE_INFO_PATH"] = table_info_path
         # env_settings["TABLE_INFO"]["TABLE_SAMPLES_PATH"] = table_samples_path
 
         # Update settings file for future use.
-        f = open(f"{app_base_path}/sidekick/configs/env.toml", "w")
-        toml.dump(env_settings, f)
-        f.close()
+        # Check if the env.toml exists.
+        env_config_fname = f"{app_base_path}/sidekick/configs/env.toml"
+        if Path(env_config_fname).exists():
+            env_settings["LOCAL_DB_CONFIG"]["HOST_NAME"] = hostname
+            env_settings["LOCAL_DB_CONFIG"]["USER_NAME"] = user_name
+            env_settings["LOCAL_DB_CONFIG"]["PASSWORD"] = password
+            env_settings["LOCAL_DB_CONFIG"]["PORT"] = port
+            env_settings["LOCAL_DB_CONFIG"]["DB_NAME"] = db_name
+            f = open(env_config_fname, "w")
+            toml.dump(env_settings, f)
+            f.close()
+        base_path = local_base_path if local_base_path else default_base_path
         path = f"{base_path}/var/lib/tmp/data"
         # For current session
         db_obj = DBConfig(db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect)
@@ -313,7 +320,7 @@ def _add_context(entity_memory: EntityMemory):
 
 @learn.command("add-samples", help="Helps add contextual query/answer pairs.")
 def add_query_response():
-    em = EntityMemory(k=5, path=base_path)
+    em = EntityMemory(k=5, path=default_base_path)
     _add_context(em)
     _more = "y"
     while _more.lower() != "n" or _more.lower() != "no":
@@ -328,13 +335,13 @@ def add_query_response():
 def update_context():
     """Helps learn context for generation."""
     # Book-keeping
-    setup_dir(base_path)
+    setup_dir(default_base_path)
 
     context_dict = """{\n"<new_context_key>": "<new_context_value>"\n}
     """
-    content_file_path = f"{base_path}/var/lib/tmp/data/context.json"
+    content_file_path = f"{default_base_path}/var/lib/tmp/data/context.json"
     context_str = context_dict
-    if Path(f"{base_path}/var/lib/tmp/data/context.json").exists():
+    if Path(f"{default_base_path}/var/lib/tmp/data/context.json").exists():
         context_dict = json.load(open(content_file_path, "r"))
         context_dict["<new_context_key>"] = "<new_context_value"
         context_str = json.dumps(context_dict, indent=4, sort_keys=True, default=str)
@@ -344,7 +351,7 @@ def update_context():
         context_dict = json.loads(updated_context)
         if "<new_context_key>" in context_dict:
             del context_dict["<new_context_key>"]
-        path = f"{base_path}/var/lib/tmp/data/"
+        path = f"{default_base_path}/var/lib/tmp/data/"
         with open(f"{path}/context.json", "w") as outfile:
             json.dump(context_dict, outfile, indent=4, sort_keys=False)
     else:
@@ -357,7 +364,7 @@ def update_context():
 @click.option("--sample_qna_path", "-s", help="Samples path", default=None)
 def query(question: str, table_info_path: str, sample_qna_path: str):
     """Asks question and returns SQL."""
-    query_api(
+    ask(
         question=question,
         table_info_path=table_info_path,
         sample_queries_path=sample_qna_path,
@@ -373,7 +380,7 @@ def data_preview(table_name):
     db_name = env_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
 
     db_obj = DBConfig(
-        db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect
+        db_name, hostname, user_name, password, port, base_path=default_base_path, dialect=db_dialect
     )
     if not db_obj.table_name:
         db_obj.table_name = table_name
@@ -382,7 +389,7 @@ def data_preview(table_name):
     res = pd.DataFrame(q_res[0]) if q_res and q_res[0] else None
     return res
 
-def query_api(
+def ask(
     question: str,
     table_info_path: str,
     sample_queries_path: str,
@@ -391,11 +398,14 @@ def query_api(
     is_regenerate: bool = False,
     is_regen_with_options: bool = False,
     is_command: bool = False,
+    execute_query: bool = True,
+    local_base_path = None
 ):
     """Asks question and returns SQL."""
     results = []
     err = None  # TODO - Need to handle errors if occurred
     # Book-keeping
+    base_path = local_base_path if local_base_path else default_base_path
     setup_dir(base_path)
 
     # Check if table exists
@@ -539,12 +549,18 @@ def query_api(
             results.extend([f"**Generated response for question,**\n{question}\n", syntax_highlight, "\n"])
             logger.info(f"Alternate responses:\n\n{alt_res}")
 
-            exe_sql = click.prompt("Would you like to execute the generated SQL (y/n)?") if is_command else "y"
+            exe_sql = "y"
+            if not execute_query:
+                if is_command:
+                    exe_sql = click.prompt("Would you like to execute the generated SQL (y/n)?")
+                else:
+                    exe_sql = "n"
+
+            _val = updated_sql if updated_sql else res
             if exe_sql.lower() == "y" or exe_sql.lower() == "yes":
                 # For the time being, the default option is Pandas, but the user can be asked to select Database or pandas DF later.
                 q_res = None
                 option = "DB"  # or DB
-                _val = updated_sql if updated_sql else res
                 if option == "DB":
                     hostname = env_settings["LOCAL_DB_CONFIG"]["HOST_NAME"]
                     user_name = env_settings["LOCAL_DB_CONFIG"]["USER_NAME"]
@@ -552,6 +568,7 @@ def query_api(
                     port = env_settings["LOCAL_DB_CONFIG"]["PORT"]
                     db_name = env_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
 
+                    #TODO This call maybe redundant n might need some cleaning
                     db_obj = DBConfig(
                         db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect
                     )

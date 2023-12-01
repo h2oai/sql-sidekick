@@ -76,7 +76,7 @@ class DBConfig:
                     self._url = f"{self._url}{self.db_name}"
                     return res, None
                 else:
-                    logger.debug("SQLite DB is created when 'engine.connect()' is called")
+                    logger.debug("SQLite DB is created successfully.")
 
             return True, None
         except SQLAlchemyError as sqla_error:
@@ -97,6 +97,7 @@ class DBConfig:
         res = []
         sample_values = []
         try:
+            logger.debug(f"Schema path: {schema_info_path}")
             if Path(schema_info_path).exists():
                 with open(schema_info_path, "r") as in_file:
                     for line in in_file:
@@ -131,7 +132,7 @@ class DBConfig:
             pass
         return res
 
-    def create_table(self, schema_info_path=None, schema_info=None):
+    def create_table(self, schema_info_path: str=None, schema_info=None):
         try:
             engine = create_engine(self._url, isolation_level="AUTOCOMMIT")
             self._engine = engine
