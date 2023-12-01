@@ -45,6 +45,9 @@ TASK_CHOICE = {
     "sqld": "Debugging",
 }
 
+def list_models():
+    return list(MODEL_CHOICE_MAP_EVAL_MODE.keys())
+
 
 def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, device: Optional[str] = None):
     # Reference:
