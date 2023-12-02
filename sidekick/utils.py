@@ -509,14 +509,14 @@ def check_vulnerability(input_query: str):
     return res, _msg
 
 
-def generate_suggestions(remote_url, client_key:str, table_name: str, column_names: list):
+def generate_suggestions(remote_url, client_key:str, column_names: list, n_qs: int=10):
     results = []
     # Check if remote url contains h2o.ai/openai endpoints
     if not remote_url or not client_key:
         results = "Currently not supported or remote API key is missing."
     else:
         column_info = ','.join(column_names)
-        input_prompt  = RECOMMENDATION_PROMPT.format(data_schema=column_info
+        input_prompt  = RECOMMENDATION_PROMPT.format(data_schema=column_info, n_questions=n_qs
         )
 
         client = H2OGPTE(address=remote_url, api_key=client_key)

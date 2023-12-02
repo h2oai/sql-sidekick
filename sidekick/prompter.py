@@ -125,13 +125,11 @@ def update_table_info(cache_path: str, table_info_path: str = None, table_name: 
     with open(f"{cache_path}/table_context.json", "w") as outfile:
         json.dump(table_metadata, outfile, indent=4, sort_keys=False)
 
-# Experimental, might be deprecated in future.
-def recommend_suggestions(cache_path: str, table_name: str, remote_url: str= None, client_key:str=None):
-    # Reload .env info
-    env_settings = toml.load(f"{app_base_path}/sidekick/configs/env.toml")
-    path = f"{default_base_path}/var/lib/tmp/data"
+# Experimental, might change in future.
+def recommend_suggestions(cache_path: str, table_name: str, n_qs: int=10):
     column_names = []
     if cache_path is None:
+        path = f"{default_base_path}/var/lib/tmp/data"
         logger.debug(f"Retrieve meta information for table {table_name}")
         cache_path = _get_table_info(path, table_name)
         logger.debug(f"Updated table info path: {cache_path}")
@@ -143,16 +141,28 @@ def recommend_suggestions(cache_path: str, table_name: str, remote_url: str= Non
                     if "Column Name" in data and "Column Type" in data:
                         col_name = data["Column Name"]
                         column_names.append(col_name)
-
-    r_url = _key =  None
-    if not remote_url:
-        r_url = env_settings["MODEL_INFO"]["RECOMMENDATION_MODEL_REMOTE_URL"]
-    if not client_key:
-        _key = env_settings["MODEL_INFO"]["H2OAI_KEY"]
     try:
-        result = generate_suggestions(remote_url=r_url, client_key=_key, table_name=table_name, column_names=column_names)
+        r_url = _key =  None
+        # First check for keys in env variables
+        logger.debug(f"Checking environment settings ...")
+        env_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
+        env_key = os.environ["H2OAI_KEY"]
+        if env_url and env_key:
+            r_url = env_url
+            _key = env_key
+        elif Path(f"{app_base_path}/sidekick/configs/env.toml").exists():
+            # Reload .env info
+            logger.debug(f"Checking configuration file ...")
+            env_settings = toml.load(f"{app_base_path}/sidekick/configs/env.toml")
+            r_url = env_settings["MODEL_INFO"]["RECOMMENDATION_MODEL_REMOTE_URL"]
+            _key = env_settings["MODEL_INFO"]["H2OAI_KEY"]
+        else:
+            raise Exception("Model url or key is missing.")
+
+        result = generate_suggestions(remote_url=r_url, client_key=_key, column_names=column_names, n_qs=n_qs
+                                      )
     except Exception as e:
-        logger.error(f"Something went wrong,\n{e}")
+        logger.error(f"Something went wrong, check the supplied credentials:\n{e}")
         result = None
     return result
 
@@ -205,8 +215,9 @@ def db_setup(
     table_info_path: str,
     table_samples_path: str,
     table_name: str,
+    add_sample: bool=True,
     is_command: bool = False,
-    local_base_path = None
+    local_base_path: str = None
 ):
     """Creates context for the new Database"""
     click.echo(f" Information supplied:\n {db_name}, {hostname}, {user_name}, {password}, {port}")
@@ -270,9 +281,10 @@ def db_setup(
         # Add rows to table
         if db_obj.has_table():
             click.echo(f"Checked table {db_obj.table_name} exists in the DB.")
+            val = "n" if not add_sample else "n"
             val = (
                 input(color(F.GREEN, "", "Would you like to add few sample rows (at-least 3)? (y/n):"))
-                if is_command
+                if is_command and not add_sample
                 else "y"
             )
             if val.lower().strip() == "y" or val.lower().strip() == "yes":

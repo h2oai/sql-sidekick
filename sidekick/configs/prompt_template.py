@@ -113,7 +113,7 @@ SELECT"""
 
 
 RECOMMENDATION_PROMPT="""
-Generate 10 simple questions for the given dataset.
+Generate {n_questions} simple questions for the given dataset.
 Only use the specified column names mentioned in *Data Schema*.
 
 ### Data Schema:
