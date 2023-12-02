@@ -55,7 +55,7 @@ I can help you with the following:\n
 @click.version_option("-V", "--version", message=f"sql-sidekick - {__version__}")
 def cli():
     # Book-keeping
-    setup_dir(base_path)
+    setup_dir(default_base_path)
 
 
 @cli.group("configure")
