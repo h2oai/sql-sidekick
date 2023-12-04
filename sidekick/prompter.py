@@ -281,18 +281,18 @@ def db_setup(
         # Add rows to table
         if db_obj.has_table():
             click.echo(f"Checked table {db_obj.table_name} exists in the DB.")
-            val = "n" if not add_sample else "n"
             val = (
                 input(color(F.GREEN, "", "Would you like to add few sample rows (at-least 3)? (y/n):"))
                 if is_command and not add_sample
                 else "y"
             )
+            val = "n" if not add_sample else "y"
             if val.lower().strip() == "y" or val.lower().strip() == "yes":
                 val = input("Path to a CSV file to insert data from:") if is_command else table_samples_path
                 res, err = db_obj.add_samples(val)
             else:
                 click.echo("Exiting...")
-                return
+                return None, err
         else:
             echo_msg = "Job done. Ask a question now!"
             click.echo(echo_msg)
