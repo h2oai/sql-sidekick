@@ -407,11 +407,12 @@ def ask(
     sample_queries_path: str,
     table_name: str,
     model_name: str = "h2ogpt-sql-nsql-llama-2-7B",
+    db_dialect = "sqlite",
     is_regenerate: bool = False,
     is_regen_with_options: bool = False,
     is_command: bool = False,
     execute_query: bool = True,
-    local_base_path = None
+    local_base_path = None,
 ):
     """Asks question and returns SQL."""
     results = []
@@ -477,7 +478,7 @@ def ask(
         passwd = env_settings["LOCAL_DB_CONFIG"]["PASSWORD"]
         db_name = env_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
 
-        if db_dialect == "sqlite":
+        if db_dialect.lower() == "sqlite":
             db_url = f"sqlite:///{base_path}/db/sqlite/{db_name}.db"
         else:
             db_url = f"{db_dialect}+psycopg2://{user_name}:{passwd}@{host_name}/{db_name}".format(
@@ -497,6 +498,7 @@ def ask(
             sample_queries_path=sample_queries_path,
             is_regenerate_with_options=is_regen_with_options,
             is_regenerate=is_regenerate,
+            db_dialect=db_dialect
         )
         if "h2ogpt-sql" not in model_name and not _execute_sql(question):
             sql_g._tasks = sql_g.generate_tasks(table_names, question)
@@ -531,7 +533,7 @@ def ask(
             _check_cond = question.strip().lower().split("execute sql:")
             if len(_check_cond) > 1:
                 question = question.strip().lower().split("execute sql:")[1].strip()
-            res, alt_res = sql_g.generate_sql(table_names, question, model_name=model_name, _dialect=db_dialect)
+            res, alt_res = sql_g.generate_sql(table_names, question, model_name=model_name)
         logger.info(f"Input query: {question}")
         logger.info(f"Generated response:\n\n{res}")
 

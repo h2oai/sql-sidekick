@@ -26,11 +26,11 @@ TASK_PROMPT = {
 # Reference: https://arxiv.org/pdf/2005.14165.pdf
 QUERY_PROMPT = """
                 ### System: Act as a SQL Expert
-                # For table {_table_name}, given an input *Question*, only generate syntactically correct SQL queries.
+                # For table {_table_name}, given an input *Question*, only generate syntactically correct {dialect} SQL queries.
                 # Let's work it out in a detailed step by step way using the reasoning from *Tasks* section.
                 # Pick the SQL query which has the highest average log probability if more than one result is likely to answer the
                 candidate *Question*.
-                ### {_dialect} SQL tables
+                ### {dialect} SQL tables
                 ### *Data:* \nFor table {_table_name} schema info is mentioned below,\n{_data_info}
                 ### *History*:\n{_sample_queries}
                 ### *Question*: For table {_table_name}, {_question}
@@ -52,7 +52,7 @@ QUERY_PROMPT = """
             """
 
 DEBUGGING_PROMPT = {
-    "system_prompt": "Act as a SQL expert for {_dialect} code",
+    "system_prompt": "Act as a SQL expert for {dialect} code",
     "user_prompt": """
                 ### Fix syntax errors for provided incorrect SQL Query.
                 # Add ``` as prefix and ``` as suffix to generated SQL
@@ -72,7 +72,7 @@ Table '{table_name}' has sample values ({data_info_detailed})
 
 
 
--- Using valid and syntactically correct SQLite query, answer the following questions (check for typos, grammatical and spelling errors and fix them) with the information for '{table_name}' provided above; for final SQL only use column names from the CREATE TABLE (Do not query for columns that do not exist).
+-- Using valid and syntactically correct {dialect} query, answer the following questions (check for typos, grammatical and spelling errors and fix them) with the information for '{table_name}' provided above; for final SQL only use column names from the CREATE TABLE (Do not query for columns that do not exist).
 
 
 -- Using reference for TABLES '{table_name}' {context}; {question_txt}?
@@ -82,7 +82,7 @@ SELECT"""
 # https://colab.research.google.com/drive/13BIKsqHnPOBcQ-ba2p77L5saiepTIwu0#scrollTo=0eI-VpCkf-fN
 STARCODER2_PROMPT = """
 ### Instructions:
-Your task is convert a question into a valid SQLite SQL query, given a sqlite database schema. Let's work this out step by step to be sure we have the right answer.
+Your task is convert a question into a valid {dialect} SQL query, given a {dialect} database schema. Let's work this out step by step to be sure we have the right answer.
 Only use the column names from the CREATE TABLE statement.
 Adhere to these rules:
 - **Deliberately go through the question and database schema word by word** to appropriately answer the question
@@ -101,7 +101,7 @@ Adhere to these rules:
 
 
 ### Input:
-For SQL TABLE '{table_name}' with sample question/answer pairs,\n({sample_queries}), create a valid SQL (dialect:SQLite) query to answer the following question:\n{question_txt}.
+For SQL TABLE '{table_name}' with sample question/answer pairs,\n({sample_queries}), create a valid SQL (dialect:{dialect}) query to answer the following question:\n{question_txt}.
 This query will run on a database whose schema is represented in this string:
 CREATE TABLE '{table_name}' ({column_info}
 );
