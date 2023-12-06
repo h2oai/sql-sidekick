@@ -408,6 +408,7 @@ def ask(
     table_name: str,
     model_name: str = "h2ogpt-sql-nsql-llama-2-7B",
     db_dialect = "sqlite",
+    execute_db_dialect="sqlite",
     is_regenerate: bool = False,
     is_regen_with_options: bool = False,
     is_command: bool = False,
@@ -439,6 +440,7 @@ def ask(
         with open(f"{path}/table_context.json", "w") as outfile:
             json.dump(table_context, outfile, indent=4, sort_keys=False)
     logger.info(f"Table in use: {table_names}")
+    logger.info(f"SQL dialect for generation: {db_dialect}")
     # Check if env.toml file exists
     api_key = os.getenv("OPENAI_API_KEY", None)
     if (model_name == 'gpt-3.5-turbo-0301' or model_name == 'gpt-3.5-turbo-1106') and api_key is None:
@@ -478,16 +480,18 @@ def ask(
         passwd = env_settings["LOCAL_DB_CONFIG"]["PASSWORD"]
         db_name = env_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
 
-        if db_dialect.lower() == "sqlite":
+        if execute_db_dialect.lower() == "sqlite":
             db_url = f"sqlite:///{base_path}/db/sqlite/{db_name}.db"
-        else:
-            db_url = f"{db_dialect}+psycopg2://{user_name}:{passwd}@{host_name}/{db_name}".format(
+        elif execute_db_dialect.lower() == "postgresql":
+            db_url = f"{execute_db_dialect}+psycopg2://{user_name}:{passwd}@{host_name}/{db_name}".format(
                 user_name, passwd, host_name, db_name
             )
+        else:
+            db_url = None
 
         if table_info_path is None:
             table_info_path = _get_table_info(path, table_name)
-            logger.debug(f"Table info path: {table_info_path}")
+        logger.debug(f"Table info path: {table_info_path}")
 
         sql_g = SQLGenerator(
             db_url,

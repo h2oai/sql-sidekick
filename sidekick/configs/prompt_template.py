@@ -63,7 +63,7 @@ DEBUGGING_PROMPT = {
 }
 
 NSQL_QUERY_PROMPT = """
-For SQL TABLE '{table_name}' with sample question/answer pairs,\n({sample_queries})
+For {dialect} SQL TABLE '{table_name}' with sample question/answer pairs,\n({sample_queries})
 
 CREATE TABLE '{table_name}'({column_info}
 )
@@ -72,7 +72,7 @@ Table '{table_name}' has sample values ({data_info_detailed})
 
 
 
--- Using valid and syntactically correct {dialect} query, answer the following questions (check for typos, grammatical and spelling errors and fix them) with the information for '{table_name}' provided above; for final SQL only use column names from the CREATE TABLE (Do not query for columns that do not exist).
+-- Using valid and syntactically correct {dialect} SQL syntax, answer the following questions (check for typos, grammatical and spelling errors and fix them) with the information for '{table_name}' provided above; for final SQL only use column names from the CREATE TABLE (Do not query for columns that do not exist).
 
 
 -- Using reference for TABLES '{table_name}' {context}; {question_txt}?
@@ -82,7 +82,7 @@ SELECT"""
 # https://colab.research.google.com/drive/13BIKsqHnPOBcQ-ba2p77L5saiepTIwu0#scrollTo=0eI-VpCkf-fN
 STARCODER2_PROMPT = """
 ### Instructions:
-Your task is convert a question into a valid {dialect} SQL query, given a {dialect} database schema. Let's work this out step by step to be sure we have the right answer.
+Your task is convert a question into a valid {dialect} syntax SQL query, given a {dialect} database schema. Let's work this out step by step to be sure we have the right answer.
 Only use the column names from the CREATE TABLE statement.
 Adhere to these rules:
 - **Deliberately go through the question and database schema word by word** to appropriately answer the question

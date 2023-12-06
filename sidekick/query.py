@@ -370,7 +370,7 @@ class SQLGenerator:
                         )
                     else:
                         res = str(result).split("Explanation:", 1)[0].strip()
-                    res = sqlglot.transpile(res, identify=True, read=self.dialect)[0]
+                    res = sqlglot.transpile(res, identify=True, write=self.dialect)[0]
                     result = res
                 except (sqlglot.errors.ParseError, ValueError, RuntimeError) as e:
                     logger.info("We did the best we could, there might be still be some error:\n")
