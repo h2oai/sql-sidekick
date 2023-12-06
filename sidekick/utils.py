@@ -17,6 +17,7 @@ from sentence_transformers import SentenceTransformer
 from sidekick.configs.prompt_template import RECOMMENDATION_PROMPT
 from sidekick.logger import logger
 from sklearn.metrics.pairwise import cosine_similarity
+from sqlglot import Dialects
 from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
                           BitsAndBytesConfig)
 
@@ -47,6 +48,10 @@ TASK_CHOICE = {
 
 def list_models():
     return list(MODEL_CHOICE_MAP_EVAL_MODE.keys())
+
+
+def list_db_dialects():
+    [_d.value for _d in Dialects.__members__.values() if _d != '']
 
 
 def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, device: Optional[str] = None):
