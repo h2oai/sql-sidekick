@@ -37,14 +37,15 @@ def initialize_models():
     logging.info(f"Initializing models")
 
     _ = SQLGenerator(
-        None,
-        None,
+        db_url=None,
+        openai_key=None,
         model_name=None,  # Default: h2ogpt-sql-sqlcoder2
         job_path=base_path,
         data_input_path="",
         sample_queries_path="",
         is_regenerate_with_options="",
         is_regenerate="",
+        db_dialect="sqlite"
     )
     return
 

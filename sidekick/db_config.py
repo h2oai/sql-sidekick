@@ -39,7 +39,6 @@ class DBConfig:
         self.base_path = base_path
         self.column_names = []
         if dialect == "sqlite":
-            logger.debug(f"Creating SQLite DB: sqlite:///{base_path}/db/sqlite/{db_name}.db")
             self._url = f"sqlite:///{base_path}/db/sqlite/{db_name}.db"
         else:
             self._url = f"{self.dialect}://{self.user_name}:{self.password}@{self.hostname}:{self.port}/"
@@ -86,63 +85,77 @@ class DBConfig:
             logger.debug("Error Occurred:", error)
             return None, error
 
-    def _extract_schema_info(self, schema_info_path=None):
+
+    def _parser(self, file_handle=None, schema_info=None):
+        sample_values = []
+        res = []
+        _lines = file_handle if file_handle else schema_info
+        for line in _lines:
+            data = json.loads(line) if isinstance(line, str) and line.strip() else line
+            if "Column Name" in data and "Column Type" in data:
+                col_name = data["Column Name"]
+                self.column_names.append(col_name)
+                col_type = data["Column Type"]
+                if col_type.lower() == "text":
+                    col_type = col_type + " COLLATE NOCASE"
+                # if column has sample values, save in cache for future use.
+                if "Sample Values" in data:
+                    _sample_values = data["Sample Values"]
+                    _ds = data_samples_template.format(
+                        column_name=col_name,
+                        comma_separated_sample_values=",".join(
+                            str(_sample_val) for _sample_val in _sample_values
+                        ),
+                    )
+                    sample_values.append(_ds)
+                _new_samples = f"{col_name} {col_type}"
+            res.append(_new_samples)
+        return res, sample_values
+
+
+    def _extract_schema_info(self, schema=None, schema_path=None):
         # From jsonl format
         # E.g. {"Column Name": "id", "Column Type": "uuid PRIMARY KEY"}
-        if schema_info_path is None:
-            table_info_file = f"{self.base_path}/var/lib/tmp/data/table_context.json"
-            if Path(table_info_file).exists():
-                with open(table_info_file, "w") as outfile:
-                    schema_info_path = json.load(outfile)["schema_info_path"]
         res = []
         sample_values = []
         try:
-            logger.debug(f"Schema path: {schema_info_path}")
-            if Path(schema_info_path).exists():
-                with open(schema_info_path, "r") as in_file:
-                    for line in in_file:
-                        if line.strip():
-                            data = json.loads(line)
-                            if "Column Name" in data and "Column Type" in data:
-                                col_name = data["Column Name"]
-                                self.column_names.append(col_name)
-                                col_type = data["Column Type"]
-                                if col_type.lower() == "text":
-                                    col_type = col_type + " COLLATE NOCASE"
-                                # if column has sample values, save in cache for future use.
-                                if "Sample Values" in data:
-                                    _sample_values = data["Sample Values"]
-                                    _ds = data_samples_template.format(
-                                        column_name=col_name,
-                                        comma_separated_sample_values=",".join(
-                                            str(_sample_val) for _sample_val in _sample_values
-                                        ),
-                                    )
-                                    sample_values.append(_ds)
-                                _new_samples = f"{col_name} {col_type}"
-                            res.append(_new_samples)
-                if len(sample_values) > 0:
-                    # cache it for future use
-                    with open(
-                        f"{self.base_path}/var/lib/tmp/data/{self._table_name}_column_values.json", "w"
-                    ) as outfile:
-                        json.dump(sample_values, outfile, indent=2, sort_keys=False)
+            if schema is not None:
+                logger.debug(f"Using passed schema information.")
+                res, sample_values =  self._parser(schema_info=schema)
+            else:
+                if schema_path is None:
+                    table_info_file = f"{self.base_path}/var/lib/tmp/data/table_context.json"
+                    if Path(table_info_file).exists():
+                        with open(table_info_file, "w") as outfile:
+                            schema_path = json.load(outfile)["schema_info_path"]
+                if Path(schema_path).exists():
+                    logger.debug(f"Using schema information from: {schema_path}")
+                    with open(schema_path, "r") as in_file:
+                        res, sample_values =  self._parser(file_handle=in_file)
+            if len(sample_values) > 0:
+                # cache it for future use
+                with open(
+                    f"{self.base_path}/var/lib/tmp/data/{self._table_name}_column_values.json", "w"
+                ) as outfile:
+                    json.dump(sample_values, outfile, indent=2, sort_keys=False)
         except ValueError as ve:
             logger.error(f"Error in reading table context file: {ve}")
             pass
         return res
 
-    def create_table(self, schema_info_path: str=None, schema_info=None):
+    def create_table(self, schema_info_path=None, schema_info=None):
         try:
             engine = create_engine(self._url, isolation_level="AUTOCOMMIT")
             self._engine = engine
-            if self.schema_info is None:
-                if schema_info is not None:
-                    self.schema_info = schema_info
-                else:
-                    # If schema information is not provided, extract from the template.
-                    self.schema_info = """,\n""".join(self._extract_schema_info(schema_info_path)).strip()
-                    logger.debug(f"Schema info used for creating table:\n {self.schema_info}")
+            if self.schema_info is None and schema_info_path:
+                # If schema information is not provided, extract from the template.
+                self.schema_info = """,\n""".join(self._extract_schema_info(schema_path=schema_info_path)).strip()
+            else:
+                self.schema_info = """,\n""".join(self._extract_schema_info(schema=schema_info)).strip()
+
+            logger.debug(f"Schema info used for creating table:\n {self.schema_info}")
+            # Currently, multiple tables is not supported.
+            # TODO https://github.com/h2oai/sql-sidekick/issues/62
             create_syntax = f"""
                     CREATE TABLE IF NOT EXISTS {self.table_name} (
                         {self.schema_info}

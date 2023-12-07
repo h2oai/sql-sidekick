@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sql-sidekick"
-version = "0.1.7"
+version = "0.1.8"
 license = "Proprietary"
 description = "An AI assistant for SQL"
 authors = [

@@ -39,6 +39,7 @@ class SQLGenerator:
         model_name="h2ogpt-sql-nsql-llama-2-7B",
         data_input_path: str = "./table_info.jsonl",
         sample_queries_path: str = "./samples.csv",
+        db_dialect = "sqlite",
         job_path: str = "./",
         device: str = "auto",
         is_regenerate: bool = False,
@@ -98,12 +99,14 @@ class SQLGenerator:
         sample_queries_path: str = "./samples.csv",
         job_path: str = "./",
         device: str = "cpu",
+        db_dialect = "sqlite",
         is_regenerate: bool = False,
         is_regenerate_with_options: bool = False,
     ):
         self.db_url = db_url
         self.engine = create_engine(db_url) if db_url else None
         self.sql_database = SQLDatabase(self.engine) if self.engine else None
+        self.dialect = db_dialect
         self.context_builder = None
         self.data_input_path = _check_file_info(data_input_path)
         self.sample_queries_path = sample_queries_path
@@ -218,7 +221,7 @@ class SQLGenerator:
             return res
 
     def generate_response(
-        self, sql_index, input_prompt, attempt_fix_on_error: bool = True, _dialect: str = "sqlite"
+        self, sql_index, input_prompt, attempt_fix_on_error: bool = True
     ):
         try:
             _sql_index = sql_index.as_query_engine()
@@ -234,7 +237,7 @@ class SQLGenerator:
                     # Attempt to heal with simple feedback
                     # Reference: Teaching Large Language Models to Self-Debug, https://arxiv.org/abs/2304.05128
                     logger.info(f"Attempting to fix syntax error ...,\n {se}")
-                    system_prompt = DEBUGGING_PROMPT["system_prompt"].format(_dialect=_dialect)
+                    system_prompt = DEBUGGING_PROMPT["system_prompt"].format(dialect=self.dialect)
                     user_prompt = DEBUGGING_PROMPT["user_prompt"].format(ex_traceback=ex_traceback, qry_txt=qry_txt)
                     # Role and content
                     query_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
@@ -304,7 +307,6 @@ class SQLGenerator:
         self,
         table_names: list,
         input_question: str,
-        _dialect: str = "sqlite",
         model_name: str = "h2ogpt-sql-nsql-llama-2-7B",
     ):
         # TODO: Update needed to support multiple tables
@@ -328,7 +330,7 @@ class SQLGenerator:
 
                 # TODO: The need to pass data info again could be eliminated if Task generation becomes more consistent and accurate.
                 query_str = QUERY_PROMPT.format(
-                    _dialect=_dialect,
+                    dialect=self.dialect,
                     _data_info=self._data_info,
                     _question=input_question,
                     _table_name=table_names,
@@ -368,7 +370,7 @@ class SQLGenerator:
                         )
                     else:
                         res = str(result).split("Explanation:", 1)[0].strip()
-                    res = sqlglot.transpile(res, identify=True, read=_dialect)[0]
+                    res = sqlglot.transpile(res, identify=True, write=self.dialect)[0]
                     result = res
                 except (sqlglot.errors.ParseError, ValueError, RuntimeError) as e:
                     logger.info("We did the best we could, there might be still be some error:\n")
@@ -488,6 +490,7 @@ class SQLGenerator:
                     sample_queries=qna_samples,
                     context=contextual_context_val,
                     question_txt=input_question,
+                    dialect=self.dialect
                 )
 
                 logger.debug(f"Query Text:\n {query}")
@@ -649,7 +652,7 @@ class SQLGenerator:
                 # Reference ticket: https://github.com/tobymao/sqlglot/issues/2011
                 result = res
                 try:
-                    result = sqlglot.transpile(res, identify=True, write=_dialect)[0]
+                    result = sqlglot.transpile(res, identify=True, write=self.dialect)[0]
                 except (sqlglot.errors.ParseError, ValueError, RuntimeError) as e:
                     logger.info("We did the best we could, there might be still be some error:\n")
                     logger.info(f"Realized query so far:\n {res}")

@@ -3,6 +3,7 @@ import importlib.metadata
 import json
 import os
 from pathlib import Path
+from typing import Optional
 
 import click
 import openai
@@ -212,12 +213,13 @@ def db_setup(
     user_name: str,
     password: str,
     port: int,
-    table_info_path: str,
-    table_samples_path: str,
     table_name: str,
+    table_info_path: Optional[str] = None,
+    table_schema: Optional[list] = None,
+    table_samples_path: Optional[str] = None,
     add_sample: bool=True,
     is_command: bool = False,
-    local_base_path: str = None
+    local_base_path: Optional[str] = None
 ):
     """Creates context for the new Database"""
     click.echo(f" Information supplied:\n {db_name}, {hostname}, {user_name}, {password}, {port}")
@@ -264,7 +266,7 @@ def db_setup(
             else:
                 break
 
-        if table_info_path is None:
+        if table_info_path is None and table_schema is None:
             logger.debug(f"Retrieve meta information for table {table_name}")
             table_info_path = _get_table_info(path, table_name)
             logger.debug(f"Updated table info path: {table_info_path}")
@@ -274,7 +276,11 @@ def db_setup(
             click.echo(f"Table name: {table_value}")
             # set table name
             db_obj.table_name = table_value.lower().replace(" ", "_")
-            res, err = db_obj.create_table(table_info_path)
+            if table_schema:
+                res, err = db_obj.create_table(schema_info=table_schema)
+            else:
+                if table_info_path:
+                    res, err = db_obj.create_table(schema_info_path=table_info_path)
 
         update_table_info(path, table_info_path, db_obj.table_name)
         # Check if table exists; pending --> and doesn't have any rows
@@ -407,11 +413,13 @@ def ask(
     sample_queries_path: str,
     table_name: str,
     model_name: str = "h2ogpt-sql-nsql-llama-2-7B",
+    db_dialect = "sqlite",
+    execute_db_dialect="sqlite",
     is_regenerate: bool = False,
     is_regen_with_options: bool = False,
     is_command: bool = False,
     execute_query: bool = True,
-    local_base_path = None
+    local_base_path = None,
 ):
     """Asks question and returns SQL."""
     results = []
@@ -438,6 +446,7 @@ def ask(
         with open(f"{path}/table_context.json", "w") as outfile:
             json.dump(table_context, outfile, indent=4, sort_keys=False)
     logger.info(f"Table in use: {table_names}")
+    logger.info(f"SQL dialect for generation: {db_dialect}")
     # Check if env.toml file exists
     api_key = os.getenv("OPENAI_API_KEY", None)
     if (model_name == 'gpt-3.5-turbo-0301' or model_name == 'gpt-3.5-turbo-1106') and api_key is None:
@@ -477,16 +486,18 @@ def ask(
         passwd = env_settings["LOCAL_DB_CONFIG"]["PASSWORD"]
         db_name = env_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
 
-        if db_dialect == "sqlite":
+        if execute_db_dialect.lower() == "sqlite":
             db_url = f"sqlite:///{base_path}/db/sqlite/{db_name}.db"
-        else:
-            db_url = f"{db_dialect}+psycopg2://{user_name}:{passwd}@{host_name}/{db_name}".format(
+        elif execute_db_dialect.lower() == "postgresql":
+            db_url = f"{execute_db_dialect}+psycopg2://{user_name}:{passwd}@{host_name}/{db_name}".format(
                 user_name, passwd, host_name, db_name
             )
+        else:
+            db_url = None
 
         if table_info_path is None:
             table_info_path = _get_table_info(path, table_name)
-            logger.debug(f"Table info path: {table_info_path}")
+        logger.debug(f"Table info path: {table_info_path}")
 
         sql_g = SQLGenerator(
             db_url,
@@ -497,6 +508,7 @@ def ask(
             sample_queries_path=sample_queries_path,
             is_regenerate_with_options=is_regen_with_options,
             is_regenerate=is_regenerate,
+            db_dialect=db_dialect
         )
         if "h2ogpt-sql" not in model_name and not _execute_sql(question):
             sql_g._tasks = sql_g.generate_tasks(table_names, question)
@@ -531,7 +543,7 @@ def ask(
             _check_cond = question.strip().lower().split("execute sql:")
             if len(_check_cond) > 1:
                 question = question.strip().lower().split("execute sql:")[1].strip()
-            res, alt_res = sql_g.generate_sql(table_names, question, model_name=model_name, _dialect=db_dialect)
+            res, alt_res = sql_g.generate_sql(table_names, question, model_name=model_name)
         logger.info(f"Input query: {question}")
         logger.info(f"Generated response:\n\n{res}")
 
