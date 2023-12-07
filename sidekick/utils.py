@@ -51,7 +51,7 @@ def list_models():
 
 
 def list_db_dialects():
-    [_d.value for _d in Dialects.__members__.values() if _d != '']
+    return [_d.value for _d in Dialects.__members__.values() if _d != '']
 
 
 def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, device: Optional[str] = None):
