@@ -3,6 +3,7 @@ import importlib.metadata
 import json
 import os
 from pathlib import Path
+from typing import Optional
 
 import click
 import openai
@@ -212,12 +213,13 @@ def db_setup(
     user_name: str,
     password: str,
     port: int,
-    table_info_path: str,
-    table_samples_path: str,
     table_name: str,
+    table_info_path: Optional[str] = None,
+    table_schema: Optional[list] = None,
+    table_samples_path: Optional[str] = None,
     add_sample: bool=True,
     is_command: bool = False,
-    local_base_path: str = None
+    local_base_path: Optional[str] = None
 ):
     """Creates context for the new Database"""
     click.echo(f" Information supplied:\n {db_name}, {hostname}, {user_name}, {password}, {port}")
@@ -264,7 +266,7 @@ def db_setup(
             else:
                 break
 
-        if table_info_path is None:
+        if table_info_path is None and table_schema is None:
             logger.debug(f"Retrieve meta information for table {table_name}")
             table_info_path = _get_table_info(path, table_name)
             logger.debug(f"Updated table info path: {table_info_path}")
@@ -274,7 +276,11 @@ def db_setup(
             click.echo(f"Table name: {table_value}")
             # set table name
             db_obj.table_name = table_value.lower().replace(" ", "_")
-            res, err = db_obj.create_table(table_info_path)
+            if table_schema:
+                res, err = db_obj.create_table(schema_info=table_schema)
+            else:
+                if table_info_path:
+                    res, err = db_obj.create_table(schema_info_path=table_info_path)
 
         update_table_info(path, table_info_path, db_obj.table_name)
         # Check if table exists; pending --> and doesn't have any rows
