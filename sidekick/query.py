@@ -20,8 +20,7 @@ from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
                                               NSQL_QUERY_PROMPT, QUERY_PROMPT,
                                               STARCODER2_PROMPT, TASK_PROMPT)
 from sidekick.logger import logger
-from sidekick.utils import (MODEL_CHOICE_MAP_DEFAULT,
-                            MODEL_CHOICE_MAP_EVAL_MODE, _check_file_info,
+from sidekick.utils import (MODEL_CHOICE_MAP_EVAL_MODE, _check_file_info,
                             is_resource_low, load_causal_lm_model,
                             load_embedding_model, make_dir, re_rank,
                             read_sample_pairs, remove_duplicates,
@@ -74,7 +73,7 @@ class SQLGenerator:
             if cls._instance is None:
                 cls._instance = super().__new__(cls)
                 cls._instance.current_temps = {}
-            if not model_name or (model_name is not None and "gpt-3.5" not in model_name or "gpt-4" not in model_name):
+            if not model_name or (model_name is not None and "gpt-3.5" not in model_name or "gpt-4" not in model_name or not os.getenv("H2OGPT_NSQL_LLAMA2_7B_OPS_API_URL", None)):
                 cls._instance.models, cls._instance.tokenizers = load_causal_lm_model(
                     model_name,
                     cache_path=f"{job_path}/models/",
@@ -494,168 +493,193 @@ class SQLGenerator:
                 )
 
                 logger.debug(f"Query Text:\n {query}")
-                tokenizer = self.tokenizers[model_name]
-                inputs = tokenizer([query], return_tensors="pt")
-                model = self.models[model_name]
-                current_temperature = self.current_temps.get(model_name, 0.5)
-                input_length = 1 if model.config.is_encoder_decoder else inputs.input_ids.shape[1]
-                logger.info(f"Context length: {input_length}")
-
-                # Handle limited context length
-                # Currently, conservative approach: remove column description from the prompt, if input_length > (2048-300)
-                # Others to try:
-                # 1. Move to a model with larger context length
-                # 2. Possibly use a different tokenizer for chunking
-                # 3. Maybe positional interpolation --> https://arxiv.org/abs/2306.15595
-                if int(input_length) > 4000:
-                    logger.info("Input length is greater than 1748, removing column description from the prompt")
-                    query = query_prompt_format.format(
-                        table_name=_table_name,
-                        column_info=_column_info,
-                        data_info_detailed="",
-                        sample_queries=qna_samples,
-                        context=contextual_context_val,
-                        question_txt=input_question,
-                    )
-                    logger.debug(f"Adjusted query Text:\n {query}")
-                    inputs = tokenizer([query], return_tensors="pt")
-                    input_length = 1 if model.config.is_encoder_decoder else inputs.input_ids.shape[1]
-                    logger.info(f"Adjusted context length: {input_length}")
-                # Generate SQL
-                random_seed = random.randint(0, 50)
-                torch.manual_seed(random_seed)
-
-                # Greedy search for quick response
-                model.eval()
-                device_type = "cuda" if torch.cuda.is_available() else "cpu"
-
-                possible_temp_gt_5 = [0.6, 0.75, 0.8, 0.9, 1.0]
-                possible_temp_lt_5 = [0.1, 0.2, 0.3, 0.4]
-                random_seed = random.randint(0, 50)
-                torch.manual_seed(random_seed)
-
-                if current_temperature >= 0.5:
-                    random_temperature = np.random.choice(possible_temp_lt_5, 1)[0]
-                else:
-                    random_temperature = np.random.choice(possible_temp_gt_5, 1)[0]
-
-                if not self.is_regenerate_with_options and not self.is_regenerate:
-                    # Greedy decoding
-                    # Reset temperature to 0.5
-                    current_temperature = 0.5
-                    logger.debug(f"Generation with default temperature : {current_temperature}")
-                    output = model.generate(
-                        **inputs.to(device_type),
-                        max_new_tokens=512,
-                        temperature=current_temperature,
-                        output_scores=True,
-                        do_sample=True,
-                        return_dict_in_generate=True,
-                    )
-
-                    generated_tokens = output.sequences[:, input_length:][0]
-                elif self.is_regenerate and not self.is_regenerate_with_options:
-                    # throttle temperature for different result
-                    logger.info("Regeneration requested on previous query ...")
-                    logger.debug(f"Selected temperature for fast regeneration : {random_temperature}")
-                    output = model.generate(
-                        **inputs.to(device_type),
-                        max_new_tokens=512,
-                        temperature=random_temperature,
-                        output_scores=True,
-                        do_sample=True,
-                        return_dict_in_generate=True,
-                    )
-                    generated_tokens = output.sequences[:, input_length:][0]
-                    self.current_temps[model_name] = random_temperature
-                    logger.debug(f"Temperature saved: {self.current_temps[model_name]}")
-                else:
-                    logger.info("Regeneration with options requested on previous query ...")
-                    # Diverse beam search decoding to explore more options
-                    logger.debug(f"Selected temperature for diverse beam search: {random_temperature}")
-                    output_re = model.generate(
-                        **inputs.to(device_type),
-                        max_new_tokens=512,
-                        temperature=random_temperature,
-                        top_k=5,
-                        top_p=0.9,
-                        num_beams=5,
-                        num_beam_groups=5,
-                        num_return_sequences=5,
-                        output_scores=True,
-                        do_sample=False,
-                        diversity_penalty=2.0,
-                        return_dict_in_generate=True,
-                    )
-
-                    transition_scores = model.compute_transition_scores(
-                        output_re.sequences, output_re.scores, output_re.beam_indices, normalize_logits=False
-                    )
-
-                    # Create a boolean tensor where elements are True if the corresponding element in transition_scores is less than 0
-                    mask = transition_scores < 0
-                    # Sum the True values along axis 1
-                    counts = torch.sum(mask, dim=1)
-                    output_length = inputs.input_ids.shape[1] + counts
-                    length_penalty = model.generation_config.length_penalty
-                    reconstructed_scores = transition_scores.sum(axis=1) / (output_length**length_penalty)
-
-                    # Converting logit scores to prob scores
-                    probabilities_scores = F.softmax(reconstructed_scores, dim=-1)
-                    out_idx = torch.argmax(probabilities_scores)
-                    # Final output
-                    output = output_re.sequences[out_idx]
-                    generated_tokens = output[input_length:]
-
-                    logger.info(f"Generated options:\n")
-                    prob_sorted_idxs = sorted(
-                        range(len(probabilities_scores)), key=lambda k: probabilities_scores[k], reverse=True
-                    )
-                    for idx, sorted_idx in enumerate(prob_sorted_idxs):
-                        _out = output_re.sequences[sorted_idx]
-                        res = tokenizer.decode(_out[input_length:], skip_special_tokens=True)
-                        result = res.replace("table_name", _table_name)
-                        # Remove the last semi-colon if exists at the end
-                        # we will add it later
-                        if result.endswith(";"):
-                            result = result.replace(";", "")
-                        if "LIMIT".lower() not in result.lower():
-                            res = "SELECT " + result.strip() + " LIMIT 100;"
-                        else:
-                            res = "SELECT " + result.strip() + ";"
-
-                        pretty_sql = sqlparse.format(res, reindent=True, keyword_case="upper")
-                        syntax_highlight = f"""``` sql\n{pretty_sql}\n```\n\n"""
-                        alt_res = (
-                            f"Option {idx+1}: (_probability_: {probabilities_scores[sorted_idx]})\n{syntax_highlight}\n"
+                # First: Check if the REMOTE URL is provided, if yes, use that for generation
+                # Second: if REMOTE URL is not provided, use the local model for generation
+                llm_ops_base_url = os.getenv("H2OGPT_NSQL_LLAMA2_7B_OPS_API_URL", None)
+                llm_ops_api_key = os.getenv("H2OGPT_NSQL_LLAMA2_7B_OPS_API_KEY", None)
+                if llm_ops_base_url and llm_ops_api_key:
+                    logger.info(f"Using remote model for generation: {llm_ops_base_url}")
+                    client = OpenAI(
+                        # defaults to os.environ.get("OPENAI_API_KEY")
+                        api_key=llm_ops_api_key,
+                        base_url=llm_ops_base_url
                         )
-                        alternate_queries.append(alt_res)
-                        logger.info(alt_res)
-
-                _res = tokenizer.decode(generated_tokens, skip_special_tokens=True)
-                # Below is a pre-caution in-case of an error in table name during generation
-                # COLLATE NOCASE is used to ignore case sensitivity, this might be specific to sqlite
-                _temp = _res.replace("table_name", table_name).split(";")[0]
-
-                if _temp.endswith(";"):
-                    _temp = _temp.replace(";", "")
-                if "LIMIT".lower() not in _temp.lower():
-                    res = "SELECT " + _temp.strip() + " LIMIT 100;"
+                    system_prompt = f"Act as a SQL expert for {self.dialect} code"
+                    query_txt = [{"role": "system", "content": system_prompt}, {"role": "user", "content": query}]
+                    completion = client.chat.completions.create(model="h2ogpt-sql-nsql-llama-2-7B",
+                        messages=query_txt,
+                        max_tokens=512,
+                        temperature=0.5,
+                        stream=False)
+                    res = completion.choices[0].message.content
+                    if "SELECT" not in res:
+                        res = input_question
+                    result = res
+                    logger.debug(f"Generated result: {res}")
                 else:
-                    res = "SELECT " + _temp.strip() + ";"
+                    logger.info(f"Using local configured model for generation.")
+                    tokenizer = self.tokenizers[model_name]
+                    inputs = tokenizer([query], return_tensors="pt")
+                    model = self.models[model_name]
+                    current_temperature = self.current_temps.get(model_name, 0.5)
+                    input_length = 1 if model.config.is_encoder_decoder else inputs.input_ids.shape[1]
+                    logger.info(f"Context length: {input_length}")
 
-                # Validate the generate SQL for parsing errors, along with dialect specific validation
-                # Note: Doesn't do well with handling date-time conversions
-                # e.g.
-                # sqlite: SELECT DATETIME(MAX(timestamp), '-5 minute') FROM demo WHERE isin_id = 'VM88109EGG92'
-                # postgres: SELECT MAX(timestamp) - INTERVAL '5 minutes' FROM demo where isin_id='VM88109EGG92'
-                # Reference ticket: https://github.com/tobymao/sqlglot/issues/2011
-                result = res
-                try:
-                    result = sqlglot.transpile(res, identify=True, write=self.dialect)[0]
-                except (sqlglot.errors.ParseError, ValueError, RuntimeError) as e:
-                    logger.info("We did the best we could, there might be still be some error:\n")
-                    logger.info(f"Realized query so far:\n {res}")
+                    # Handle limited context length
+                    # Currently, conservative approach: remove column description from the prompt, if input_length > (2048-300)
+                    # Others to try:
+                    # 1. Move to a model with larger context length
+                    # 2. Possibly use a different tokenizer for chunking
+                    # 3. Maybe positional interpolation --> https://arxiv.org/abs/2306.15595
+                    if int(input_length) > 4000:
+                        logger.info("Input length is greater than 1748, removing column description from the prompt")
+                        query = query_prompt_format.format(
+                            table_name=_table_name,
+                            column_info=_column_info,
+                            data_info_detailed="",
+                            sample_queries=qna_samples,
+                            context=contextual_context_val,
+                            question_txt=input_question,
+                        )
+                        logger.debug(f"Adjusted query Text:\n {query}")
+                        inputs = tokenizer([query], return_tensors="pt")
+                        input_length = 1 if model.config.is_encoder_decoder else inputs.input_ids.shape[1]
+                        logger.info(f"Adjusted context length: {input_length}")
+                    # Generate SQL
+                    random_seed = random.randint(0, 50)
+                    torch.manual_seed(random_seed)
+
+                    # Greedy search for quick response
+                    model.eval()
+                    device_type = "cuda" if torch.cuda.is_available() else "cpu"
+
+                    possible_temp_gt_5 = [0.6, 0.75, 0.8, 0.9, 1.0]
+                    possible_temp_lt_5 = [0.1, 0.2, 0.3, 0.4]
+                    random_seed = random.randint(0, 50)
+                    torch.manual_seed(random_seed)
+
+                    if current_temperature >= 0.5:
+                        random_temperature = np.random.choice(possible_temp_lt_5, 1)[0]
+                    else:
+                        random_temperature = np.random.choice(possible_temp_gt_5, 1)[0]
+
+                    if not self.is_regenerate_with_options and not self.is_regenerate:
+                        # Greedy decoding
+                        # Reset temperature to 0.5
+                        current_temperature = 0.5
+                        logger.debug(f"Generation with default temperature : {current_temperature}")
+                        output = model.generate(
+                            **inputs.to(device_type),
+                            max_new_tokens=512,
+                            temperature=current_temperature,
+                            output_scores=True,
+                            do_sample=True,
+                            return_dict_in_generate=True,
+                        )
+
+                        generated_tokens = output.sequences[:, input_length:][0]
+                    elif self.is_regenerate and not self.is_regenerate_with_options:
+                        # throttle temperature for different result
+                        logger.info("Regeneration requested on previous query ...")
+                        logger.debug(f"Selected temperature for fast regeneration : {random_temperature}")
+                        output = model.generate(
+                            **inputs.to(device_type),
+                            max_new_tokens=512,
+                            temperature=random_temperature,
+                            output_scores=True,
+                            do_sample=True,
+                            return_dict_in_generate=True,
+                        )
+                        generated_tokens = output.sequences[:, input_length:][0]
+                        self.current_temps[model_name] = random_temperature
+                        logger.debug(f"Temperature saved: {self.current_temps[model_name]}")
+                    else:
+                        logger.info("Regeneration with options requested on previous query ...")
+                        # Diverse beam search decoding to explore more options
+                        logger.debug(f"Selected temperature for diverse beam search: {random_temperature}")
+                        output_re = model.generate(
+                            **inputs.to(device_type),
+                            max_new_tokens=512,
+                            temperature=random_temperature,
+                            top_k=5,
+                            top_p=0.9,
+                            num_beams=5,
+                            num_beam_groups=5,
+                            num_return_sequences=5,
+                            output_scores=True,
+                            do_sample=False,
+                            diversity_penalty=2.0,
+                            return_dict_in_generate=True,
+                        )
+
+                        transition_scores = model.compute_transition_scores(
+                            output_re.sequences, output_re.scores, output_re.beam_indices, normalize_logits=False
+                        )
+
+                        # Create a boolean tensor where elements are True if the corresponding element in transition_scores is less than 0
+                        mask = transition_scores < 0
+                        # Sum the True values along axis 1
+                        counts = torch.sum(mask, dim=1)
+                        output_length = inputs.input_ids.shape[1] + counts
+                        length_penalty = model.generation_config.length_penalty
+                        reconstructed_scores = transition_scores.sum(axis=1) / (output_length**length_penalty)
+
+                        # Converting logit scores to prob scores
+                        probabilities_scores = F.softmax(reconstructed_scores, dim=-1)
+                        out_idx = torch.argmax(probabilities_scores)
+                        # Final output
+                        output = output_re.sequences[out_idx]
+                        generated_tokens = output[input_length:]
+
+                        logger.info(f"Generated options:\n")
+                        prob_sorted_idxs = sorted(
+                            range(len(probabilities_scores)), key=lambda k: probabilities_scores[k], reverse=True
+                        )
+                        for idx, sorted_idx in enumerate(prob_sorted_idxs):
+                            _out = output_re.sequences[sorted_idx]
+                            res = tokenizer.decode(_out[input_length:], skip_special_tokens=True)
+                            result = res.replace("table_name", _table_name)
+                            # Remove the last semi-colon if exists at the end
+                            # we will add it later
+                            if result.endswith(";"):
+                                result = result.replace(";", "")
+                            if "LIMIT".lower() not in result.lower():
+                                res = "SELECT " + result.strip() + " LIMIT 100;"
+                            else:
+                                res = "SELECT " + result.strip() + ";"
+
+                            pretty_sql = sqlparse.format(res, reindent=True, keyword_case="upper")
+                            syntax_highlight = f"""``` sql\n{pretty_sql}\n```\n\n"""
+                            alt_res = (
+                                f"Option {idx+1}: (_probability_: {probabilities_scores[sorted_idx]})\n{syntax_highlight}\n"
+                            )
+                            alternate_queries.append(alt_res)
+                            logger.info(alt_res)
+
+                    _res = tokenizer.decode(generated_tokens, skip_special_tokens=True)
+                    # Below is a pre-caution in-case of an error in table name during generation
+                    # COLLATE NOCASE is used to ignore case sensitivity, this might be specific to sqlite
+                    _temp = _res.replace("table_name", table_name).split(";")[0]
+
+                    if _temp.endswith(";"):
+                        _temp = _temp.replace(";", "")
+                    if "LIMIT".lower() not in _temp.lower():
+                        res = "SELECT " + _temp.strip() + " LIMIT 100;"
+                    else:
+                        res = "SELECT " + _temp.strip() + ";"
+
+                    # Validate the generate SQL for parsing errors, along with dialect specific validation
+                    # Note: Doesn't do well with handling date-time conversions
+                    # e.g.
+                    # sqlite: SELECT DATETIME(MAX(timestamp), '-5 minute') FROM demo WHERE isin_id = 'VM88109EGG92'
+                    # postgres: SELECT MAX(timestamp) - INTERVAL '5 minutes' FROM demo where isin_id='VM88109EGG92'
+                    # Reference ticket: https://github.com/tobymao/sqlglot/issues/2011
+                    result = res
+                    try:
+                        result = sqlglot.transpile(res, identify=True, write=self.dialect)[0]
+                    except (sqlglot.errors.ParseError, ValueError, RuntimeError) as e:
+                        logger.info("We did the best we could, there might be still be some error:\n")
+                        logger.info(f"Realized query so far:\n {res}")
         return result, alternate_queries
 
     def task_formatter(self, input_task: str):
