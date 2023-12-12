@@ -23,6 +23,7 @@ from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
 
 MODEL_CHOICE_MAP_EVAL_MODE = {
     "h2ogpt-sql-sqlcoder2": "defog/sqlcoder2",
+    "h2ogpt-sql-sqlcoder-34b-alpha": "defog/sqlcoder-34b-alpha",
     "h2ogpt-sql-nsql-llama-2-7B": "NumbersStation/nsql-llama-2-7B",
     "gpt-3.5-turbo": "gpt-3.5-turbo-1106",
     "gpt-4-8k": "gpt-4",
@@ -32,6 +33,7 @@ MODEL_CHOICE_MAP_EVAL_MODE = {
 
 MODEL_CHOICE_MAP_DEFAULT = {
     "h2ogpt-sql-sqlcoder2": "defog/sqlcoder2",
+    "h2ogpt-sql-sqlcoder-34b-alpha": "defog/sqlcoder-34b-alpha",
     "h2ogpt-sql-nsql-llama-2-7B": "NumbersStation/nsql-llama-2-7B"
 
 }
