@@ -1,6 +1,25 @@
 # sql-sidekick
 A simple SQL assistant (WIP)
 
+## Motivation
+- Historically, it’s common for data to be stored on Databases, democratize insight generation
+- Enable a helpful assistant to help write complex queries across different database dialects with acceptable efficient execution accuracy (not just matching accuracy) 
+- Push to derive consistent generation without errors using smaller OSS models to save on compute costs.
+- Provide a toolkit for users to mix and match different model sizes to optimize compute cost - e.g., smaller models for generation, remote bigger models for syntax correction or spell correction …
+- Build a smart search engine for Databases/structured data, Text to SQL as a Natural Language interface (NLI) for data analysis
+
+
+## Key Features
+- An interactive UI to capture feedback along with a python-client and CLI mode.
+- Ability for auto DB schema generation for input data using custom input format.
+- Support for in-context learning (ICL) pipeline with RAG support to control hallucination
+- Guardrails: to check for SQL injections via SELECT statements, e.g., `SELECT * FROM SleepStudy WHERE user_id = 11 OR 1=1;`
+- Entity mapping/Schema linking: Ability to build memory for mapping business context to the data schema dynamically; **Note: currently enabled only via CLI, others WIP.
+- Ability to save the chat history of query/answer pairs for future reference and improvements.
+- Self-correction loop back: Validates syntactic correction of generation. **Note: Self-correction is currently enabled for all openAI GPT models. WIP for other OSS models.
+- Integration with different database dialects - currently, SQLite/Postgres is enabled. WIP to add support for Duckdb/Databricks next.
+- Debug mode: Ability to evaluate/modify and validate SQL query against the configured database via UI
+- Recommendation sample questions: Often, given a dataset, we are unsure what to ask. To come around this problem, we have enabled the ability to generate recommendations for possible questions.
 
 # Installation
 ## Dev
