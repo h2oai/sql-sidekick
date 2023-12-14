@@ -220,6 +220,41 @@ class SQLGenerator:
             res = ex_value.statement if ex_value.statement else None
             return res
 
+    def self_correction(self, input_prompt, remote_url, client_key):
+        try:
+            # Reference: Teaching Large Language Models to Self-Debug, https://arxiv.org/abs/2304.05128
+            system_prompt = DEBUGGING_PROMPT["system_prompt"].format(dialect=self.dialect)
+            user_prompt = DEBUGGING_PROMPT["user_prompt"].format(ex_traceback="", qry_txt=input_prompt)
+            # Role and content
+            query_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
+            MODEL_CHOICE_MAP = MODEL_CHOICE_MAP_EVAL_MODE
+
+            from h2ogpte import H2OGPTE
+            client = H2OGPTE(address=remote_url, api_key=client_key)
+            text_completion = client.answer_question(
+            system_prompt=system_prompt,
+            text_context_list=[],
+            question=user_prompt,
+            llm='h2oai/h2ogpt-4096-llama2-70b-chat')
+
+            res = text_completion.content.split("\n")[2:]
+            # m_name = MODEL_CHOICE_MAP.get(self.model_name, "gpt-3.5-turbo-1106")
+            # completion = self.openai_client.chat.completions.create(
+            #     model=m_name,
+            #     messages=query_msg,
+            #     max_tokens=512,
+            #     seed=42
+            # )
+            # res = completion.choices[0].message.content
+            if "SELECT" not in res:
+                res = input_prompt
+            return res
+        except Exception as se:
+            # Another exception occurred, return the original SQL
+            res = input_prompt
+            return res
+
+
     def generate_response(
         self, sql_index, input_prompt, attempt_fix_on_error: bool = True
     ):
@@ -654,8 +689,16 @@ class SQLGenerator:
                 try:
                     result = sqlglot.transpile(res, identify=True, write=self.dialect)[0]
                 except (sqlglot.errors.ParseError, ValueError, RuntimeError) as e:
-                    logger.info("We did the best we could, there might be still be some error:\n")
-                    logger.info(f"Realized query so far:\n {res}")
+                    logger.info(f"Attempting to fix syntax error ...,\n {e}")
+                    env_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
+                    env_key = os.environ["H2OAI_KEY"]
+                    try:
+                        result =  self.self_correction(res, remote_url=env_url, client_key=env_key)
+                    except Exception as se:
+                    # Another exception occurred, return the original SQL
+                        logger.info(f"We did the best we could, there might be still be some error:\n {se}")
+                        logger.info(f"Realized query so far:\n {res}")
+                        result = res
         return result, alternate_queries
 
     def task_formatter(self, input_task: str):
