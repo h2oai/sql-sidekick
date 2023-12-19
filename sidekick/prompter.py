@@ -419,6 +419,7 @@ def ask(
     is_regen_with_options: bool = False,
     is_command: bool = False,
     execute_query: bool = True,
+    debug_mode: bool = False,
     local_base_path = None,
 ):
     """Asks question and returns SQL."""
@@ -472,9 +473,10 @@ def ask(
             f = open(f"{app_base_path}/sidekick/configs/env.toml", "w")
             toml.dump(env_settings, f)
             f.close()
-    if ('gpt-3.5' in model_name or 'gpt-4' in model_name):
-        openai.api_key = api_key
-        logger.info(f"OpenAI key found.")
+    if model_name:
+        if 'gpt-3.5' in model_name or 'gpt-4' in model_name:
+            openai.api_key = api_key
+            logger.info(f"OpenAI key found.")
 
     try:
         # Set context
@@ -536,7 +538,7 @@ def ask(
             _q = question.lower().split("q:")[1].split("r:")[0].strip()
             res = question.lower().split("r:")[1].strip()
             question = _q
-        elif _execute_sql(question):
+        elif _execute_sql(question) and debug_mode:
             logger.info("Executing user provided SQL without re-generation...")
             res = question.strip().lower().split("execute sql:")[1].strip()
         else:

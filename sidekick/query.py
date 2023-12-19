@@ -44,6 +44,7 @@ class SQLGenerator:
         device: str = "auto",
         is_regenerate: bool = False,
         eval_mode = False,
+        debug_mode = False,
         is_regenerate_with_options: bool = False,
     ):
         # TODO: If openai model then only tokenizer needs to be loaded.
@@ -74,7 +75,7 @@ class SQLGenerator:
             if cls._instance is None:
                 cls._instance = super().__new__(cls)
                 cls._instance.current_temps = {}
-            if not model_name or (model_name is not None and "gpt-3.5" not in model_name or "gpt-4" not in model_name):
+            if not debug_mode and not model_name or (model_name is not None and "gpt-3.5" not in model_name or "gpt-4" not in model_name):
                 cls._instance.models, cls._instance.tokenizers = load_causal_lm_model(
                     model_name,
                     cache_path=f"{job_path}/models/",
@@ -220,13 +221,12 @@ class SQLGenerator:
             res = ex_value.statement if ex_value.statement else None
             return res
 
-    def self_correction(self, input_prompt, remote_url, client_key):
+    def self_correction(self, error_msg, input_prompt, remote_url, client_key):
         try:
             # Reference: Teaching Large Language Models to Self-Debug, https://arxiv.org/abs/2304.05128
             system_prompt = DEBUGGING_PROMPT["system_prompt"].format(dialect=self.dialect)
-            user_prompt = DEBUGGING_PROMPT["user_prompt"].format(ex_traceback="", qry_txt=input_prompt)
+            user_prompt = DEBUGGING_PROMPT["user_prompt"].format(ex_traceback=error_msg, qry_txt=input_prompt)
             # Role and content
-            query_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
             MODEL_CHOICE_MAP = MODEL_CHOICE_MAP_EVAL_MODE
 
             from h2ogpte import H2OGPTE
@@ -689,11 +689,12 @@ class SQLGenerator:
                 try:
                     result = sqlglot.transpile(res, identify=True, write=self.dialect)[0]
                 except (sqlglot.errors.ParseError, ValueError, RuntimeError) as e:
+                    _, ex_value, ex_traceback = sys.exc_info()
                     logger.info(f"Attempting to fix syntax error ...,\n {e}")
                     env_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
                     env_key = os.environ["H2OAI_KEY"]
                     try:
-                        result =  self.self_correction(res, remote_url=env_url, client_key=env_key)
+                        result =  self.self_correction(res, error_msg=ex_traceback, remote_url=env_url, client_key=env_key)
                     except Exception as se:
                     # Another exception occurred, return the original SQL
                         logger.info(f"We did the best we could, there might be still be some error:\n {se}")
