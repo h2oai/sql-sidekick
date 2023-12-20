@@ -61,7 +61,7 @@ DEBUGGING_PROMPT = {
                 """,
 }
 
-h2ogpt_DEBUGGING_PROMPT = {
+H2OGPT_DEBUGGING_PROMPT = {
 "system_prompt": "Act as a SQL expert for {dialect} database",
 "user_prompt": """
 Help fix the provided incorrect SQL Query mentioned below in the *Query* section",\n

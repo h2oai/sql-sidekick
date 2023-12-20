@@ -510,9 +510,10 @@ def ask(
             sample_queries_path=sample_queries_path,
             is_regenerate_with_options=is_regen_with_options,
             is_regenerate=is_regenerate,
-            db_dialect=db_dialect
+            db_dialect=db_dialect,
+            debug_mode=debug_mode,
         )
-        if "h2ogpt-sql" not in model_name and not _execute_sql(question):
+        if model_name and "h2ogpt-sql" not in model_name and not _execute_sql(question):
             sql_g._tasks = sql_g.generate_tasks(table_names, question)
             results.extend(["I am thinking step by step: \n", sql_g._tasks, "\n"])
             click.echo(sql_g._tasks)
@@ -608,7 +609,6 @@ def ask(
                         q_res, err = db_obj.execute_query_db(query=_val)
                     else:
                         q_res = m
-
                 elif option == "pandas":
                     tables = extract_table_names(_val)
                     tables_path = dict()

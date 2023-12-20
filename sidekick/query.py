@@ -16,7 +16,7 @@ from llama_index.indices.struct_store import SQLContextContainerBuilder
 from llama_index.indices.struct_store.sql import GPTSQLStructStoreIndex
 from llama_index.llms import OpenAI as LOpenAI
 from openai import OpenAI
-from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
+from sidekick.configs.prompt_template import (DEBUGGING_PROMPT, H2OGPT_DEBUGGING_PROMPT,
                                               NSQL_QUERY_PROMPT, QUERY_PROMPT,
                                               STARCODER2_PROMPT, TASK_PROMPT)
 from sidekick.logger import logger
@@ -43,9 +43,9 @@ class SQLGenerator:
         job_path: str = "./",
         device: str = "auto",
         is_regenerate: bool = False,
-        eval_mode = False,
-        debug_mode = False,
         is_regenerate_with_options: bool = False,
+        eval_mode = False,
+        debug_mode = False
     ):
         # TODO: If openai model then only tokenizer needs to be loaded.
         offloading = is_resource_low(model_name)
@@ -71,24 +71,29 @@ class SQLGenerator:
                 torch.cuda.empty_cache()
             logger.info(f"Low memory: {offloading}/ Model re-initialization: {is_regenerate_with_options}")
 
-        if cls._instance is None or (cls._instance and cls._instance.models and not cls._instance.models.get(model_name, None)) or not cls._instance.tokenizers or (not cls._instance.tokenizers and cls._instance.tokenizers.get(model_name, None)):
+        if cls._instance is None or (cls._instance and hasattr(cls._instance, 'models') and not cls._instance.models.get(model_name, None)) or not hasattr(cls._instance, 'tokenizers') or (not cls._instance.tokenizers and cls._instance.tokenizers.get(model_name, None)):
             if cls._instance is None:
                 cls._instance = super().__new__(cls)
                 cls._instance.current_temps = {}
-            if not debug_mode and not model_name or (model_name is not None and "gpt-3.5" not in model_name or "gpt-4" not in model_name):
-                cls._instance.models, cls._instance.tokenizers = load_causal_lm_model(
-                    model_name,
-                    cache_path=f"{job_path}/models/",
-                    device=device,
-                    off_load=offloading,
-                    re_generate=is_regenerate_with_options,
-                )
+            if not model_name or (model_name is not None and "gpt-3.5" not in model_name or "gpt-4" not in model_name):
+                if not debug_mode:
+                    # Currently. Debug mode is using remote model
+                    # This could change in future.
+                    cls._instance.models, cls._instance.tokenizers = load_causal_lm_model(
+                        model_name,
+                        cache_path=f"{job_path}/models/",
+                        device=device,
+                        off_load=offloading,
+                        re_generate=is_regenerate_with_options,
+                    )
             cls._instance.model_name = "h2ogpt-sql-sqlcoder2" if not model_name else model_name
             model_embed_path = f"{job_path}/models/sentence_transformers"
             cls._instance.current_temps[cls._instance.model_name] = 0.5
             device = "cuda" if torch.cuda.is_available() else "cpu" if device == "auto" else device
-
-            cls._instance.similarity_model = load_embedding_model(model_path=model_embed_path, device=device)
+            if not debug_mode:
+                # Currently. Debug mode is using remote model
+                # This could change in future.
+                cls._instance.similarity_model = load_embedding_model(model_path=model_embed_path, device=device)
         return cls._instance
 
     def __init__(
@@ -103,6 +108,8 @@ class SQLGenerator:
         db_dialect = "sqlite",
         is_regenerate: bool = False,
         is_regenerate_with_options: bool = False,
+        eval_mode = False,
+        debug_mode = False
     ):
         self.db_url = db_url
         self.engine = create_engine(db_url) if db_url else None
@@ -121,7 +128,8 @@ class SQLGenerator:
         self.is_regenerate = is_regenerate
         self.device = device
         self.table_name = None,
-        self.eval_mode = False
+        self.eval_mode = eval_mode,
+        self.debug_mode = debug_mode,
         self.openai_client = OpenAI() if openai.api_key else None
 
     def clear(self):
@@ -224,10 +232,8 @@ class SQLGenerator:
     def self_correction(self, error_msg, input_prompt, remote_url, client_key):
         try:
             # Reference: Teaching Large Language Models to Self-Debug, https://arxiv.org/abs/2304.05128
-            system_prompt = DEBUGGING_PROMPT["system_prompt"].format(dialect=self.dialect)
-            user_prompt = DEBUGGING_PROMPT["user_prompt"].format(ex_traceback=error_msg, qry_txt=input_prompt)
-            # Role and content
-            MODEL_CHOICE_MAP = MODEL_CHOICE_MAP_EVAL_MODE
+            system_prompt = H2OGPT_DEBUGGING_PROMPT["system_prompt"].format(dialect=self.dialect).strip()
+            user_prompt = H2OGPT_DEBUGGING_PROMPT["user_prompt"].format(ex_traceback=error_msg, qry_txt=input_prompt).strip()
 
             from h2ogpte import H2OGPTE
             client = H2OGPTE(address=remote_url, api_key=client_key)
@@ -237,20 +243,13 @@ class SQLGenerator:
             question=user_prompt,
             llm='h2oai/h2ogpt-4096-llama2-70b-chat')
 
-            res = text_completion.content.split("\n")[2:]
-            # m_name = MODEL_CHOICE_MAP.get(self.model_name, "gpt-3.5-turbo-1106")
-            # completion = self.openai_client.chat.completions.create(
-            #     model=m_name,
-            #     messages=query_msg,
-            #     max_tokens=512,
-            #     seed=42
-            # )
-            # res = completion.choices[0].message.content
+            res = text_completion.content.split("```")[1].strip()
             if "SELECT" not in res:
                 res = input_prompt
             return res
         except Exception as se:
             # Another exception occurred, return the original SQL
+            logger.info(f"Error in self correction: {se}")
             res = input_prompt
             return res
 
