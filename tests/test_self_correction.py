@@ -66,7 +66,7 @@ def test_input1():
     )
     assert 'OperationalError' in error
 
-    #2. Self correction is disabled
+    #2. Self correction enabled
     result, _, error = ask(
         question=question,
         table_info_path=table_info_path,
@@ -122,7 +122,7 @@ LIMIT 100
     )
     assert 'OperationalError' in error
 
-    #2. Self correction is disabled
+    #2. Self correction enabled
     result, _, error = ask(
         question=question,
         table_info_path=table_info_path,
