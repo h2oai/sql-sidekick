@@ -42,7 +42,7 @@ pandasql = "0.7.3"
 accelerate = "0.21.0"
 bitsandbytes = "0.41.0"
 InstructorEmbedding = "^1.0.1"
-h2ogpte = "^1.0.1"
+h2ogpte = "^1.2.3"
 openai = "^1.3.0"
 
 [tool.poetry.scripts]

@@ -181,7 +181,7 @@ class DBConfig:
     def data_preview(self, table_name):
         if table_name:
             query_str = f"SELECT * FROM {table_name} LIMIT 10"
-            result = self.execute_query_db(query_str)
+            result = self.execute_query(query_str)
         else:
             result = "Table not found. Make sure uploaded dataset is registered."
         return result
@@ -218,7 +218,7 @@ class DBConfig:
             if engine:
                 engine.dispose()
 
-    def execute_query_db(self, query=None, n_rows=100):
+    def execute_query(self, query=None, n_rows=100):
         output = []
         if self.dialect != "sqlite":
             conn_str = f"{self._url}{self.db_name}"

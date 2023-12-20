@@ -419,6 +419,8 @@ def ask(
     is_regen_with_options: bool = False,
     is_command: bool = False,
     execute_query: bool = True,
+    debug_mode: bool = False,
+    self_correction: bool = True,
     local_base_path = None,
 ):
     """Asks question and returns SQL."""
@@ -472,9 +474,10 @@ def ask(
             f = open(f"{app_base_path}/sidekick/configs/env.toml", "w")
             toml.dump(env_settings, f)
             f.close()
-    if ('gpt-3.5' in model_name or 'gpt-4' in model_name):
-        openai.api_key = api_key
-        logger.info(f"OpenAI key found.")
+    if model_name:
+        if 'gpt-3.5' in model_name or 'gpt-4' in model_name:
+            openai.api_key = api_key
+            logger.info(f"OpenAI key found.")
 
     try:
         # Set context
@@ -508,9 +511,10 @@ def ask(
             sample_queries_path=sample_queries_path,
             is_regenerate_with_options=is_regen_with_options,
             is_regenerate=is_regenerate,
-            db_dialect=db_dialect
+            db_dialect=db_dialect,
+            debug_mode=debug_mode,
         )
-        if "h2ogpt-sql" not in model_name and not _execute_sql(question):
+        if model_name and "h2ogpt-sql" not in model_name and not _execute_sql(question):
             sql_g._tasks = sql_g.generate_tasks(table_names, question)
             results.extend(["I am thinking step by step: \n", sql_g._tasks, "\n"])
             click.echo(sql_g._tasks)
@@ -536,7 +540,7 @@ def ask(
             _q = question.lower().split("q:")[1].split("r:")[0].strip()
             res = question.lower().split("r:")[1].strip()
             question = _q
-        elif _execute_sql(question):
+        elif _execute_sql(question) and debug_mode:
             logger.info("Executing user provided SQL without re-generation...")
             res = question.strip().lower().split("execute sql:")[1].strip()
         else:
@@ -603,10 +607,25 @@ def ask(
 
                     r, m = check_vulnerability(_val)
                     if not r:
-                        q_res, err = db_obj.execute_query_db(query=_val)
+                        q_res, err = db_obj.execute_query(query=_val)
+                        # Check for runtime/operational errors n attempt auto-correction
+                        count = 0
+                        if self_correction:
+                            logger.info("Attempting to auto-correct the query...")
+                            while count !=2 and err and 'OperationalError' in err:
+                                try:
+                                    logger.debug(f"Attempt: {count+1}")
+                                    _err = err.split("\n")[0].split("Error occurred :")[1]
+                                    env_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
+                                    env_key = os.environ["H2OAI_KEY"]
+                                    corr_sql =  sql_g.self_correction(input_prompt=_val, error_msg=_err, remote_url=env_url, client_key=env_key)
+                                    q_res, err = db_obj.execute_query(query=corr_sql)
+                                    count += 1
+                                except Exception as e:
+                                    logger.error(f"Something went wrong, check the supplied credentials:\n{e}")
+                                    count += 1
                     else:
                         q_res = m
-
                 elif option == "pandas":
                     tables = extract_table_names(_val)
                     tables_path = dict()
@@ -656,7 +675,7 @@ def ask(
         del sql_g
         gc.collect()
         torch.cuda.empty_cache()
-        alt_res, err = None, None
+        alt_res, err = None, e
         results = ["Something went wrong while generating response. Please check the supplied API Keys and try again."]
     return results, alt_res, err
 

@@ -294,6 +294,7 @@ async def chatbot(q: Q):
     # Check on task choice.
     if q.user.task_dropdown == "sqld":
         question = f"Execute SQL:\n{q.args.chatbot}"
+        q.args.debug_mode = True
     logging.info(f"Question: {question}")
 
     # For regeneration, currently there are 2 modes
@@ -334,7 +335,7 @@ async def chatbot(q: Q):
                     table_name=q.user.table_name,
                     model_name=q.user.model_choice_dropdown,
                     is_regenerate=True,
-                    is_regen_with_options=False,
+                    is_regen_with_options=False
                 )
                 llm_response = "\n".join(llm_response)
             else:
@@ -353,7 +354,7 @@ async def chatbot(q: Q):
                     table_name=q.user.table_name,
                     model_name=q.user.model_choice_dropdown,
                     is_regenerate=False,
-                    is_regen_with_options=True,
+                    is_regen_with_options=True
                 )
                 response = "\n".join(llm_response)
                 if alt_response:
@@ -374,6 +375,7 @@ async def chatbot(q: Q):
                 table_info_path=q.user.table_info_path,
                 table_name=q.user.table_name,
                 model_name=q.user.model_choice_dropdown,
+                debug_mode=q.args.debug_mode
             )
             llm_response = "\n".join(llm_response)
     except (MemoryError, RuntimeError) as e:
@@ -640,6 +642,8 @@ async def submit_table(q: Q):
 
 async def init(q: Q) -> None:
     q.client.timezone = "UTC"
+    q.args.demo_mode = False
+
     username, profile_pic = q.auth.username, q.app.persona_path
     q.page["meta"] = ui.meta_card(
         box="",
