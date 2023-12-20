@@ -26,7 +26,9 @@ _, table_info_path = generate_schema(data_path, f"{cache_path}/{table_name}_tabl
 # Set DB and table to test
 # Set add_sample=False if no need to add rows to the table (default: = True)
 # Initialize DB
-os.remove(f"{base_path}/db/sqlite/{DB_NAME}.db")
+if Path(f"{base_path}/db/sqlite/{DB_NAME}.db").exists():
+    os.remove(f"{base_path}/db/sqlite/{DB_NAME}.db")
+
 _, err = db_setup(
                 db_name=DB_NAME,
                 hostname=HOST_NAME,
@@ -41,13 +43,14 @@ _, err = db_setup(
 
 def test_input1():
     input_q = """
-    SELECT "age_bucket", AVERAGE("sleep_duration") AS "average_sleep_duration"
+    SELECT "age", AVERAGE("sleep_duration") AS "average_sleep_duration" group by "age"
         FROM "test_self_correction"
     """
 
     result = None
     question = f"Execute SQL:\n{input_q}"
-    res, _, error = ask(
+    #1. Self correction is disabled
+    _, _, error = ask(
         question=question,
         table_info_path=table_info_path,
         sample_queries_path=None,
@@ -58,59 +61,28 @@ def test_input1():
         is_regen_with_options=False,
         execute_query=True,
         local_base_path=base_path,
-        debug_mode=True
+        debug_mode=True,
+        self_correction=False
     )
+    assert 'OperationalError' in error
 
-    if error and 'OperationalError' in error:
-        env_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
-        env_key = os.environ["H2OAI_KEY"]
-
-        _res = input_q
-        sql_g = SQLGenerator(
-            None,
-            None,
-            model_name=None,
-            job_path=cache_path,
-            data_input_path=table_info_path,
-            sample_queries_path=None,
-            is_regenerate_with_options=None,
-            is_regenerate=None,
-            debug_mode=True,
-            db_dialect="sqlite"
-        )
-        count = 0
-        while count !=2:
-            try:
-                print(f"Attempt: {count+1}")
-                _err = error.split("\n")[0].split("Error occurred :")[1]
-                corr_sql =  sql_g.self_correction(input_prompt=_res, error_msg=_err, remote_url=env_url, client_key=env_key)
-                result = sqlglot.transpile(corr_sql, identify=True, write='sqlite')[0]
-
-                _question = f"Execute SQL:\n{result}"
-                _, _, error = ask(
-                    question=_question,
-                    table_info_path=table_info_path,
-                    sample_queries_path=None,
-                    table_name=table_name,
-                    is_command=False,
-                    model_name=None,
-                    is_regenerate=False,
-                    is_regen_with_options=False,
-                    execute_query=True,
-                    local_base_path=base_path,
-                    debug_mode=True
-            )
-                if error and 'OperationalError' in error:
-                    count += 1
-                else:
-                    break
-            except Exception as e:
-                count += 1
-                print(f"Error: {e}")
-
-        print(f"Realized query so far:\n {result}")
-    assert error is None
+    #2. Self correction is disabled
+    result, _, error = ask(
+        question=question,
+        table_info_path=table_info_path,
+        sample_queries_path=None,
+        table_name=table_name,
+        is_command=False,
+        model_name=None,
+        is_regenerate=False,
+        is_regen_with_options=False,
+        execute_query=True,
+        local_base_path=base_path,
+        debug_mode=True,
+        self_correction=True
+    )
     assert result != input_q
+    assert error is None
 
 def test_input2():
     input_q = """
@@ -133,7 +105,8 @@ LIMIT 100
 
     result = None
     question = f"Execute SQL:\n{input_q}"
-    res, _, error = ask(
+    #1. Self correction is disabled
+    _, _, error = ask(
         question=question,
         table_info_path=table_info_path,
         sample_queries_path=None,
@@ -145,56 +118,24 @@ LIMIT 100
         execute_query=True,
         local_base_path=base_path,
         debug_mode=True,
+        self_correction=False
     )
+    assert 'OperationalError' in error
 
-    if error and 'OperationalError' in error:
-        env_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
-        env_key = os.environ["H2OAI_KEY"]
-
-        _res = input_q
-        sql_g = SQLGenerator(
-            None,
-            None,
-            model_name=None,
-            job_path=cache_path,
-            data_input_path=table_info_path,
-            sample_queries_path=None,
-            is_regenerate_with_options=None,
-            is_regenerate=None,
-            debug_mode=True,
-            db_dialect="sqlite"
-        )
-        count = 0
-        while count !=2:
-            try:
-                print(f"Attempt: {count+1}")
-                _err = error.split("\n")[0].split("Error occurred :")[1]
-                corr_sql =  sql_g.self_correction(input_prompt=_res, error_msg=_err, remote_url=env_url, client_key=env_key)
-                result = sqlglot.transpile(corr_sql, identify=True, write='sqlite')[0]
-
-                _question = f"Execute SQL:\n{result}"
-                _, _, error = ask(
-                    question=_question,
-                    table_info_path=table_info_path,
-                    sample_queries_path=None,
-                    table_name=table_name,
-                    is_command=False,
-                    model_name=None,
-                    is_regenerate=False,
-                    is_regen_with_options=False,
-                    execute_query=True,
-                    local_base_path=base_path,
-                    debug_mode=True
-            )
-                if error and 'OperationalError' in error:
-                    count += 1
-                else:
-                    break
-            except Exception as e:
-                count += 1
-                print(f"Error: {e}")
-
-        print(f"Realized query so far:\n {result}")
-    assert error is None
+    #2. Self correction is disabled
+    result, _, error = ask(
+        question=question,
+        table_info_path=table_info_path,
+        sample_queries_path=None,
+        table_name=table_name,
+        is_command=False,
+        model_name=None,
+        is_regenerate=False,
+        is_regen_with_options=False,
+        execute_query=True,
+        local_base_path=base_path,
+        debug_mode=True,
+        self_correction=True
+    )
     assert result != input_q
-    assert 'concat' not in result.lower()
+    assert error is None

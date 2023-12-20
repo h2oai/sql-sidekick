@@ -243,15 +243,16 @@ class SQLGenerator:
             question=user_prompt,
             llm='h2oai/h2ogpt-4096-llama2-70b-chat')
 
-            res = text_completion.content.split("```")[1].strip()
-            if "SELECT" not in res:
-                res = input_prompt
-            return res
+            _res = text_completion.content.split("```")[1].strip()
+            if "SELECT" not in _res:
+                _res = input_prompt
+            result = sqlglot.transpile(_res, identify=True, write=self.dialect)[0]
+            return result
         except Exception as se:
             # Another exception occurred, return the original SQL
             logger.info(f"Error in self correction: {se}")
-            res = input_prompt
-            return res
+            result = _res
+            return result
 
 
     def generate_response(
