@@ -54,12 +54,21 @@ QUERY_PROMPT = """
 DEBUGGING_PROMPT = {
     "system_prompt": "Act as a SQL expert for {dialect} database",
     "user_prompt": """
-                ### Fix syntax errors for provided incorrect SQL Query.
-                # Add ``` as prefix and ``` as suffix to generated SQL
+                ### Help fix syntax errors for provided incorrect SQL Query.
                 # Error: {ex_traceback}
-                # Add explanation and reasoning for each SQL query
-                Query:\n {qry_txt}
+                # Query:\n {qry_txt}
+                # Output: Add ``` as prefix and ``` as suffix to generated SQL
                 """,
+}
+
+h2ogpt_DEBUGGING_PROMPT = {
+"system_prompt": "Act as a SQL expert for {dialect} database",
+"user_prompt": """
+Help fix the provided incorrect SQL Query mentioned below in the *Query* section",\n
+### Error: {ex_traceback}\n
+### Query:\n {qry_txt}\n\n
+Output: Add ``` as prefix and ``` as suffix to generated SQL
+""",
 }
 
 NSQL_QUERY_PROMPT = """
