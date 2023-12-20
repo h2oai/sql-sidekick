@@ -420,6 +420,7 @@ def ask(
     is_command: bool = False,
     execute_query: bool = True,
     debug_mode: bool = False,
+    self_correction: bool = True,
     local_base_path = None,
 ):
     """Asks question and returns SQL."""
@@ -606,7 +607,23 @@ def ask(
 
                     r, m = check_vulnerability(_val)
                     if not r:
-                        q_res, err = db_obj.execute_query_db(query=_val)
+                        q_res, err = db_obj.execute_query(query=_val)
+                        # Check for runtime/operational errors n attempt auto-correction
+                        count = 0
+                        if self_correction:
+                            logger.info("Attempting to auto-correct the query...")
+                            while count !=2 and err and 'OperationalError' in err:
+                                try:
+                                    logger.debug(f"Attempt: {count+1}")
+                                    _err = err.split("\n")[0].split("Error occurred :")[1]
+                                    env_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
+                                    env_key = os.environ["H2OAI_KEY"]
+                                    corr_sql =  sql_g.self_correction(input_prompt=_val, error_msg=_err, remote_url=env_url, client_key=env_key)
+                                    q_res, err = db_obj.execute_query(query=corr_sql)
+                                    count += 1
+                                except Exception as e:
+                                    logger.error(f"Something went wrong, check the supplied credentials:\n{e}")
+                                    count += 1
                     else:
                         q_res = m
                 elif option == "pandas":
@@ -658,7 +675,7 @@ def ask(
         del sql_g
         gc.collect()
         torch.cuda.empty_cache()
-        alt_res, err = None, None
+        alt_res, err = None, e
         results = ["Something went wrong while generating response. Please check the supplied API Keys and try again."]
     return results, alt_res, err
 
