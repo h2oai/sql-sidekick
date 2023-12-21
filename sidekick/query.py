@@ -71,10 +71,11 @@ class SQLGenerator:
                 torch.cuda.empty_cache()
             logger.info(f"Low memory: {offloading}/ Model re-initialization: {is_regenerate_with_options}")
 
-        if cls._instance is None or (cls._instance and hasattr(cls._instance, 'models') and not cls._instance.models.get(model_name, None)) or not hasattr(cls._instance, 'tokenizers') or (not cls._instance.tokenizers and cls._instance.tokenizers.get(model_name, None)):
+        if cls._instance is None or (cls._instance and hasattr(cls._instance, 'models') and not cls._instance.models.get(model_name, None)) or not hasattr(cls._instance, 'tokenizers'):
             if cls._instance is None:
                 cls._instance = super().__new__(cls)
                 cls._instance.current_temps = {}
+            # Load local models only wen remote models are not selected.
             if not model_name or (model_name is not None and "gpt-3.5" not in model_name or "gpt-4" not in model_name):
                 if not debug_mode:
                     # Currently. Debug mode is using remote model

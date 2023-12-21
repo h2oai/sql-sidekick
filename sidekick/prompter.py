@@ -221,7 +221,21 @@ def db_setup(
     is_command: bool = False,
     local_base_path: Optional[str] = None
 ):
-    """Creates context for the new Database"""
+    """Helps setup local database.
+    Args:
+        db_name (str): Database name.
+        hostname (str): Hostname.
+        user_name (str): Username.
+        password (str): Password.
+        port (int): Port.
+        table_name (str): Table name.
+        table_info_path (str): Table info path.
+        table_schema (list): Table schema.
+        table_samples_path (str): Table samples path.
+        add_sample (bool): Add sample rows.
+        is_command (bool): Is command line interface.
+        local_base_path (str): Local base path.
+    """
     click.echo(f" Information supplied:\n {db_name}, {hostname}, {user_name}, {password}, {port}")
     try:
         res = err = None
@@ -423,7 +437,27 @@ def ask(
     self_correction: bool = True,
     local_base_path = None,
 ):
-    """Asks question and returns SQL."""
+    """Ask a question and returns generate SQL.
+    Args:
+        question (str): Question to ask.
+        table_info_path (str): Path to table info.
+        sample_queries_path (str): Path to sample queries.
+        table_name (str): Table name.
+        model_name (str): Model name.
+        db_dialect (str): Database dialect.
+        execute_db_dialect (str): Database dialect to execute.
+        is_regenerate (bool): Regenerate SQL.
+        is_regen_with_options (bool): Regenerate SQL with options.
+        is_command (bool): Is command line interface.
+        execute_query (bool): Execute SQL.
+        debug_mode (bool): Debug mode.
+        self_correction (bool): Self correction.
+        local_base_path (str): Local base path.
+
+    Returns:
+        list: List of results.
+    """
+
     results = []
     err = None  # TODO - Need to handle errors if occurred
     # Book-keeping
@@ -478,7 +512,7 @@ def ask(
         if 'gpt-3.5' in model_name or 'gpt-4' in model_name:
             openai.api_key = api_key
             logger.info(f"OpenAI key found.")
-
+    sql_g = None
     try:
         # Set context
         logger.info("Setting context...")
@@ -610,7 +644,7 @@ def ask(
                         q_res, err = db_obj.execute_query(query=_val)
                         # Check for runtime/operational errors n attempt auto-correction
                         count = 0
-                        if self_correction:
+                        if self_correction and err and 'OperationalError' in err:
                             logger.info("Attempting to auto-correct the query...")
                             while count !=2 and err and 'OperationalError' in err:
                                 try:
@@ -672,7 +706,8 @@ def ask(
                 click.echo("Exiting...")
     except (MemoryError, RuntimeError, AttributeError) as e:
         logger.error(f"Something went wrong while generating response: {e}")
-        del sql_g
+        if sql_g:
+            del sql_g
         gc.collect()
         torch.cuda.empty_cache()
         alt_res, err = None, e

@@ -49,10 +49,12 @@ TASK_CHOICE = {
 }
 
 def list_models():
+    """ List all the available models. """
     return list(MODEL_CHOICE_MAP_EVAL_MODE.keys())
 
 
 def list_db_dialects():
+    """ List all the available SQL dialects."""
     return [_d.value for _d in Dialects.__members__.values() if _d != '']
 
 
@@ -209,6 +211,7 @@ def save_query(
 
 
 def setup_dir(base_path: str):
+    """ Setup the required directories."""
     dir_list = ["var/lib/tmp/data", "var/lib/tmp/jobs", "var/lib/tmp/.cache", "models", "db/sqlite"]
     for _dl in dir_list:
         p = Path(f"{base_path}/{_dl}")

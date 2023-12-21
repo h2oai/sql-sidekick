@@ -6,7 +6,17 @@ from pathlib import Path
 import pandas as pd
 
 
-def generate_schema(data_path, output_path):
+def generate_schema(data_path: str, output_path: str):
+    """ Generate the schema information for the given data file
+    Args:
+        data_path: The path to the data file
+        output_path: The path to save the schema information
+    Returns:
+        schema_list: A list of dictionaries containing the schema information
+        output_path: The path to the schema information
+    """
+
+    # Load the data file
     df = pd.read_csv(data_path)
     # Extract the schema information
     schema = df.dtypes.to_dict()
