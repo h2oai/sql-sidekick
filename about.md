@@ -1,10 +1,10 @@
-**App Goal:** Demo-ware web client for SQL-Sidekick
+**App Goal:** Web client for SQL-Sidekick
 
 **Target Audience:** Data (Machine Learning) Scientists, Citizen Data Scientists, Data Engineers Managers and Business Analysts
 
 **Actively Being Maintained:** Yes (Demo release: _In active RnD_)
 
-**Last Updated:** November, 2023
+**Last Updated:** December, 2023
 
 **Allows uploading and using new model and data:** Yes
 

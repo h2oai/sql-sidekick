@@ -1,5 +1,4 @@
 import gc
-import importlib.metadata
 import json
 import os
 from pathlib import Path
@@ -24,7 +23,7 @@ from sidekick.utils import (_execute_sql, check_vulnerability,
                             execute_query_pd, extract_table_names,
                             generate_suggestions, save_query, setup_dir)
 
-__version__ = importlib.metadata.version('sql-sidekick')
+__version__ = "0.1.8"
 
 # Load the config file and initialize required paths
 app_base_path = (Path(__file__).parent / "../").resolve()

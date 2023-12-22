@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "sql-sidekick"
 version = "0.1.8"
-license = "Proprietary"
-description = "An AI assistant for SQL"
+license = "Apache-2.0 license"
+description = "An AI assistant for SQL generation"
 authors = [
   "Pramit Choudhary <pramit.choudhary@h2o.ai>",
   "Michal Malohlava <michal@h2o.ai>"
@@ -12,7 +12,7 @@ classifiers = [
   "Development Status :: Alpha",
   "Environment :: CLI",
   "Intended Audience :: Developers, Analysts",
-  "License :: Other/Proprietary License",
+  "License :: Apache-2.0 license",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3.8+",
   "Topic :: Scientific/Engineering",

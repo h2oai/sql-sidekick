@@ -515,11 +515,11 @@ async def on_settings(q: Q):
             box="vertical",
             items=[
                 ui.textbox(name='textbox_remote_url', label='Recommendation Remote URL',
-                      value='https://playground.h2ogpte.h2o.ai'),
+                      value='https://playground.h2ogpte.h2o.ai', prefix='https://'),
                 ui.textbox(name='textbox_h2o_api_key', label='H2O API Key',
-                      value=''),
+                      value='', password=True),
                 ui.textbox(name='textbox_openai_api_key', label='OpenAI API Key',
-                      value=''),
+                      value='', password=True),
                 ui.button(name="submit_url_keys", label="Add", primary=True),
                 ui.message_bar(
                     name="error_add_bar",
