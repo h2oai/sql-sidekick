@@ -33,7 +33,7 @@ env_settings = toml.load(f"{app_base_path}/sidekick/configs/env.toml")
 db_dialect = env_settings["DB-DIALECT"]["DB_TYPE"]
 model_name = env_settings["MODEL_INFO"]["MODEL_NAME"]
 h2o_remote_url = env_settings["MODEL_INFO"]["RECOMMENDATION_MODEL_REMOTE_URL"]
-h2o_key = env_settings["MODEL_INFO"]["H2OAI_KEY"]
+h2o_key = env_settings["MODEL_INFO"]["RECOMMENDATION_MODEL_API_KEY"]
 
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
 
@@ -146,7 +146,7 @@ def recommend_suggestions(cache_path: str, table_name: str, n_qs: int=10):
         # First check for keys in env variables
         logger.debug(f"Checking environment settings ...")
         env_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
-        env_key = os.environ["H2OAI_KEY"]
+        env_key = os.environ["RECOMMENDATION_MODEL_API_KEY"]
         if env_url and env_key:
             r_url = env_url
             _key = env_key
@@ -155,7 +155,7 @@ def recommend_suggestions(cache_path: str, table_name: str, n_qs: int=10):
             logger.debug(f"Checking configuration file ...")
             env_settings = toml.load(f"{app_base_path}/sidekick/configs/env.toml")
             r_url = env_settings["MODEL_INFO"]["RECOMMENDATION_MODEL_REMOTE_URL"]
-            _key = env_settings["MODEL_INFO"]["H2OAI_KEY"]
+            _key = env_settings["MODEL_INFO"]["RECOMMENDATION_MODEL_API_KEY"]
         else:
             raise Exception("Model url or key is missing.")
 
@@ -650,7 +650,7 @@ def ask(
                                     logger.debug(f"Attempt: {count+1}")
                                     _err = err.split("\n")[0].split("Error occurred :")[1]
                                     env_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
-                                    env_key = os.environ["H2OAI_KEY"]
+                                    env_key = os.environ["RECOMMENDATION_MODEL_API_KEY"]
                                     corr_sql =  sql_g.self_correction(input_prompt=_val, error_msg=_err, remote_url=env_url, client_key=env_key)
                                     q_res, err = db_obj.execute_query(query=corr_sql)
                                     count += 1

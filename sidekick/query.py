@@ -693,7 +693,7 @@ class SQLGenerator:
                     _, ex_value, ex_traceback = sys.exc_info()
                     logger.info(f"Attempting to fix syntax error ...,\n {e}")
                     env_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
-                    env_key = os.environ["H2OAI_KEY"]
+                    env_key = os.environ["RECOMMENDATION_MODEL_API_KEY"]
                     try:
                         result =  self.self_correction(res, error_msg=ex_traceback, remote_url=env_url, client_key=env_key)
                     except Exception as se:

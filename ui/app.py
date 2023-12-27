@@ -394,8 +394,8 @@ async def submit_url_keys(q: Q):
         env_settings["MODEL_INFO"]["RECOMMENDATION_MODEL_REMOTE_URL"] = q.args.textbox_remote_url
         os.environ["RECOMMENDATION_MODEL_REMOTE_URL"] = q.args.textbox_remote_url
     if q.args.textbox_h2o_api_key:
-        env_settings["MODEL_INFO"]["H2OAI_KEY"] = q.args.textbox_h2o_api_key
-        os.environ["H2OAI_KEY"] = q.args.textbox_h2o_api_key
+        env_settings["MODEL_INFO"]["RECOMMENDATION_MODEL_API_KEY"] = q.args.textbox_h2o_api_key
+        os.environ["RECOMMENDATION_MODEL_API_KEY"] = q.args.textbox_h2o_api_key
     if q.args.textbox_openai_api_key:
         env_settings["MODEL_INFO"]["OPENAI_API_KEY"] = q.args.textbox_openai_api_key
         os.environ["OPENAI_API_KEY"]  = q.args.textbox_openai_api_key
