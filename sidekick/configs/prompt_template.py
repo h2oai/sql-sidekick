@@ -38,6 +38,7 @@ QUERY_PROMPT = """
                 ### *Tasks for table {_table_name}*:\n{_tasks}
                 ### *Policies for SQL generation*:
                 # Avoid overly complex SQL queries, favor concise human readable SQL queries
+                # Avoid patterns that might be vulnerable to SQL injection
                 # Use values and column names that are explicitly mentioned in the question or in the *Data* section.
                 # Do not query for columns that do not exist
                 # Validate column names with the table name when needed
@@ -74,10 +75,15 @@ Output: Add ``` as prefix and ``` as suffix to generated SQL
 
 H2OGPT_GUARDRAIL_PROMPT = {
 "system_prompt": "Act as a Security expert your job is to detect SQL injection vulnerabilities",
-"user_prompt": """
-Help identify possible SQL injection vulnerabilities occur within the provided the SQL Query,
+"user_prompt":"""
+Help audit SQL injection patterns within the provided the SQL *Query*.
+Flag as vulnerable if there are any SQL injection string pattern is found in the *Query*, few *Examples* are provided below,
+### *Examples*:\n
+1. SELECT * FROM sleep_health_and_lifestyle_study WHERE UserId = 105; vulnerable: false
+2. SELECT * FROM sleep_health_and_lifestyle_study WHERE UserId = 105 OR 1=1; vulnerable: true
+If there are more than one possible vulnerabilities, summarize in a single explanation.\n
 ### Query:\n {query_txt}\n\n
-Output: in valid json format with keys: 1. detected_vulnerability (values as True/False), 2. explanation: <value: description>
+### Output: Return result as a valid dictionary string using the JSON schema format, don't add a separate Explanation section or after the json schema, \n{schema}
 """
 }
 
@@ -109,6 +115,7 @@ Adhere to these rules:
 - Only use supplied table names: **{table_name}** for generation
 - Only use column names from the CREATE TABLE statement: **{column_info}** for generation
 - Avoid overly complex SQL queries, favor concise human readable SQL queries
+- Avoid patterns that might be vulnerable to SQL injection
 - When creating a ratio, always cast the numerator as float
 - Always use COUNT(1) instead of COUNT(*)
 - If the question is asking for a rate, use COUNT to compute percentage

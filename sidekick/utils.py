@@ -14,7 +14,8 @@ from h2ogpte import H2OGPTE
 from InstructorEmbedding import INSTRUCTOR
 from pandasql import sqldf
 from sentence_transformers import SentenceTransformer
-from sidekick.configs.prompt_template import RECOMMENDATION_PROMPT, H2OGPT_GUARDRAIL_PROMPT
+from sidekick.configs.prompt_template import (H2OGPT_GUARDRAIL_PROMPT,
+                                              RECOMMENDATION_PROMPT)
 from sidekick.logger import logger
 from sklearn.metrics.pairwise import cosine_similarity
 from sqlglot import Dialects
@@ -510,7 +511,7 @@ def check_vulnerability(input_query: str):
     for pattern in sql_injection_patterns:
         matches = re.findall(pattern, input_query, re.IGNORECASE)
         if matches:
-            if all(v == "'" for v in matches) or all(v == "''" for v in matches):
+            if all(v == "'" for v in matches) or all(v == '' for v in matches):
                 matches = []
             else:
                 res = True
@@ -523,12 +524,22 @@ def check_vulnerability(input_query: str):
     # Step 2:
     # Step 2 is optional, if remote url is provided, check for SQL injection patterns in the generated SQL code via LLM
     # Currently, only support only for models as an endpoints
-
     remote_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
     api_key = os.environ["RECOMMENDATION_MODEL_API_KEY"]
 
     system_prompt = H2OGPT_GUARDRAIL_PROMPT["system_prompt"]
-    user_prompt = H2OGPT_GUARDRAIL_PROMPT["user_prompt"].format(query_txt=input_query).strip()
+    output_schema = """{
+        "type": "object",
+        "properties": {
+            "vulnerability": {
+            "type": "boolean"
+            },
+            "explanation": {
+            "type": "string"
+            }
+        }
+    }"""
+    user_prompt = H2OGPT_GUARDRAIL_PROMPT["user_prompt"].format(query_txt=input_query, schema=output_schema).strip()
 
     from h2ogpte import H2OGPTE
     client = H2OGPTE(address=remote_url, api_key=api_key)
@@ -537,9 +548,17 @@ def check_vulnerability(input_query: str):
     text_context_list=[],
     question=user_prompt,
     llm='h2oai/h2ogpt-4096-llama2-70b-chat')
+    generated_res = text_completion.content.split("\n\n")
 
-    _res2 = text_completion.content
-    import pdb; pdb.set_trace()
+    _res = generated_res[0].strip()
+    temp_result = json.loads(_res) if _res else None
+
+    if temp_result:
+        vulnerable = temp_result['properties']['vulnerability']['value']
+        if vulnerable:
+            explanation_msg = temp_result['properties']['explanation']['value']
+            _t = " ".join([_msg, explanation_msg]) if explanation_msg and _msg else explanation_msg
+            _msg = _t
     return res, _msg
 
 

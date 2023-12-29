@@ -657,6 +657,9 @@ def ask(
                                 except Exception as e:
                                     logger.error(f"Something went wrong, check the supplied credentials:\n{e}")
                                     count += 1
+                        if m:
+                            _t = "\nWarning:\n".join([str(q_res), m])
+                            q_res = _t
                     else:
                         q_res = m
                 elif option == "pandas":
