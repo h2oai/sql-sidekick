@@ -457,16 +457,15 @@ def _check_file_info(file_path: str):
 
 
 def _execute_sql(query: str):
-    # Check for,
-    # 1. Keyword: "Execute SQL: <SQL query>"
-    # 2. Query starts with SQL statement
+    # Check forKeyword: "Execute SQL: <SQL query>"
+
     # TODO vulnerability check for possible SELECT SQL injection via source code.
-    _cond1 = _cond2 = False
-    _cond1 = re.findall(r"Execute SQL:\s+(.*)", query, re.IGNORECASE)
+    _cond = False
+    _cond = re.findall(r"Execute SQL:\s+(.*)", query, re.IGNORECASE)
     _temp_cond = query.strip().lower().split("execute sql:")
     if len(_temp_cond) > 1:
-        _cond2 = True if query.strip().lower().split("execute sql:")[1].strip().startswith("select") else False
-    return _cond1 and _cond2
+        _cond = True
+    return _cond
 
 
 def make_dir(path: str):
@@ -508,14 +507,19 @@ def check_vulnerability(input_query: str):
     res = False
     _msg = None
     p_detected = []
-    for pattern in sql_injection_patterns:
-        matches = re.findall(pattern, input_query, re.IGNORECASE)
-        if matches:
-            if all(v == "'" for v in matches) or all(v == '' for v in matches):
-                matches = []
-            else:
-                res = True
-                p_detected.append(matches)
+    # Check if the supplied query starts with SELECT, only SELECT queries are allowed.
+    if not input_query.strip().lower().startswith("select"):
+        p_detected.append(['Contains SQL keywords other than SELECT'])
+        res = True
+    else:
+        for pattern in sql_injection_patterns:
+            matches = re.findall(pattern, input_query, re.IGNORECASE)
+            if matches:
+                if all(v == "'" for v in matches) or all(v == '' for v in matches):
+                    matches = []
+                else:
+                    res = True
+                    p_detected.append(matches)
     _pd = set(flatten_list(p_detected))
     if res:
         _detected_patterns = ", ".join([str(elem) for elem in _pd])
@@ -554,9 +558,9 @@ def check_vulnerability(input_query: str):
     temp_result = json.loads(_res) if _res else None
 
     if temp_result:
-        vulnerable = temp_result['properties']['vulnerability']['value']
+        vulnerable = temp_result['properties']['vulnerability'].get('value', None)
         if vulnerable:
-            explanation_msg = temp_result['properties']['explanation']['value']
+            explanation_msg = temp_result['properties']['explanation'].get('value', None)
             _t = " ".join([_msg, explanation_msg]) if explanation_msg and _msg else explanation_msg
             _msg = _t
     return res, _msg

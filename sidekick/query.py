@@ -361,7 +361,7 @@ class SQLGenerator:
             context_queries = self.content_queries
             self.context_builder = SQLContextContainerBuilder(self.sql_database, context_dict=table_context_dict)
 
-            if "h2ogpt-sql" not in model_name:
+            if model_name and "h2ogpt-sql" not in model_name:
                 _tasks = self.task_formatter(self._tasks)
 
                 # TODO: The need to pass data info again could be eliminated if Task generation becomes more consistent and accurate.
