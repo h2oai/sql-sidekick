@@ -361,7 +361,7 @@ class SQLGenerator:
             context_queries = self.content_queries
             self.context_builder = SQLContextContainerBuilder(self.sql_database, context_dict=table_context_dict)
 
-            if "h2ogpt-sql" not in model_name:
+            if model_name and "h2ogpt-sql" not in model_name:
                 _tasks = self.task_formatter(self._tasks)
 
                 # TODO: The need to pass data info again could be eliminated if Task generation becomes more consistent and accurate.
@@ -693,7 +693,7 @@ class SQLGenerator:
                     _, ex_value, ex_traceback = sys.exc_info()
                     logger.info(f"Attempting to fix syntax error ...,\n {e}")
                     env_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
-                    env_key = os.environ["H2OAI_KEY"]
+                    env_key = os.environ["RECOMMENDATION_MODEL_API_KEY"]
                     try:
                         result =  self.self_correction(res, error_msg=ex_traceback, remote_url=env_url, client_key=env_key)
                     except Exception as se:

@@ -21,7 +21,7 @@ PORT = "5432"
 
 data_path = "./examples/demo/sleep_health_and_lifestyle_dataset.csv"
 # Replace table_name as needed
-table_name = "test_self_correction"
+table_name = "sleep_health_and_lifestyle"
 _, table_info_path = generate_schema(data_path, f"{cache_path}/{table_name}_table_info.jsonl")
 # Set DB and table to test
 # Set add_sample=False if no need to add rows to the table (default: = True)

@@ -14,7 +14,8 @@ from h2ogpte import H2OGPTE
 from InstructorEmbedding import INSTRUCTOR
 from pandasql import sqldf
 from sentence_transformers import SentenceTransformer
-from sidekick.configs.prompt_template import RECOMMENDATION_PROMPT
+from sidekick.configs.prompt_template import (H2OGPT_GUARDRAIL_PROMPT,
+                                              RECOMMENDATION_PROMPT)
 from sidekick.logger import logger
 from sklearn.metrics.pairwise import cosine_similarity
 from sqlglot import Dialects
@@ -456,16 +457,15 @@ def _check_file_info(file_path: str):
 
 
 def _execute_sql(query: str):
-    # Check for,
-    # 1. Keyword: "Execute SQL: <SQL query>"
-    # 2. Query starts with SQL statement
+    # Check forKeyword: "Execute SQL: <SQL query>"
+
     # TODO vulnerability check for possible SELECT SQL injection via source code.
-    _cond1 = _cond2 = False
-    _cond1 = re.findall(r"Execute SQL:\s+(.*)", query, re.IGNORECASE)
+    _cond = False
+    _cond = re.findall(r"Execute SQL:\s+(.*)", query, re.IGNORECASE)
     _temp_cond = query.strip().lower().split("execute sql:")
     if len(_temp_cond) > 1:
-        _cond2 = True if query.strip().lower().split("execute sql:")[1].strip().startswith("select") else False
-    return _cond1 and _cond2
+        _cond = True
+    return _cond
 
 
 def make_dir(path: str):
@@ -483,10 +483,12 @@ def flatten_list(_list: list):
 
 
 def check_vulnerability(input_query: str):
+    # Ignore: `SELECT "name" FROM PRAGMA_TABLE_INFO(<table_name>)`
     # Common SQL injection patterns checklist
     # Reference: https://github.com/payloadbox/sql-injection-payload-list#generic-sql-injection-payloads
     sql_injection_patterns = [
         r"\b(UNION\s+ALL\s+SELECT|OR\s+\d+\s*=\s*\d+|1\s*=\s*1|--\s+)",
+        r"['\"]|(--|#)|' OR '1|' OR 1 -- -|\" OR \"\" = \"|\" OR 1 = 1 -- -|' OR '' = '|=0--+|OR 1=1|' OR 'x'='x'",
         r'\b(SELECT\s+\*\s+FROM\s+\w+\s+WHERE\s+\w+\s*=\s*[\'"].*?[\'"]\s*;?\s*--)',
         r'\b(INSERT\s+INTO\s+\w+\s+\(\s*\w+\s*,\s*\w+\s*\)\s+VALUES\s*\(\s*[\'"].*?[\'"]\s*,\s*[\'"].*?[\'"]\s*\)\s*;?\s*--)',
         r"\b(DROP\s+TABLE|ALTER\s+TABLE|admin\'--)",  # DROP TABLE/ALTER TABLE
@@ -500,22 +502,67 @@ def check_vulnerability(input_query: str):
         r"(ORDER BY \d+,\s*)*(ORDER BY \d+,?)*SLEEP\(\d+\),?(BENCHMARK\(\d+,\s*MD5\('[A-Z]'\)\),?)*\d*,?",  # Additional generic UNION patterns
     ]
 
+    # Step 1:
     # Check for SQL injection patterns in the SQL code
     res = False
     _msg = None
     p_detected = []
-    for pattern in sql_injection_patterns:
-        matches = re.findall(pattern, input_query, re.IGNORECASE)
-        if matches:
-            if all(v == "'" for v in matches) or all(v == "''" for v in matches):
-                matches = []
-            else:
-                res = True
-                p_detected.append(matches)
+    # Check if the supplied query starts with SELECT, only SELECT queries are allowed.
+    if not input_query.strip().lower().startswith("select"):
+        p_detected.append(['Contains SQL keywords other than SELECT'])
+        res = True
+    else:
+        for pattern in sql_injection_patterns:
+            matches = re.findall(pattern, input_query, re.IGNORECASE)
+            if matches:
+                if all(v == "'" for v in matches) or all(v == '' for v in matches):
+                    matches = []
+                else:
+                    res = True
+                    p_detected.append(matches)
     _pd = set(flatten_list(p_detected))
     if res:
         _detected_patterns = ", ".join([str(elem) for elem in _pd])
         _msg = f"The input question has malicious patterns, **{_detected_patterns}** that could lead to SQL Injection.\nSorry, I will not be able to provide an answer.\nPlease try rephrasing the question."
+
+    # Step 2:
+    # Step 2 is optional, if remote url is provided, check for SQL injection patterns in the generated SQL code via LLM
+    # Currently, only support only for models as an endpoints
+    remote_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
+    api_key = os.environ["RECOMMENDATION_MODEL_API_KEY"]
+
+    system_prompt = H2OGPT_GUARDRAIL_PROMPT["system_prompt"]
+    output_schema = """{
+        "type": "object",
+        "properties": {
+            "vulnerability": {
+            "type": "boolean"
+            },
+            "explanation": {
+            "type": "string"
+            }
+        }
+    }"""
+    user_prompt = H2OGPT_GUARDRAIL_PROMPT["user_prompt"].format(query_txt=input_query, schema=output_schema).strip()
+
+    from h2ogpte import H2OGPTE
+    client = H2OGPTE(address=remote_url, api_key=api_key)
+    text_completion = client.answer_question(
+    system_prompt=system_prompt,
+    text_context_list=[],
+    question=user_prompt,
+    llm='h2oai/h2ogpt-4096-llama2-70b-chat')
+    generated_res = text_completion.content.split("\n\n")
+
+    _res = generated_res[0].strip()
+    temp_result = json.loads(_res) if _res else None
+
+    if temp_result:
+        vulnerable = temp_result['properties']['vulnerability'].get('value', None)
+        if vulnerable:
+            explanation_msg = temp_result['properties']['explanation'].get('value', None)
+            _t = " ".join([_msg, explanation_msg]) if explanation_msg and _msg else explanation_msg
+            _msg = _t
     return res, _msg
 
 
