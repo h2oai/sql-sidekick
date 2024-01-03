@@ -485,13 +485,16 @@ def flatten_list(_list: list):
 def check_vulnerability(input_query: str):
     # Ignore: `SELECT "name" FROM PRAGMA_TABLE_INFO(<table_name>)`
     # Common SQL injection patterns checklist
-    # Reference: https://github.com/payloadbox/sql-injection-payload-list#generic-sql-injection-payloads
+    # Reference:
+    # 1. https://github.com/payloadbox/sql-injection-payload-list#generic-sql-injection-payloads
+    # 2. https://www.invicti.com/blog/web-security/sql-injection-cheat-sheet/#InlineSamples
     sql_injection_patterns = [
         r"\b(UNION\s+ALL\s+SELECT|OR\s+\d+\s*=\s*\d+|1\s*=\s*1|--\s+)",
         r"['\"]|(--|#)|' OR '1|' OR 1 -- -|\" OR \"\" = \"|\" OR 1 = 1 -- -|' OR '' = '|=0--+|OR 1=1|' OR 'x'='x'",
         r'\b(SELECT\s+\*\s+FROM\s+\w+\s+WHERE\s+\w+\s*=\s*[\'"].*?[\'"]\s*;?\s*--)',
         r'\b(INSERT\s+INTO\s+\w+\s+\(\s*\w+\s*,\s*\w+\s*\)\s+VALUES\s*\(\s*[\'"].*?[\'"]\s*,\s*[\'"].*?[\'"]\s*\)\s*;?\s*--)',
         r"\b(DROP\s+TABLE|ALTER\s+TABLE|admin\'--)",  # DROP TABLE/ALTER TABLE
+        r"\b(?!SELECT\b)(?:\w+\s*)+(?:FROM|JOIN|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|USE|SET)\b",  # SQL injection via source code
         r"(?:'|\”|--|#|‘\s*OR\s*‘1|‘\s*OR\s*\d+\s*--\s*-|\"\s*OR\s*\"\" = \"|\"\s*OR\s*\d+\s*=\s*\d+\s*--\s*-|’\s*OR\s*''\s*=\s*‘|‘=‘|'=0--+|OR\s*\d+\s*=\s*\d+|‘\s*OR\s*‘x’=‘x’|AND\s*id\s*IS\s*NULL;\s*--|‘’’’’’’’’’’’’UNION\s*SELECT\s*‘\d+|%00|/\*.*?\*/|\|\||@\w+|@@\w+)",  # Generic SQL injection patterns (Reference: https://github.com/payloadbox/sql-injection-payload-list#generic-sql-injection-payloads)
         r"AND\s[01]|AND\s(true|false)|[01]-((true|false))",
         r"\d+'\s*ORDER\s*BY\s*\d+--\+|\d+'\s*GROUP\s*BY\s*(\d+,)*\d+--\+|'\s*GROUP\s*BY\s*columnnames\s*having\s*1=1\s*--",
@@ -524,10 +527,10 @@ def check_vulnerability(input_query: str):
     if res:
         _detected_patterns = ", ".join([str(elem) for elem in _pd])
         _msg = f"The input question has malicious patterns, **{_detected_patterns}** that could lead to SQL Injection.\nSorry, I will not be able to provide an answer.\nPlease try rephrasing the question."
-
     # Step 2:
     # Step 2 is optional, if remote url is provided, check for SQL injection patterns in the generated SQL code via LLM
     # Currently, only support only for models as an endpoints
+    logger.debug(f"Requesting additional scan using configured LLM model")
     remote_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
     api_key = os.environ["RECOMMENDATION_MODEL_API_KEY"]
 
@@ -544,7 +547,6 @@ def check_vulnerability(input_query: str):
         }
     }"""
     user_prompt = H2OGPT_GUARDRAIL_PROMPT["user_prompt"].format(query_txt=input_query, schema=output_schema).strip()
-
     from h2ogpte import H2OGPTE
     client = H2OGPTE(address=remote_url, api_key=api_key)
     text_completion = client.answer_question(

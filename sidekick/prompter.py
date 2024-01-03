@@ -13,9 +13,9 @@ import torch
 from colorama import Back as B
 from colorama import Fore as F
 from colorama import Style
-from loguru import logger
 from pandasql import sqldf
 from sidekick.db_config import DBConfig
+from sidekick.logger import logger
 from sidekick.memory import EntityMemory
 from sidekick.query import SQLGenerator
 from sidekick.schema_generator import generate_schema
@@ -574,12 +574,13 @@ def ask(
             res = question.lower().split("r:")[1].strip()
             question = _q
         elif _execute_sql(question) and debug_mode:
-            logger.info("Executing user provided SQL without re-generation...")
+            logger.info("Executing user provided SQL without generation...")
             res = question.strip().lower().split("execute sql:")[1].strip()
         else:
+            logger.info("Computing user request ...")
             _check_cond = question.strip().lower().split("execute sql:")
             if len(_check_cond) > 1:
-                question = question.strip().lower().split("execute sql:")[1].strip()
+                question = _check_cond[1].strip()
             res, alt_res = sql_g.generate_sql(table_names, question, model_name=model_name)
         logger.info(f"Input query: {question}")
         logger.info(f"Generated response:\n\n{res}")
@@ -620,9 +621,11 @@ def ask(
             _val = updated_sql if updated_sql else res
             if exe_sql.lower() == "y" or exe_sql.lower() == "yes":
                 # For the time being, the default option is Pandas, but the user can be asked to select Database or pandas DF later.
-                q_res = None
+                logger.info(f"Checking for vulnerabilities in the provided SQL: {_val}")
+                r, m = check_vulnerability(question)
+                q_res = m if r else None
                 option = "DB"  # or DB
-                if option == "DB":
+                if option == "DB" and not r:
                     hostname = env_settings["LOCAL_DB_CONFIG"]["HOST_NAME"]
                     user_name = env_settings["LOCAL_DB_CONFIG"]["USER_NAME"]
                     password = env_settings["LOCAL_DB_CONFIG"]["PASSWORD"]
@@ -638,30 +641,26 @@ def ask(
                     _val = _val.replace("“", '"').replace("”", '"')
                     [_val := _val.replace(s, '"') for s in "‘`’'" if s in _val]
 
-                    r, m = check_vulnerability(_val)
-                    if not r:
-                        q_res, err = db_obj.execute_query(query=_val)
-                        # Check for runtime/operational errors n attempt auto-correction
-                        count = 0
-                        if self_correction and err and 'OperationalError' in err:
-                            logger.info("Attempting to auto-correct the query...")
-                            while count !=2 and err and 'OperationalError' in err:
-                                try:
-                                    logger.debug(f"Attempt: {count+1}")
-                                    _err = err.split("\n")[0].split("Error occurred :")[1]
-                                    env_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
-                                    env_key = os.environ["RECOMMENDATION_MODEL_API_KEY"]
-                                    corr_sql =  sql_g.self_correction(input_prompt=_val, error_msg=_err, remote_url=env_url, client_key=env_key)
-                                    q_res, err = db_obj.execute_query(query=corr_sql)
-                                    count += 1
-                                except Exception as e:
-                                    logger.error(f"Something went wrong, check the supplied credentials:\n{e}")
-                                    count += 1
-                        if m:
-                            _t = "\nWarning:\n".join([str(q_res), m])
-                            q_res = _t
-                    else:
-                        q_res = m
+                    q_res, err = db_obj.execute_query(query=_val)
+                    # Check for runtime/operational errors n attempt auto-correction
+                    count = 0
+                    if self_correction and err and 'OperationalError' in err:
+                        logger.info("Attempting to auto-correct the query...")
+                        while count !=2 and err and 'OperationalError' in err:
+                            try:
+                                logger.debug(f"Attempt: {count+1}")
+                                _err = err.split("\n")[0].split("Error occurred :")[1]
+                                env_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
+                                env_key = os.environ["RECOMMENDATION_MODEL_API_KEY"]
+                                corr_sql =  sql_g.self_correction(input_prompt=_val, error_msg=_err, remote_url=env_url, client_key=env_key)
+                                q_res, err = db_obj.execute_query(query=corr_sql)
+                                count += 1
+                            except Exception as e:
+                                logger.error(f"Something went wrong, check the supplied credentials:\n{e}")
+                                count += 1
+                    if m:
+                        _t = "\nWarning:\n".join([str(q_res), m])
+                        q_res = _t
                 elif option == "pandas":
                     tables = extract_table_names(_val)
                     tables_path = dict()
@@ -706,6 +705,9 @@ def ask(
                 save_query(base_path, query=question, response=_val)
             else:
                 click.echo("Exiting...")
+        else:
+            results = ["I was not able to generate a response for the question. Please try re-phrasing."]
+            alt_res, err = None, None
     except (MemoryError, RuntimeError, AttributeError) as e:
         logger.error(f"Something went wrong while generating response: {e}")
         if sql_g:

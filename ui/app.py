@@ -1,6 +1,5 @@
 import gc
 import json
-import logging
 import os
 from pathlib import Path
 from typing import List, Optional
@@ -10,6 +9,7 @@ import toml
 import torch
 from h2o_wave import Q, app, data, handle_on, main, on, ui
 from h2o_wave.core import expando_to_dict
+from sidekick.logger import logger as logging
 from sidekick.prompter import (ask, data_preview, db_setup,
                                recommend_suggestions)
 from sidekick.query import SQLGenerator
@@ -50,7 +50,6 @@ def initialize_models():
     return
 
 
-logging.info("Initializing the models")
 initialize_models()
 
 
@@ -74,8 +73,6 @@ async def user_variable(q: Q):
 
     q.user.model_choices = MODEL_CHOICE_MAP_DEFAULT
     q.user.eval_mode = False
-
-    logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s")
 
 
 async def client_variable(q: Q):
@@ -135,10 +132,10 @@ async def chat(q: Q):
 
     MODEL_CHOICE_MAP = q.user.model_choices
     model_choices = [ui.choice(_key, _key) for _key in MODEL_CHOICE_MAP.keys()]
-    q.user.model_choice_dropdown = "h2ogpt-sql-sqlcoder2"
+    q.user.model_choice_dropdown = q.args.model_choice_dropdown = "h2ogpt-sql-sqlcoder2"
 
     task_choices = [ui.choice("q_a", "Ask Questions"), ui.choice("sqld", "Debugging")]
-    q.user.task_choice_dropdown = "q_a"
+    q.user.task_choice_dropdown = q.args.task_dropdown = "q_a"
 
     chat_card_command_items = [
         ui.command(name="download_accept", label="Download QnA history", icon="Download"),
@@ -207,10 +204,7 @@ async def chat(q: Q):
                 box=ui.box("vertical", height="500px"),
                 name="chatbot",
                 data=data(fields="content from_user", t="list", size=-50),
-                commands=[
-                    ui.command(name="download_accept", label="Download QnA history", icon="Download"),
-                    ui.command(name="download_reject", label="Download in-correct QnA history", icon="Download"),
-                ],
+                commands=chat_card_command_items,
                 events=["scroll"],
             ),
         ),
@@ -292,7 +286,7 @@ async def chatbot(q: Q):
     # Append bot response.
     question = f"{q.args.chatbot}"
     # Check on task choice.
-    if q.user.task_dropdown == "sqld":
+    if q.user.task_dropdown == "sqld" or q.args.task_dropdown == "sqld":
         question = f"Execute SQL:\n{q.args.chatbot}"
         q.args.debug_mode = True
     logging.info(f"Question: {question}")
@@ -779,6 +773,7 @@ async def on_event(q: Q):
     event_handled = False
     args_dict = expando_to_dict(q.args)
     logging.info(f"Args dict {args_dict}")
+
     if q.args.regenerate_with_options:
         q.args.chatbot = "try harder"
     elif q.args.regenerate:
@@ -802,19 +797,21 @@ async def on_event(q: Q):
         event_handled = True
     if (
         q.args.model_choice_dropdown
-        and not q.args.chatbot
+        and not q.args.chatbot and q.args.model_choice_dropdown != q.user.model_choice_dropdown
     ):
         logging.info(f"User selected model type: {q.args.model_choice_dropdown}")
         q.user.model_choice_dropdown = q.args.model_choice_dropdown
         q.page["select_tables"].model_choice_dropdown.value = q.user.model_choice_dropdown
         q.args.chatbot = f"Model {q.user.model_choice_dropdown} selected"
         # Refresh response is triggered when user selects a table via dropdown
+        q.args.model_choice_dropdown = None
         event_handled = True
     if q.args.task_dropdown and not q.args.chatbot and q.user.task_dropdown != q.args.task_dropdown:
         logging.info(f"User selected task: {q.args.task_dropdown}")
         q.user.task_dropdown = q.args.task_dropdown
         q.page["task_choice"].task_dropdown.value = q.user.task_dropdown
         q.args.chatbot = f"'{TASK_CHOICE[q.user.task_dropdown]}' mode selected"
+        q.args.task_dropdown = None
         # Refresh response is triggered when user selects a table via dropdown
         event_handled = True
     if (
