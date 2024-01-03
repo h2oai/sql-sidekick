@@ -77,10 +77,12 @@ H2OGPT_GUARDRAIL_PROMPT = {
 "system_prompt": "Act as a Security expert your job is to detect SQL injection vulnerabilities",
 "user_prompt":"""
 Help audit SQL injection patterns within the provided the SQL *Query*.
-Flag as vulnerable if there are any SQL injection string pattern is found in the *Query*, few *Examples* are provided below,
+Flag as vulnerable if there are any known SQL injection string pattern is found in the *Query*, few *Examples* are provided below,
 ### *Examples*:\n
 1. SELECT * FROM sleep_health_and_lifestyle_study WHERE UserId = 105; vulnerable: false
 2. SELECT * FROM sleep_health_and_lifestyle_study WHERE UserId = 105 OR 1=1; vulnerable: true
+\n
+Only SELECT queries are allowed, flag as vulnerable if other SQL statements are found in the *Query* (e.g. DROP, INSERT, UPDATE, DELETE, etc.).
 If there are more than one possible vulnerabilities, summarize in a single explanation.\n
 ### Query:\n {query_txt}\n\n
 ### Output: Return result as a valid dictionary string using the JSON schema format, don't add a separate Explanation section or after the json schema, \n{schema}
