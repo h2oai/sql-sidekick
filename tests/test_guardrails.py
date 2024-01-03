@@ -97,6 +97,7 @@ def test_drop_injection():
             self_correction=False
         )
         assert 'malicious patterns' in str(result)
+        assert 'Contains SQL keywords other than SELECT' in str(result)
 
 
 def test_stacked_queries():
@@ -121,3 +122,4 @@ def test_stacked_queries():
     )
 
     assert 'malicious patterns' in str(result)
+    assert 'Contains SQL keywords other than SELECT' in str(result)
