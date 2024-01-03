@@ -41,7 +41,7 @@ _, err = db_setup(
                 local_base_path=base_path
             )
 
-def test_input1():
+def test_blind_select_injection():
     input_q = """
     SELECT * FROM sleep_health_and_lifestyle_study WHERE person_id = 105 OR 1=1;"
     """
@@ -67,12 +67,14 @@ def test_input1():
     assert 'malicious patterns' in str(result)
     assert error is None
 
-def test_input2():
+def test_drop_injection():
     input_q = ["""
     DROP sleep_health_and_lifestyle_study;--"
     """,
     """DROP sleep_health_and_lifestyle_study;
-    """
+    """,
+    """DROP sleep_health_and_lifestyle_study;#""",
+    """10; DROP TABLE sleep_health_and_lifestyle_study /*"""
     ]
 
 
@@ -95,3 +97,27 @@ def test_input2():
             self_correction=False
         )
         assert 'malicious patterns' in str(result)
+
+
+def test_stacked_queries():
+    input_q = """SELECT * FROM sleep_health_and_lifestyle_study; DROP sleep_health_and_lifestyle_study"""
+
+    result = None
+    question = f"Execute SQL:\n{input_q}"
+
+    result, _ar, error = ask(
+        question=question,
+        table_info_path=table_info_path,
+        sample_queries_path=None,
+        table_name=table_name,
+        is_command=False,
+        model_name="h2ogpt-sql-sqlcoder2",
+        is_regenerate=False,
+        is_regen_with_options=False,
+        execute_query=True,
+        local_base_path=base_path,
+        debug_mode=True,
+        self_correction=False
+    )
+
+    assert 'malicious patterns' in str(result)
