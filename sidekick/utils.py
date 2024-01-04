@@ -494,7 +494,7 @@ def check_vulnerability(input_query: str):
         r'\b(SELECT\s+\*\s+FROM\s+\w+\s+WHERE\s+\w+\s*=\s*[\'"].*?[\'"]\s*;?\s*--)',
         r'\b(INSERT\s+INTO\s+\w+\s+\(\s*\w+\s*,\s*\w+\s*\)\s+VALUES\s*\(\s*[\'"].*?[\'"]\s*,\s*[\'"].*?[\'"]\s*\)\s*;?\s*--)',
         r"\b(DROP\s+TABLE|ALTER\s+TABLE|admin\'--)",  # DROP TABLE/ALTER TABLE
-        r"\b(?!SELECT\b)(?:\w+\s*)+(?:FROM|JOIN|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|USE|SET)\b",  # SQL injection via source code
+        r"\b(?:INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)\b",
         r"(?:'|\”|--|#|‘\s*OR\s*‘1|‘\s*OR\s*\d+\s*--\s*-|\"\s*OR\s*\"\" = \"|\"\s*OR\s*\d+\s*=\s*\d+\s*--\s*-|’\s*OR\s*''\s*=\s*‘|‘=‘|'=0--+|OR\s*\d+\s*=\s*\d+|‘\s*OR\s*‘x’=‘x’|AND\s*id\s*IS\s*NULL;\s*--|‘’’’’’’’’’’’’UNION\s*SELECT\s*‘\d+|%00|/\*.*?\*/|\|\||@\w+|@@\w+)",  # Generic SQL injection patterns (Reference: https://github.com/payloadbox/sql-injection-payload-list#generic-sql-injection-payloads)
         r"AND\s[01]|AND\s(true|false)|[01]-((true|false))",
         r"\d+'\s*ORDER\s*BY\s*\d+--\+|\d+'\s*GROUP\s*BY\s*(\d+,)*\d+--\+|'\s*GROUP\s*BY\s*columnnames\s*having\s*1=1\s*--",
@@ -512,7 +512,7 @@ def check_vulnerability(input_query: str):
     p_detected = []
     # Check if the supplied query starts with SELECT, only SELECT queries are allowed.
     if not input_query.strip().lower().startswith("select"):
-        p_detected.append(['Contains SQL keywords other than SELECT'])
+        p_detected.append(['SQL keywords does not start with SELECT, only SELECT queries are allowed.'])
         res = True
     else:
         for pattern in sql_injection_patterns:

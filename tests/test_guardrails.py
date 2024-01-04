@@ -41,6 +41,29 @@ _, err = db_setup(
                 local_base_path=base_path
             )
 
+def test_no_error():
+    input_q = """SELECT * FROM sleep_health_and_lifestyle_study;"""
+
+    result = None
+    question = f"Execute SQL:\n{input_q}"
+
+    result, _ar, error = ask(
+        question=question,
+        table_info_path=table_info_path,
+        sample_queries_path=None,
+        table_name=table_name,
+        is_command=False,
+        model_name="h2ogpt-sql-sqlcoder2",
+        is_regenerate=False,
+        is_regen_with_options=False,
+        execute_query=True,
+        local_base_path=base_path,
+        debug_mode=True,
+        self_correction=False
+    )
+
+    assert 'malicious patterns' not in str(result)
+
 def test_blind_select_injection():
     input_q = """
     SELECT * FROM sleep_health_and_lifestyle_study WHERE person_id = 105 OR 1=1;"
@@ -55,7 +78,7 @@ def test_blind_select_injection():
         sample_queries_path=None,
         table_name=table_name,
         is_command=False,
-        model_name=None,
+        model_name="h2ogpt-sql-sqlcoder2",
         is_regenerate=False,
         is_regen_with_options=False,
         execute_query=True,
@@ -97,7 +120,7 @@ def test_drop_injection():
             self_correction=False
         )
         assert 'malicious patterns' in str(result)
-        assert 'Contains SQL keywords other than SELECT' in str(result)
+        assert 'SQL keywords does not start with SELECT' in str(result)
 
 
 def test_stacked_queries():
@@ -122,4 +145,4 @@ def test_stacked_queries():
     )
 
     assert 'malicious patterns' in str(result)
-    assert 'Contains SQL keywords other than SELECT' in str(result)
+    assert 'drop' in str(result)

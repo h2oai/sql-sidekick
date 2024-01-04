@@ -117,7 +117,7 @@ Adhere to these rules:
 - Only use supplied table names: **{table_name}** for generation
 - Only use column names from the CREATE TABLE statement: **{column_info}** for generation
 - Avoid overly complex SQL queries, favor concise human readable SQL queries
-- Avoid patterns that might be vulnerable to SQL injection
+- Avoid patterns that might be vulnerable to SQL injection, e.g. sanitize inputs
 - When creating a ratio, always cast the numerator as float
 - Always use COUNT(1) instead of COUNT(*)
 - If the question is asking for a rate, use COUNT to compute percentage

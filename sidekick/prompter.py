@@ -622,7 +622,7 @@ def ask(
             if exe_sql.lower() == "y" or exe_sql.lower() == "yes":
                 # For the time being, the default option is Pandas, but the user can be asked to select Database or pandas DF later.
                 logger.info(f"Checking for vulnerabilities in the provided SQL: {_val}")
-                r, m = check_vulnerability(question)
+                r, m = check_vulnerability(_val)
                 q_res = m if r else None
                 option = "DB"  # or DB
                 if option == "DB" and not r:

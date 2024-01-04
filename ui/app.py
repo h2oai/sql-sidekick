@@ -299,9 +299,10 @@ async def chatbot(q: Q):
         if q.args.chatbot and ("preview data" in q.args.chatbot.lower() or "data preview" in q.args.chatbot.lower() or "preview" in q.args.chatbot.lower()) or f"preview {q.user.table_name}" in q.args.chatbot.lower():
             _response_df = data_preview(q.user.table_name)
             # Format as markdown table
-            df_markdown = make_markdown_table(fields = _response_df.columns.tolist(), rows=_response_df.values.tolist())
-            n_cols = len(_response_df.columns)
-            llm_response = f"The selected dataset has total number of {n_cols} columns.\nBelow is quick preview:\n{df_markdown}"
+            if _response_df:
+                df_markdown = make_markdown_table(fields = _response_df.columns.tolist(), rows=_response_df.values.tolist())
+                n_cols = len(_response_df.columns)
+                llm_response = f"The selected dataset has total number of {n_cols} columns.\nBelow is quick preview:\n{df_markdown}"
         elif q.args.chatbot and (q.args.chatbot.lower() == "recommend questions" or q.args.chatbot.lower() == "recommend qs"):
             llm_response = recommend_suggestions(cache_path=q.user.table_info_path, table_name=q.user.table_name)
             if not llm_response:
