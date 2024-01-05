@@ -34,7 +34,7 @@ MODEL_CHOICE_MAP_EVAL_MODE = {
 
 MODEL_CHOICE_MAP_DEFAULT = {
     "h2ogpt-sql-sqlcoder2": "defog/sqlcoder2",
-     "h2ogpt-sql-sqlcoder-34b-alpha": "defog/sqlcoder-34b-alpha",
+    "h2ogpt-sql-sqlcoder-34b-alpha": "defog/sqlcoder-34b-alpha",
     "h2ogpt-sql-nsql-llama-2-7B": "NumbersStation/nsql-llama-2-7B"
 
 }
@@ -534,7 +534,7 @@ def check_vulnerability(input_query: str):
     remote_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
     api_key = os.environ["RECOMMENDATION_MODEL_API_KEY"]
 
-    system_prompt = H2OGPT_GUARDRAIL_PROMPT["system_prompt"]
+    _system_prompt = H2OGPT_GUARDRAIL_PROMPT["system_prompt"].strip()
     output_schema = """{
         "type": "object",
         "properties": {
@@ -546,13 +546,14 @@ def check_vulnerability(input_query: str):
             }
         }
     }"""
-    user_prompt = H2OGPT_GUARDRAIL_PROMPT["user_prompt"].format(query_txt=input_query, schema=output_schema).strip()
+    _user_prompt = H2OGPT_GUARDRAIL_PROMPT["user_prompt"].format(query_txt=input_query, schema=output_schema).strip()
+
     from h2ogpte import H2OGPTE
     client = H2OGPTE(address=remote_url, api_key=api_key)
     text_completion = client.answer_question(
-    system_prompt=system_prompt,
+    system_prompt=_system_prompt,
     text_context_list=[],
-    question=user_prompt,
+    question=_user_prompt,
     llm='h2oai/h2ogpt-4096-llama2-70b-chat')
     generated_res = text_completion.content.split("\n\n")
 

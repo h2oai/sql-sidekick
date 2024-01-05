@@ -299,7 +299,7 @@ async def chatbot(q: Q):
         if q.args.chatbot and ("preview data" in q.args.chatbot.lower() or "data preview" in q.args.chatbot.lower() or "preview" in q.args.chatbot.lower()) or f"preview {q.user.table_name}" in q.args.chatbot.lower():
             _response_df = data_preview(q.user.table_name)
             # Format as markdown table
-            if _response_df:
+            if not _response_df.empty:
                 df_markdown = make_markdown_table(fields = _response_df.columns.tolist(), rows=_response_df.values.tolist())
                 n_cols = len(_response_df.columns)
                 llm_response = f"The selected dataset has total number of {n_cols} columns.\nBelow is quick preview:\n{df_markdown}"

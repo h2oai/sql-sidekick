@@ -16,7 +16,8 @@ from llama_index.indices.struct_store import SQLContextContainerBuilder
 from llama_index.indices.struct_store.sql import GPTSQLStructStoreIndex
 from llama_index.llms import OpenAI as LOpenAI
 from openai import OpenAI
-from sidekick.configs.prompt_template import (DEBUGGING_PROMPT, H2OGPT_DEBUGGING_PROMPT,
+from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
+                                              H2OGPT_DEBUGGING_PROMPT,
                                               NSQL_QUERY_PROMPT, QUERY_PROMPT,
                                               STARCODER2_PROMPT, TASK_PROMPT)
 from sidekick.logger import logger
@@ -244,7 +245,8 @@ class SQLGenerator:
             question=user_prompt,
             llm='h2oai/h2ogpt-4096-llama2-70b-chat')
 
-            _res = text_completion.content.split("```")[1].strip()
+            _response = text_completion.content.split("```sql")
+            _res = _response[1].split("```")[0].strip() if len(_response) > 0 else _response[0].split("```")[0].strip()
             if "SELECT" not in _res:
                 _res = input_prompt
             result = sqlglot.transpile(_res, identify=True, write=self.dialect)[0]

@@ -29,6 +29,7 @@ _, table_info_path = generate_schema(data_path, f"{cache_path}/{table_name}_tabl
 if Path(f"{base_path}/db/sqlite/{DB_NAME}.db").exists():
     os.remove(f"{base_path}/db/sqlite/{DB_NAME}.db")
 
+
 _, err = db_setup(
                 db_name=DB_NAME,
                 hostname=HOST_NAME,
@@ -44,7 +45,7 @@ _, err = db_setup(
 def test_input1():
     input_q = """
     SELECT "age", AVERAGE("sleep_duration") AS "average_sleep_duration" group by "age"
-        FROM "test_self_correction"
+        FROM "sleep_health_and_lifestyle"
     """
 
     result = None
@@ -90,14 +91,14 @@ SELECT "age_bucket",
        AVG("sleep_duration") AS "average_sleep_duration"
 FROM
   (SELECT "age" AS "age_bucket"
-   FROM "test_self_correction"
+   FROM "sleep_health_and_lifestyle"
    WHERE LOWER('Gender') LIKE CONCAT('%like%', '%Female,Male%')
      AND LOWER('Occupation') LIKE '%Accountant,Doctor,Engineer,Lawyer,Manager,Nurse,Sales Representative,Salesperson,Scientist,Software Engineer,Teacher%'
      AND LOWER('BMI_Category') LIKE '%Normal,Normal Weight,Obese,Overweight%'
      AND LOWER('Blood_Pressure') LIKE '%115/75,%115/78,%117/76,%118/75,%118/76,%119/77%'
      AND LOWER('Sleep_Disorder') LIKE '%Insomnia,Sleep Apnea%'
    GROUP BY "age") AS "age_buckets"
-JOIN "test_self_correction" ON "age_buckets"."age_bucket" = "test_self_correction"."age"
+JOIN "sleep_health_and_lifestyle" ON "age_buckets"."age_bucket" = "sleep_health_and_lifestyle"."age"
 GROUP BY "age_buckets"."age_bucket"
 ORDER BY "age_buckets"."age_bucket" NULLS LAST
 LIMIT 100
@@ -139,3 +140,26 @@ LIMIT 100
     )
     assert result != input_q
     assert error is None
+
+def test_input3():
+    input_q = """SELECT CONCAT("age", " ", "heart_rate") AS "age_heart_rate" FROM "sleep_health_and_lifestyle" ORDER BY "age_heart_rate" DESC LIMIT 100
+    """
+
+    question = f"Execute SQL:\n{input_q}"
+    #1. Self correction is disabled
+    res, _, error = ask(
+        question=question,
+        table_info_path=table_info_path,
+        sample_queries_path=None,
+        table_name=table_name,
+        is_command=False,
+        model_name=None,
+        is_regenerate=False,
+        is_regen_with_options=False,
+        execute_query=True,
+        local_base_path=base_path,
+        debug_mode=True,
+        self_correction=True
+    )
+    assert error == None
+    assert res != None

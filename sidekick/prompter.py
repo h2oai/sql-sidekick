@@ -23,7 +23,7 @@ from sidekick.utils import (_execute_sql, check_vulnerability,
                             execute_query_pd, extract_table_names,
                             generate_suggestions, save_query, setup_dir)
 
-__version__ = "0.1.8"
+__version__ = "0.1.9"
 
 # Load the config file and initialize required paths
 app_base_path = (Path(__file__).parent / "../").resolve()
@@ -417,7 +417,7 @@ def data_preview(table_name):
         db_obj.table_name = table_name
     q_res = db_obj.data_preview(table_name)
     # Convert result to data-frame
-    res = pd.DataFrame(q_res[0]) if q_res and q_res[0] else None
+    res = pd.DataFrame(q_res[0]) if q_res and q_res[0] else pd.DataFrame()
     return res
 
 def ask(
