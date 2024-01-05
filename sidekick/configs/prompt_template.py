@@ -11,7 +11,7 @@ TASK_PROMPT = {
         If words in the *Question* match more than one key, include both the values using "or" when forming step by step tasks.
         If no information related to the *Question* is found; apply self reasoning and predict for possible tasks.
         Infer the return type of the Question.
-        Do not generate SQL response, only return itemized tasks.
+        DO NOT generate SQL response, only return itemized tasks.
         # *Data:* \nFor table {_table_name} schema info is mentioned below,\n{_data_info}
         # *History*: \n{_sample_queries}
         # *Question*: For table {_table_name}, {_question_str}, *Context*: {_context}
@@ -37,12 +37,12 @@ QUERY_PROMPT = """
                 # SELECT 1
                 ### *Tasks for table {_table_name}*:\n{_tasks}
                 ### *Policies for SQL generation*:
-                # Avoid overly complex SQL queries, favor concise human readable SQL queries
+                # Avoid overly complex SQL queries, favor concise human readable SQL queries which are easy to understand and debug
                 # Avoid patterns that might be vulnerable to SQL injection
                 # Use values and column names that are explicitly mentioned in the question or in the *Data* section.
-                # Do not query for columns that do not exist
+                # DO NOT query for columns that do not exist
                 # Validate column names with the table name when needed
-                # Don't use aggregate and window function together
+                # DO NOT USE aggregate and window function together
                 # Use COUNT(1) instead of COUNT(*)
                 # Return with LIMIT 100
                 # Prefer NOT EXISTS to LEFT JOIN ON null id
@@ -69,7 +69,7 @@ H2OGPT_DEBUGGING_PROMPT = {
 Help fix the provided incorrect SQL Query mentioned below in the *Query* section",\n
 ### Error: {ex_traceback}\n
 ### Query:\n {qry_txt}\n\n
-Output: Add ``` as prefix and ``` as suffix to generated SQL
+Output: Add '```sql' as prefix and '```' as suffix to generated SQL
 """,
 }
 
@@ -115,14 +115,14 @@ Adhere to these rules:
 - **Deliberately go through the question and database schema word by word** to appropriately answer the question
 - **Use Table Aliases** to prevent ambiguity. For example, `SELECT table1.col1, table2.col1 FROM table1 JOIN table2 ON table1.id = table2.id`.
 - Only use supplied table names: **{table_name}** for generation
-- Only use column names from the CREATE TABLE statement: **{column_info}** for generation
-- Avoid overly complex SQL queries, favor concise human readable SQL queries
+- Only use column names from the CREATE TABLE statement: **{column_info}** for generation. DO NOT USE any other column names outside of this.
+- Avoid overly complex SQL queries, favor concise human readable SQL queries which are easy to understand and debug
 - Avoid patterns that might be vulnerable to SQL injection, e.g. sanitize inputs
 - When creating a ratio, always cast the numerator as float
 - Always use COUNT(1) instead of COUNT(*)
 - If the question is asking for a rate, use COUNT to compute percentage
 - Avoid using the WITH statement
-- Don't use aggregate and window function together
+- DO NOT USE aggregate and window function together
 - Prefer NOT EXISTS to LEFT JOIN ON null id
 - When using DESC keep NULLs at the end
 - If JSONB format found in Table schema, do pattern matching on keywords from the question and use SQL functions such as ->> or ->
