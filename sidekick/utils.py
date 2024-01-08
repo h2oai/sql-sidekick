@@ -23,6 +23,9 @@ from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
                           BitsAndBytesConfig)
 
 MODEL_CHOICE_MAP_EVAL_MODE = {
+    "h2ogpt-sql-sqlcoder2-4bit": "defog/sqlcoder2",
+    "h2ogpt-sql-sqlcoder-34b-alpha-4bit": "defog/sqlcoder-34b-alpha",
+    "h2ogpt-sql-nsql-llama-2-7B-4bit": "NumbersStation/nsql-llama-2-7B",
     "h2ogpt-sql-sqlcoder2": "defog/sqlcoder2",
     "h2ogpt-sql-sqlcoder-34b-alpha": "defog/sqlcoder-34b-alpha",
     "h2ogpt-sql-nsql-llama-2-7B": "NumbersStation/nsql-llama-2-7B",
@@ -33,15 +36,18 @@ MODEL_CHOICE_MAP_EVAL_MODE = {
 }
 
 MODEL_CHOICE_MAP_DEFAULT = {
+    "h2ogpt-sql-sqlcoder2-4bit": "defog/sqlcoder2",
+    "h2ogpt-sql-sqlcoder-34b-alpha-4bit": "defog/sqlcoder-34b-alpha",
+    "h2ogpt-sql-nsql-llama-2-7B-4bit": "NumbersStation/nsql-llama-2-7B",
     "h2ogpt-sql-sqlcoder2": "defog/sqlcoder2",
     "h2ogpt-sql-sqlcoder-34b-alpha": "defog/sqlcoder-34b-alpha",
     "h2ogpt-sql-nsql-llama-2-7B": "NumbersStation/nsql-llama-2-7B"
-
 }
 
+# Local models for now
 MODEL_DEVICE_MAP = {
-    "h2ogpt-sql-sqlcoder2": 0,
-    "h2ogpt-sql-nsql-llama-2-7B": 1,
+    "h2ogpt-sql-sqlcoder2-4bit": 0,
+    "h2ogpt-sql-nsql-llama-2-7B-4bit": 1,
 }
 
 TASK_CHOICE = {

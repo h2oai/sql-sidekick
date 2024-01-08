@@ -37,7 +37,7 @@ class SQLGenerator:
         cls,
         db_url: str,
         openai_key: str = None,
-        model_name="h2ogpt-sql-nsql-llama-2-7B",
+        model_name="h2ogpt-sql-nsql-llama-2-7B-4bit",
         data_input_path: str = "./table_info.jsonl",
         sample_queries_path: str = "./samples.csv",
         db_dialect = "sqlite",
@@ -88,7 +88,7 @@ class SQLGenerator:
                         off_load=offloading,
                         re_generate=is_regenerate_with_options,
                     )
-            cls._instance.model_name = "h2ogpt-sql-sqlcoder2" if not model_name else model_name
+            cls._instance.model_name = "h2ogpt-sql-sqlcoder2-4bit" if not model_name else model_name
             model_embed_path = f"{job_path}/models/sentence_transformers"
             cls._instance.current_temps[cls._instance.model_name] = 0.5
             device = "cuda" if torch.cuda.is_available() else "cpu" if device == "auto" else device
@@ -102,7 +102,7 @@ class SQLGenerator:
         self,
         db_url: str,
         openai_key: str = None,
-        model_name="h2ogpt-sql-nsql-llama-2-7B",
+        model_name="h2ogpt-sql-nsql-llama-2-7B-4bit",
         data_input_path: str = "./table_info.jsonl",
         sample_queries_path: str = "./samples.csv",
         job_path: str = "./",
@@ -133,6 +133,7 @@ class SQLGenerator:
         self.eval_mode = eval_mode,
         self.debug_mode = debug_mode,
         self.openai_client = OpenAI() if openai.api_key else None
+        self.h2ogpt_client = None
 
     def clear(self):
         del SQLGenerator._instance
@@ -414,6 +415,15 @@ class SQLGenerator:
                     logger.info("We did the best we could, there might be still be some error:\n")
                     logger.info(f"Realized query so far:\n {res}")
             else:
+                if self.h2ogpt_client is None:
+                    # Check if env variable has info about remote hosting
+                    remote_h2ogpt_base_url = os.environ.get("H2O_BASE_MODEL_URL", None)
+                    remote_h2ogpt_key = os.environ.get("H2O_BASE_MODEL_API_KEY", None)
+                    _api_key = remote_h2ogpt_key if remote_h2ogpt_key else "EMPTY"
+                    if remote_h2ogpt_base_url:
+                        client_args = dict(base_url=remote_h2ogpt_base_url, api_key=_api_key)
+                        self.h2ogpt_client = OpenAI(**client_args)
+
                 # TODO Update needed for multiple tables
                 columns_w_type = (
                     self.context_builder.full_context_dict[table_name]
@@ -518,7 +528,7 @@ class SQLGenerator:
                 _table_name = ", ".join(table_names)
 
                 query_prompt_format = STARCODER2_PROMPT
-                if model_name == "h2ogpt-sql-nsql-llama-2-7B":
+                if "h2ogpt-sql-nsql-llama-2-7B" in model_name:
                     query_prompt_format = NSQL_QUERY_PROMPT
 
                 query = query_prompt_format.format(
@@ -532,40 +542,43 @@ class SQLGenerator:
                 )
 
                 logger.debug(f"Query Text:\n {query}")
-                tokenizer = self.tokenizers[model_name]
-                inputs = tokenizer([query], return_tensors="pt")
-                model = self.models[model_name]
-                current_temperature = self.current_temps.get(model_name, 0.5)
-                input_length = 1 if model.config.is_encoder_decoder else inputs.input_ids.shape[1]
-                logger.info(f"Context length: {input_length}")
-
-                # Handle limited context length
-                # Currently, conservative approach: remove column description from the prompt, if input_length > (2048-300)
-                # Others to try:
-                # 1. Move to a model with larger context length
-                # 2. Possibly use a different tokenizer for chunking
-                # 3. Maybe positional interpolation --> https://arxiv.org/abs/2306.15595
-                if int(input_length) > 4000:
-                    logger.info("Input length is greater than 1748, removing column description from the prompt")
-                    query = query_prompt_format.format(
-                        table_name=_table_name,
-                        column_info=_column_info,
-                        data_info_detailed="",
-                        sample_queries=qna_samples,
-                        context=contextual_context_val,
-                        question_txt=input_question,
-                    )
-                    logger.debug(f"Adjusted query Text:\n {query}")
-                    inputs = tokenizer([query], return_tensors="pt")
-                    input_length = 1 if model.config.is_encoder_decoder else inputs.input_ids.shape[1]
-                    logger.info(f"Adjusted context length: {input_length}")
-                # Generate SQL
-                random_seed = random.randint(0, 50)
-                torch.manual_seed(random_seed)
-
-                # Greedy search for quick response
-                model.eval()
                 device_type = "cuda" if torch.cuda.is_available() else "cpu"
+
+                # Check if the local models were selected
+                if self.models and self.tokenizers and (model_name == "h2ogpt-sql-nsql-llama-2-7B-4bit" or model_name == "h2ogpt-sql-sqlcoder2-4bit" or model_name == "h2ogpt-sql-sqlcoder-34b-alpha-4bit"):
+                    tokenizer = self.tokenizers[model_name]
+                    inputs = tokenizer([query], return_tensors="pt")
+                    model = self.models[model_name]
+                    current_temperature = self.current_temps.get(model_name, 0.5)
+                    input_length = 1 if model.config.is_encoder_decoder else inputs.input_ids.shape[1]
+                    logger.info(f"Context length: {input_length}")
+
+                    # Handle limited context length
+                    # Currently, conservative approach: remove column description from the prompt, if input_length > (2048-300)
+                    # Others to try:
+                    # 1. Move to a model with larger context length
+                    # 2. Possibly use a different tokenizer for chunking
+                    # 3. Maybe positional interpolation --> https://arxiv.org/abs/2306.15595
+                    if int(input_length) > 4000:
+                        logger.info("Input length is greater than 1748, removing column description from the prompt")
+                        query = query_prompt_format.format(
+                            table_name=_table_name,
+                            column_info=_column_info,
+                            data_info_detailed="",
+                            sample_queries=qna_samples,
+                            context=contextual_context_val,
+                            question_txt=input_question,
+                        )
+                        logger.debug(f"Adjusted query Text:\n {query}")
+                        inputs = tokenizer([query], return_tensors="pt")
+                        input_length = 1 if model.config.is_encoder_decoder else inputs.input_ids.shape[1]
+                        logger.info(f"Adjusted context length: {input_length}")
+                    # Generate SQL
+                    random_seed = random.randint(0, 50)
+                    torch.manual_seed(random_seed)
+
+                    # Greedy search for quick response
+                    model.eval()
 
                 possible_temp_gt_5 = [0.6, 0.75, 0.8, 0.9, 1.0]
                 possible_temp_lt_5 = [0.1, 0.2, 0.3, 0.4]
@@ -582,16 +595,28 @@ class SQLGenerator:
                     # Reset temperature to 0.5
                     current_temperature = 0.5
                     logger.debug(f"Generation with default temperature : {current_temperature}")
-                    output = model.generate(
-                        **inputs.to(device_type),
-                        max_new_tokens=512,
-                        temperature=current_temperature,
-                        output_scores=True,
-                        do_sample=True,
-                        return_dict_in_generate=True,
-                    )
 
-                    generated_tokens = output.sequences[:, input_length:][0]
+                    if model_name == "h2ogpt-sql-sqlcoder2" or model_name == "h2ogpt-sql-sqlcoder-34b-alpha" or model_name == "h2ogpt-sql-nsql-llama-2-7B":
+                        query_txt = [{"role": "user", "content": query}]
+                        completion = self.h2ogpt_client.chat.completions.create(
+                                    model=model_name,
+                                    messages=query_txt,
+                                    max_tokens=1024,
+                                    seed=2)
+                        res = completion.choices[0].message.content
+                        generated_tokens = res
+                    else:
+                        output = model.generate(
+                            **inputs.to(device_type),
+                            max_new_tokens=512,
+                            temperature=current_temperature,
+                            output_scores=True,
+                            do_sample=True,
+                            return_dict_in_generate=True,
+                        )
+
+                        generated_tokens = output.sequences[:, input_length:][0]
+
                 elif self.is_regenerate and not self.is_regenerate_with_options:
                     # throttle temperature for different result
                     logger.info("Regeneration requested on previous query ...")
