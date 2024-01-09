@@ -540,11 +540,11 @@ def ask(
         logger.debug(f"Table info path: {table_info_path}")
 
         # Check if the model is present remotely
-        _remote_model = True if "h2ogpt-sql-sqlcoder-34b-alpha" in model_name else False
-        _remote_model = True if "gpt-3.5" in model_name or "gpt-4" in model_name else False
+        remote_model_list = ["h2ogpt-sql-sqlcoder-34b-alpha", "gpt-3.5", "gpt-4"]
+        _remote_model = [True if _m in model_name else False for _m in remote_model_list][0]
         sql_g = SQLGenerator(
-            db_url,
-            api_key,
+            db_url=db_url,
+            openai_key=api_key,
             model_name=model_name,
             job_path=base_path,
             data_input_path=table_info_path,

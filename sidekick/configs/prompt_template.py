@@ -138,7 +138,8 @@ CREATE TABLE '{table_name}' ({column_info}
 -- Table '{table_name}', {context}, has sample values ({data_info_detailed})
 
 ### Response:
-SELECT"""
+Based on your instructions, here is the SELECT SQL query I have generated to answer the question `{question_txt}`:
+```SELECT"""
 
 
 RECOMMENDATION_PROMPT="""

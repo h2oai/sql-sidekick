@@ -137,6 +137,7 @@ class SQLGenerator:
         self.remote_model = remote_model
         self.openai_client = OpenAI() if openai.api_key else None
         self.h2ogpt_client = None
+        self.models = {}
 
     def clear(self):
         del SQLGenerator._instance
@@ -424,7 +425,7 @@ class SQLGenerator:
                     remote_h2ogpt_key = os.environ.get("H2O_BASE_MODEL_API_KEY", None)
                     _api_key = remote_h2ogpt_key if remote_h2ogpt_key else "EMPTY"
                     if remote_h2ogpt_base_url:
-                        client_args = dict(base_url=remote_h2ogpt_base_url, api_key=_api_key)
+                        client_args = dict(base_url=remote_h2ogpt_base_url, api_key=_api_key, timeout=20.0)
                         self.h2ogpt_client = OpenAI(**client_args)
 
                 # TODO Update needed for multiple tables
@@ -548,6 +549,7 @@ class SQLGenerator:
                 device_type = "cuda" if torch.cuda.is_available() else "cpu"
 
                 # Check if the local models were selected
+                tokenizer = None
                 if self.models and self.tokenizers and (model_name == "h2ogpt-sql-nsql-llama-2-7B-4bit" or model_name == "h2ogpt-sql-sqlcoder2-4bit" or model_name == "h2ogpt-sql-sqlcoder-34b-alpha-4bit"):
                     tokenizer = self.tokenizers[model_name]
                     inputs = tokenizer([query], return_tensors="pt")
@@ -600,13 +602,15 @@ class SQLGenerator:
 
                     if model_name == "h2ogpt-sql-sqlcoder2" or model_name == "h2ogpt-sql-sqlcoder-34b-alpha" or model_name == "h2ogpt-sql-nsql-llama-2-7B":
                         m_name = MODEL_CHOICE_MAP_EVAL_MODE.get(model_name, "h2ogpt-sql-sqlcoder2")
-                        query_txt = [{"role": "user", "content": query}]
-                        completion = self.h2ogpt_client.chat.completions.create(
+                        query_txt = [{"role": "user", "content": query},]
+                        completion = self.h2ogpt_client.with_options(max_retries=3).chat.completions.create(
                                     model=m_name,
                                     messages=query_txt,
                                     max_tokens=512,
+                                    stop="```",
                                     seed=random_seed)
                         generated_tokens = completion.choices[0].message.content
+                        logger.debug(f"Generated tokens: {generated_tokens}")
                     else:
                         output = model.generate(
                             **inputs.to(device_type),
@@ -618,7 +622,6 @@ class SQLGenerator:
                         )
 
                         generated_tokens = output.sequences[:, input_length:][0]
-
                 elif self.is_regenerate and not self.is_regenerate_with_options:
                     # throttle temperature for different result
                     logger.info("Regeneration requested on previous query ...")
@@ -698,18 +701,25 @@ class SQLGenerator:
                         logger.info(alt_res)
 
                 _res = generated_tokens
-                if not self.remote_model:
+                if not self.remote_model and tokenizer:
                     _res = tokenizer.decode(generated_tokens, skip_special_tokens=True)
                 # Below is a pre-caution in-case of an error in table name during generation
                 # COLLATE NOCASE is used to ignore case sensitivity, this might be specific to sqlite
-                _temp = _res.replace("table_name", table_name).split(";")[0]
-
-                if _temp.endswith(";"):
-                    _temp = _temp.replace(";", "")
-                if "LIMIT".lower() not in _temp.lower():
-                    res = "SELECT " + _temp.strip() + " LIMIT 100;"
+                _temp = _res.replace("table_name", table_name) if _res and _res != '' else None
+                res = _temp
+                if not _temp:
+                    res = None
                 else:
-                    res = "SELECT " + _temp.strip() + ";"
+                    _temp = _temp.split("\n```")[0].strip()
+                    _temp = _temp.replace("/[/INST]", "").replace("[INST]", "")
+                    if "SELECT".lower() not in _temp.lower():
+                            _temp = "SELECT " + _temp.strip()
+                            res = _temp
+                    if "LIMIT".lower() not in _temp.lower():
+                            _temp = _temp.strip().replace(";", "") + " LIMIT 100;"
+                            res = _temp
+                    else:
+                        res = _temp.strip() + ";"
 
                 # Validate the generate SQL for parsing errors, along with dialect specific validation
                 # Note: Doesn't do well with handling date-time conversions
@@ -719,7 +729,7 @@ class SQLGenerator:
                 # Reference ticket: https://github.com/tobymao/sqlglot/issues/2011
                 result = res
                 try:
-                    result = sqlglot.transpile(res, identify=True, write=self.dialect)[0]
+                    result = sqlglot.transpile(res, identify=True, write=self.dialect)[0] if res else None
                 except (sqlglot.errors.ParseError, ValueError, RuntimeError) as e:
                     _, ex_value, ex_traceback = sys.exc_info()
                     logger.info(f"Attempting to fix syntax error ...,\n {e}")

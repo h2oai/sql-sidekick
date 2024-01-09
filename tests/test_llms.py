@@ -2,7 +2,6 @@ import os
 from pathlib import Path
 
 import pytest
-import sqlglot
 from sidekick.prompter import ask, db_setup
 from sidekick.query import SQLGenerator
 from sidekick.schema_generator import generate_schema
@@ -41,15 +40,17 @@ _, err = db_setup(
                 local_base_path=base_path
             )
 
-
+# Currently, testing the remote model generation
 def test_remote_model():
+   # 1.
     input_q = """What is the average sleep duration for each gender?"""
 
-    result = None
-    question = f"Execute SQL:\n{input_q}"
+    # or something similar
+    expected_1 = """'Male', 7.036507936507934"""
+    expected_2 = """'Female', 7.229729729729729"""
 
     result, _ar, error = ask(
-        question=question,
+        question=input_q,
         table_info_path=table_info_path,
         sample_queries_path=None,
         table_name=table_name,
@@ -60,7 +61,30 @@ def test_remote_model():
         execute_query=True,
         local_base_path=base_path,
         debug_mode=False,
-        self_correction=False
+        self_correction=True
     )
 
-    assert result is not None
+    assert expected_1 in result
+    assert expected_2 in result
+
+    input_q = """What are the most common occupations among individuals in the dataset?"""
+
+    # or something similar
+    expected = None
+
+    result, _ar, error = ask(
+        question=input_q,
+        table_info_path=table_info_path,
+        sample_queries_path=None,
+        table_name=table_name,
+        is_command=False,
+        model_name="h2ogpt-sql-sqlcoder-34b-alpha",
+        is_regenerate=False,
+        is_regen_with_options=False,
+        execute_query=True,
+        local_base_path=base_path,
+        debug_mode=False,
+        self_correction=True
+    )
+
+    assert result is not expected
