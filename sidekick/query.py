@@ -46,6 +46,7 @@ class SQLGenerator:
         is_regenerate: bool = False,
         is_regenerate_with_options: bool = False,
         eval_mode = False,
+        remote_model = False,
         debug_mode = False
     ):
         # TODO: If openai model then only tokenizer needs to be loaded.
@@ -77,7 +78,7 @@ class SQLGenerator:
                 cls._instance = super().__new__(cls)
                 cls._instance.current_temps = {}
             # Load local models only wen remote models are not selected.
-            if not model_name or (model_name is not None and "gpt-3.5" not in model_name or "gpt-4" not in model_name):
+            if not model_name or not remote_model:
                 if not debug_mode:
                     # Currently. Debug mode is using remote model
                     # This could change in future.
@@ -111,7 +112,8 @@ class SQLGenerator:
         is_regenerate: bool = False,
         is_regenerate_with_options: bool = False,
         eval_mode = False,
-        debug_mode = False
+        debug_mode = False,
+        remote_model = False
     ):
         self.db_url = db_url
         self.engine = create_engine(db_url) if db_url else None
@@ -132,6 +134,7 @@ class SQLGenerator:
         self.table_name = None,
         self.eval_mode = eval_mode,
         self.debug_mode = debug_mode,
+        self.remote_model = remote_model
         self.openai_client = OpenAI() if openai.api_key else None
         self.h2ogpt_client = None
 
@@ -379,8 +382,8 @@ class SQLGenerator:
 
                 logger.debug(f"Query Text:\n {query_str}")
                 # Reference: https://github.com/jerryjliu/llama_index/issues/987
-                MODEL_CHOICE_MAP = MODEL_CHOICE_MAP_EVAL_MODE
-                m_name = MODEL_CHOICE_MAP.get(model_name, "gpt-3.5-turbo-1106")
+                model_choices = MODEL_CHOICE_MAP_EVAL_MODE
+                m_name = model_choices.get(model_name, "gpt-3.5-turbo-1106")
 
                 llm_predictor_gpt3 = LOpenAI(temperature=0, model_name=m_name, max_tokens=512, seed=42)
                 service_context_gpt3 = ServiceContext.from_defaults(
@@ -585,26 +588,25 @@ class SQLGenerator:
                 random_seed = random.randint(0, 50)
                 torch.manual_seed(random_seed)
 
-                if current_temperature >= 0.5:
-                    random_temperature = np.random.choice(possible_temp_lt_5, 1)[0]
-                else:
-                    random_temperature = np.random.choice(possible_temp_gt_5, 1)[0]
-
                 if not self.is_regenerate_with_options and not self.is_regenerate:
                     # Greedy decoding
                     # Reset temperature to 0.5
                     current_temperature = 0.5
                     logger.debug(f"Generation with default temperature : {current_temperature}")
+                    if current_temperature >= 0.5:
+                        random_temperature = np.random.choice(possible_temp_lt_5, 1)[0]
+                    else:
+                        random_temperature = np.random.choice(possible_temp_gt_5, 1)[0]
 
                     if model_name == "h2ogpt-sql-sqlcoder2" or model_name == "h2ogpt-sql-sqlcoder-34b-alpha" or model_name == "h2ogpt-sql-nsql-llama-2-7B":
+                        m_name = MODEL_CHOICE_MAP_EVAL_MODE.get(model_name, "h2ogpt-sql-sqlcoder2")
                         query_txt = [{"role": "user", "content": query}]
                         completion = self.h2ogpt_client.chat.completions.create(
-                                    model=model_name,
+                                    model=m_name,
                                     messages=query_txt,
-                                    max_tokens=1024,
-                                    seed=2)
-                        res = completion.choices[0].message.content
-                        generated_tokens = res
+                                    max_tokens=512,
+                                    seed=random_seed)
+                        generated_tokens = completion.choices[0].message.content
                     else:
                         output = model.generate(
                             **inputs.to(device_type),
@@ -695,7 +697,9 @@ class SQLGenerator:
                         alternate_queries.append(alt_res)
                         logger.info(alt_res)
 
-                _res = tokenizer.decode(generated_tokens, skip_special_tokens=True)
+                _res = generated_tokens
+                if not self.remote_model:
+                    _res = tokenizer.decode(generated_tokens, skip_special_tokens=True)
                 # Below is a pre-caution in-case of an error in table name during generation
                 # COLLATE NOCASE is used to ignore case sensitivity, this might be specific to sqlite
                 _temp = _res.replace("table_name", table_name).split(";")[0]

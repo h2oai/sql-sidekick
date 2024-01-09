@@ -34,9 +34,13 @@ db_dialect = env_settings["DB-DIALECT"]["DB_TYPE"]
 model_name = env_settings["MODEL_INFO"]["MODEL_NAME"]
 h2o_remote_url = env_settings["MODEL_INFO"]["RECOMMENDATION_MODEL_REMOTE_URL"]
 h2o_key = env_settings["MODEL_INFO"]["RECOMMENDATION_MODEL_API_KEY"]
+# h2ogpt base model urls
+h2ogpt_base_model_url = env_settings["MODEL_INFO"]["H2O_BASE_MODEL_URL"]
+h2ogpt_base_model_key = env_settings["MODEL_INFO"]["H2O_BASE_MODEL_API_KEY"]
 
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
-
+os.environ["H2O_BASE_MODEL_URL"] = h2ogpt_base_model_url
+os.environ["H2O_BASE_MODEL_API_KEY"] = h2ogpt_base_model_key
 
 def color(fore="", back="", text=None):
     return f"{fore}{back}{text}{Style.RESET_ALL}"
@@ -535,6 +539,9 @@ def ask(
             table_info_path = _get_table_info(path, table_name)
         logger.debug(f"Table info path: {table_info_path}")
 
+        # Check if the model is present remotely
+        _remote_model = True if "h2ogpt-sql-sqlcoder-34b-alpha" in model_name else False
+        _remote_model = True if "gpt-3.5" in model_name or "gpt-4" in model_name else False
         sql_g = SQLGenerator(
             db_url,
             api_key,
@@ -546,6 +553,7 @@ def ask(
             is_regenerate=is_regenerate,
             db_dialect=db_dialect,
             debug_mode=debug_mode,
+            remote_model=_remote_model
         )
         if model_name and "h2ogpt-sql" not in model_name and not _execute_sql(question):
             sql_g._tasks = sql_g.generate_tasks(table_names, question)
