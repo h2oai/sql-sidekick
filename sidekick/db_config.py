@@ -252,7 +252,7 @@ class DBConfig:
                 engine.dispose()
             else:
                 logger.info("Query Empty or None!")
-            return output, None
+            return output, query
         except Exception as e:
             err = f"Error occurred : {format(e)}"
             logger.info(err)

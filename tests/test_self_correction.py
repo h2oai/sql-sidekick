@@ -2,7 +2,6 @@ import os
 from pathlib import Path
 
 import pytest
-import sqlglot
 from sidekick.prompter import ask, db_setup
 from sidekick.query import SQLGenerator
 from sidekick.schema_generator import generate_schema
@@ -57,7 +56,7 @@ def test_input1():
         sample_queries_path=None,
         table_name=table_name,
         is_command=False,
-        model_name=None,
+        model_name='h2ogpt-sql-sqlcoder2',
         is_regenerate=False,
         is_regen_with_options=False,
         execute_query=True,
@@ -74,7 +73,7 @@ def test_input1():
         sample_queries_path=None,
         table_name=table_name,
         is_command=False,
-        model_name=None,
+        model_name='h2ogpt-sql-sqlcoder2',
         is_regenerate=False,
         is_regen_with_options=False,
         execute_query=True,

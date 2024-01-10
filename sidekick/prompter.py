@@ -34,9 +34,13 @@ db_dialect = env_settings["DB-DIALECT"]["DB_TYPE"]
 model_name = env_settings["MODEL_INFO"]["MODEL_NAME"]
 h2o_remote_url = env_settings["MODEL_INFO"]["RECOMMENDATION_MODEL_REMOTE_URL"]
 h2o_key = env_settings["MODEL_INFO"]["RECOMMENDATION_MODEL_API_KEY"]
+# h2ogpt base model urls
+h2ogpt_base_model_url = env_settings["MODEL_INFO"]["H2O_BASE_MODEL_URL"]
+h2ogpt_base_model_key = env_settings["MODEL_INFO"]["H2O_BASE_MODEL_API_KEY"]
 
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
-
+os.environ["H2O_BASE_MODEL_URL"] = h2ogpt_base_model_url
+os.environ["H2O_BASE_MODEL_API_KEY"] = h2ogpt_base_model_key
 
 def color(fore="", back="", text=None):
     return f"{fore}{back}{text}{Style.RESET_ALL}"
@@ -431,8 +435,9 @@ def ask(
     is_regenerate: bool = False,
     is_regen_with_options: bool = False,
     is_command: bool = False,
-    execute_query: bool = True,
     debug_mode: bool = False,
+    execute_query: bool = True,
+    guardrails: bool = True,
     self_correction: bool = True,
     local_base_path = None,
 ):
@@ -535,9 +540,12 @@ def ask(
             table_info_path = _get_table_info(path, table_name)
         logger.debug(f"Table info path: {table_info_path}")
 
+        # Check if the model is present remotely
+        remote_model_list = ["h2ogpt-sql-sqlcoder-34b-alpha", "gpt-3.5", "gpt-4"]
+        _remote_model = [True if _m in model_name else False for _m in remote_model_list][0]
         sql_g = SQLGenerator(
-            db_url,
-            api_key,
+            db_url=db_url,
+            openai_key=api_key,
             model_name=model_name,
             job_path=base_path,
             data_input_path=table_info_path,
@@ -546,6 +554,7 @@ def ask(
             is_regenerate=is_regenerate,
             db_dialect=db_dialect,
             debug_mode=debug_mode,
+            remote_model=_remote_model
         )
         if model_name and "h2ogpt-sql" not in model_name and not _execute_sql(question):
             sql_g._tasks = sql_g.generate_tasks(table_names, question)
@@ -620,10 +629,13 @@ def ask(
 
             _val = updated_sql if updated_sql else res
             if exe_sql.lower() == "y" or exe_sql.lower() == "yes":
-                # For the time being, the default option is Pandas, but the user can be asked to select Database or pandas DF later.
-                logger.info(f"Checking for vulnerabilities in the provided SQL: {_val}")
-                r, m = check_vulnerability(_val)
+                # Before executing, check if known vulnerabilities exist in the generated SQL code.
+                if guardrails:
+                    logger.info(f"Checking for vulnerabilities in the provided SQL: {_val}")
+                r, m = check_vulnerability(_val) if guardrails else (None, None)
                 q_res = m if r else None
+
+                # For the time being, the default option is DB, but the user can be asked to select Database or pandas DF later.
                 option = "DB"  # or DB
                 if option == "DB" and not r:
                     hostname = env_settings["LOCAL_DB_CONFIG"]["HOST_NAME"]
@@ -637,7 +649,6 @@ def ask(
                         db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect
                     )
 
-                    # Before executing, check if known vulnerabilities exist in the generated SQL code.
                     _val = _val.replace("“", '"').replace("”", '"')
                     [_val := _val.replace(s, '"') for s in "‘`’'" if s in _val]
 
