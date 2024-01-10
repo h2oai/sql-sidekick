@@ -5,7 +5,8 @@ import pytest
 from sidekick.prompter import ask, db_setup
 from sidekick.query import SQLGenerator
 from sidekick.schema_generator import generate_schema
-from sidekick.utils import setup_dir
+from sidekick.utils import generate_text_embeddings, setup_dir
+from sklearn.metrics.pairwise import cosine_similarity
 
 base_path = (Path(__file__).parent / "../").resolve()
 base_path = "."
@@ -28,6 +29,14 @@ _, table_info_path = generate_schema(data_path, f"{cache_path}/{table_name}_tabl
 if Path(f"{base_path}/db/sqlite/{DB_NAME}.db").exists():
     os.remove(f"{base_path}/db/sqlite/{DB_NAME}.db")
 
+def compute_similarity_score(x1: str, x2:str):
+    m_path = f"{base_path}/models/sentence_transformers/"
+    _embedding1 = generate_text_embeddings(m_path, x=[x1, x2])
+    _embedding2 = generate_text_embeddings(m_path, x=[x2])
+    similarities_score = cosine_similarity(_embedding1.astype(float), _embedding2.astype(float))
+    return similarities_score
+
+
 _, err = db_setup(
                 db_name=DB_NAME,
                 hostname=HOST_NAME,
@@ -41,13 +50,11 @@ _, err = db_setup(
             )
 
 # Currently, testing the remote model generation
-def test_remote_model():
-   # 1.
+def test_basic_access():
+    # 1.
     input_q = """What is the average sleep duration for each gender?"""
-
-    # or something similar
-    expected_1 = """'Male', 7.036507936507934"""
-    expected_2 = """'Female', 7.229729729729729"""
+    expected_1 = "Male"
+    expected_2 = "Female"
 
     result, _ar, error = ask(
         question=input_q,
@@ -61,16 +68,20 @@ def test_remote_model():
         execute_query=True,
         local_base_path=base_path,
         debug_mode=False,
+        guardrails=False,
         self_correction=True
     )
 
-    assert expected_1 in result
-    assert expected_2 in result
+    assert expected_1 in str(result)
+    assert expected_2 in str(result)
 
+
+def test_input1():
+    # 2.
     input_q = """What are the most common occupations among individuals in the dataset?"""
-
-    # or something similar
-    expected = None
+    expected_value = str([('Nurse', 73), ('Doctor', 71), ('Engineer', 63), ('Lawyer', 47), ('Teacher', 40), ('Accountant', 37), ('Salesperson', 32), ('Software Engineer', 4), ('Scientist', 4), ('Sales Representative', 2), ('Manager', 1)])
+    expected_sql = """SELECT "Occupation", COUNT(*) AS "frequency" FROM "sleep_health_and_lifestyle" GROUP BY "Occupation" ORDER BY "frequency" DESC LIMIT 10
+    """
 
     result, _ar, error = ask(
         question=input_q,
@@ -84,7 +95,14 @@ def test_remote_model():
         execute_query=True,
         local_base_path=base_path,
         debug_mode=False,
+        guardrails=False,
         self_correction=True
     )
+    _generated_sql = str(result[1].split("``` sql\n")[1])
+    _runtime_value = str(result[4])
 
-    assert result is not expected
+    _syntax_score = compute_similarity_score(expected_sql, _generated_sql)
+    _execution_val_score = compute_similarity_score(expected_value, _runtime_value)
+    # compute similarity score
+    assert _syntax_score[0][0] > 0.9
+    assert _execution_val_score[0][0] > 0.85

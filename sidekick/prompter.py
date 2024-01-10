@@ -435,8 +435,9 @@ def ask(
     is_regenerate: bool = False,
     is_regen_with_options: bool = False,
     is_command: bool = False,
-    execute_query: bool = True,
     debug_mode: bool = False,
+    execute_query: bool = True,
+    guardrails: bool = True,
     self_correction: bool = True,
     local_base_path = None,
 ):
@@ -628,10 +629,13 @@ def ask(
 
             _val = updated_sql if updated_sql else res
             if exe_sql.lower() == "y" or exe_sql.lower() == "yes":
-                # For the time being, the default option is Pandas, but the user can be asked to select Database or pandas DF later.
-                logger.info(f"Checking for vulnerabilities in the provided SQL: {_val}")
-                r, m = check_vulnerability(_val)
+                # Before executing, check if known vulnerabilities exist in the generated SQL code.
+                if guardrails:
+                    logger.info(f"Checking for vulnerabilities in the provided SQL: {_val}")
+                r, m = check_vulnerability(_val) if guardrails else (None, None)
                 q_res = m if r else None
+
+                # For the time being, the default option is DB, but the user can be asked to select Database or pandas DF later.
                 option = "DB"  # or DB
                 if option == "DB" and not r:
                     hostname = env_settings["LOCAL_DB_CONFIG"]["HOST_NAME"]
@@ -645,7 +649,6 @@ def ask(
                         db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect
                     )
 
-                    # Before executing, check if known vulnerabilities exist in the generated SQL code.
                     _val = _val.replace("“", '"').replace("”", '"')
                     [_val := _val.replace(s, '"') for s in "‘`’'" if s in _val]
 

@@ -711,7 +711,9 @@ class SQLGenerator:
                     res = None
                 else:
                     _temp = _temp.split("\n```")[0].strip()
-                    _temp = _temp.replace("/[/INST]", "").replace("[INST]", "")
+                    # TODO Below should not happen, will have to check why its getting generated as part of response.
+                    # Not sure, if its a vllm or prompt issue.
+                    _temp = _temp.replace("/[/INST]", "").replace("[INST]", "").replace("[/INST]", "").strip()
                     if "SELECT".lower() not in _temp.lower():
                             _temp = "SELECT " + _temp.strip()
                             res = _temp
@@ -736,10 +738,10 @@ class SQLGenerator:
                     env_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
                     env_key = os.environ["RECOMMENDATION_MODEL_API_KEY"]
                     try:
-                        result =  self.self_correction(res, error_msg=ex_traceback, remote_url=env_url, client_key=env_key)
+                        result =  self.self_correction(res, error_msg=str(ex_traceback), remote_url=env_url, client_key=env_key)
                     except Exception as se:
                     # Another exception occurred, return the original SQL
-                        logger.info(f"We did the best we could, there might be still be some error:\n {se}")
+                        logger.info(f"We did the best we could to fix syntactical error, there might be still be some issues:\n {se}")
                         logger.info(f"Realized query so far:\n {res}")
                         result = res
         return result, alternate_queries
