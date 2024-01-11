@@ -78,10 +78,11 @@ class SQLGenerator:
                 cls._instance = super().__new__(cls)
                 cls._instance.current_temps = {}
             # Load local models only wen remote models are not selected.
-            if not model_name or not remote_model:
+            if not remote_model:
                 if not debug_mode:
                     # Currently. Debug mode is using remote model
                     # This could change in future.
+                    logger.info(f"Loading local model: {model_name}")
                     cls._instance.models, cls._instance.tokenizers = load_causal_lm_model(
                         model_name,
                         cache_path=f"{job_path}/models/",
@@ -89,6 +90,8 @@ class SQLGenerator:
                         off_load=offloading,
                         re_generate=is_regenerate_with_options,
                     )
+            else:
+                cls._instance.models = {}
             cls._instance.model_name = "h2ogpt-sql-sqlcoder2-4bit" if not model_name else model_name
             model_embed_path = f"{job_path}/models/sentence_transformers"
             cls._instance.current_temps[cls._instance.model_name] = 0.5
@@ -137,7 +140,6 @@ class SQLGenerator:
         self.remote_model = remote_model
         self.openai_client = OpenAI() if openai.api_key else None
         self.h2ogpt_client = None
-        self.models = {}
 
     def clear(self):
         del SQLGenerator._instance
@@ -422,6 +424,14 @@ class SQLGenerator:
                 if self.h2ogpt_client is None:
                     # Check if env variable has info about remote hosting
                     remote_h2ogpt_base_url = os.environ.get("H2O_BASE_MODEL_URL", None)
+                    if model_name == 'h2ogpt-sql-sqlcoder-34b-alpha':
+                        remote_h2ogpt_base_url = f"{remote_h2ogpt_base_url}:5000/v1"
+                    elif model_name == 'h2ogpt-sql-sqlcoder2':
+                        remote_h2ogpt_base_url = f"{remote_h2ogpt_base_url}:5001/v1"
+                    elif model_name == 'h2ogpt-sql-nsql-llama-2-7B':
+                        remote_h2ogpt_base_url = f"{remote_h2ogpt_base_url}:5002/v1"
+                    else:
+                        remote_h2ogpt_base_url = None
                     remote_h2ogpt_key = os.environ.get("H2O_BASE_MODEL_API_KEY", None)
                     _api_key = remote_h2ogpt_key if remote_h2ogpt_key else "EMPTY"
                     if remote_h2ogpt_base_url:
@@ -595,10 +605,7 @@ class SQLGenerator:
                     # Reset temperature to 0.5
                     current_temperature = 0.5
                     logger.debug(f"Generation with default temperature : {current_temperature}")
-                    if current_temperature >= 0.5:
-                        random_temperature = np.random.choice(possible_temp_lt_5, 1)[0]
-                    else:
-                        random_temperature = np.random.choice(possible_temp_gt_5, 1)[0]
+                    random_temperature = np.random.choice(possible_temp_lt_5, 1)[0] if current_temperature >= 0.5 else np.random.choice(possible_temp_gt_5, 1)[0]
 
                     if model_name == "h2ogpt-sql-sqlcoder2" or model_name == "h2ogpt-sql-sqlcoder-34b-alpha" or model_name == "h2ogpt-sql-nsql-llama-2-7B":
                         m_name = MODEL_CHOICE_MAP_EVAL_MODE.get(model_name, "h2ogpt-sql-sqlcoder2")
