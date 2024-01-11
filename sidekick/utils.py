@@ -22,6 +22,9 @@ from sqlglot import Dialects
 from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
                           BitsAndBytesConfig)
 
+REMOTE_LLMS = ["h2ogpt-sql-sqlcoder-34b-alpha", "h2ogpt-sql-sqlcoder2", "h2ogpt-sql-nsql-llama-2-7B",
+                             "gpt-3.5-turbo", "gpt-4-8k", "gpt-4-1106-preview-128k"]
+
 MODEL_CHOICE_MAP_EVAL_MODE = {
     "h2ogpt-sql-sqlcoder2-4bit": "defog/sqlcoder2",
     "h2ogpt-sql-sqlcoder-34b-alpha-4bit": "defog/sqlcoder-34b-alpha",

@@ -288,6 +288,7 @@ class SQLGenerator:
                     query_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
                     MODEL_CHOICE_MAP = MODEL_CHOICE_MAP_EVAL_MODE
                     m_name = MODEL_CHOICE_MAP.get(self.model_name, "gpt-3.5-turbo-1106")
+
                     completion = self.openai_client.chat.completions.create(
                         model=m_name,
                         messages=query_msg,
@@ -559,7 +560,7 @@ class SQLGenerator:
                 device_type = "cuda" if torch.cuda.is_available() else "cpu"
 
                 # Check if the local models were selected
-                tokenizer = None
+                tokenizer = model = generated_tokens = None
                 if self.models and self.tokenizers and (model_name == "h2ogpt-sql-nsql-llama-2-7B-4bit" or model_name == "h2ogpt-sql-sqlcoder2-4bit" or model_name == "h2ogpt-sql-sqlcoder-34b-alpha-4bit"):
                     tokenizer = self.tokenizers[model_name]
                     inputs = tokenizer([query], return_tensors="pt")
@@ -592,9 +593,6 @@ class SQLGenerator:
                     random_seed = random.randint(0, 50)
                     torch.manual_seed(random_seed)
 
-                    # Greedy search for quick response
-                    model.eval()
-
                 possible_temp_gt_5 = [0.6, 0.75, 0.8, 0.9, 1.0]
                 possible_temp_lt_5 = [0.1, 0.2, 0.3, 0.4]
                 random_seed = random.randint(0, 50)
@@ -619,16 +617,19 @@ class SQLGenerator:
                         generated_tokens = completion.choices[0].message.content
                         logger.debug(f"Generated tokens: {generated_tokens}")
                     else:
-                        output = model.generate(
-                            **inputs.to(device_type),
-                            max_new_tokens=512,
-                            temperature=current_temperature,
-                            output_scores=True,
-                            do_sample=True,
-                            return_dict_in_generate=True,
-                        )
+                        if model:
+                            # Greedy search for quick response
+                            model.eval()
+                            output = model.generate(
+                                **inputs.to(device_type),
+                                max_new_tokens=512,
+                                temperature=current_temperature,
+                                output_scores=True,
+                                do_sample=True,
+                                return_dict_in_generate=True,
+                            )
 
-                        generated_tokens = output.sequences[:, input_length:][0]
+                            generated_tokens = output.sequences[:, input_length:][0]
                 elif self.is_regenerate and not self.is_regenerate_with_options:
                     # throttle temperature for different result
                     logger.info("Regeneration requested on previous query ...")

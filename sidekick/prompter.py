@@ -19,7 +19,7 @@ from sidekick.logger import logger
 from sidekick.memory import EntityMemory
 from sidekick.query import SQLGenerator
 from sidekick.schema_generator import generate_schema
-from sidekick.utils import (_execute_sql, check_vulnerability,
+from sidekick.utils import (REMOTE_LLMS, _execute_sql, check_vulnerability,
                             execute_query_pd, extract_table_names,
                             generate_suggestions, save_query, setup_dir)
 
@@ -541,8 +541,7 @@ def ask(
         logger.debug(f"Table info path: {table_info_path}")
 
         # Check if the model is present remotely
-        remote_model_list = ["h2ogpt-sql-sqlcoder-34b-alpha", "h2ogpt-sql-sqlcoder2", "h2ogpt-sql-nsql-llama-2-7B", "gpt-3.5", "gpt-4"]
-        _remote_model = any(model_name.lower() in _m.lower() for _m in remote_model_list)
+        _remote_model = any(model_name.lower() in _m.lower() for _m in REMOTE_LLMS)
         sql_g = SQLGenerator(
             db_url=db_url,
             openai_key=api_key,
