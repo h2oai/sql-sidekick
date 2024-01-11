@@ -49,8 +49,37 @@ _, err = db_setup(
                 local_base_path=base_path
             )
 
-# Currently, testing the remote model generation
-def test_basic_access():
+
+@pytest.mark.parametrize("question, model_name", [("What is the average sleep duration for each gender?", "h2ogpt-sql-sqlcoder-34b-alpha"),
+    ("What is the average sleep duration for each gender?", "h2ogpt-sql-nsql-llama-2-7B")]
+    )
+def test_basic_access(question, model_name):
+    # 1.
+    input_q = question
+    expected_1 = "Male"
+    expected_2 = "Female"
+
+    result, _ar, error = ask(
+        question=input_q,
+        table_info_path=table_info_path,
+        sample_queries_path=None,
+        table_name=table_name,
+        is_command=False,
+        model_name=model_name,
+        is_regenerate=False,
+        is_regen_with_options=False,
+        execute_query=True,
+        local_base_path=base_path,
+        debug_mode=False,
+        guardrails=False,
+        self_correction=True
+    )
+
+    assert expected_1 in str(result)
+    assert expected_2 in str(result)
+
+
+def test_basic_access_local():
     # 1.
     input_q = """What is the average sleep duration for each gender?"""
     expected_1 = "Male"
@@ -62,7 +91,7 @@ def test_basic_access():
         sample_queries_path=None,
         table_name=table_name,
         is_command=False,
-        model_name="h2ogpt-sql-sqlcoder-34b-alpha",
+        model_name="h2ogpt-sql-nsql-llama-2-7B-4bit",
         is_regenerate=False,
         is_regen_with_options=False,
         execute_query=True,
@@ -82,8 +111,8 @@ def test_input1():
     expected_value = str([('Nurse', 73), ('Doctor', 71), ('Engineer', 63), ('Lawyer', 47), ('Teacher', 40), ('Accountant', 37), ('Salesperson', 32), ('Software Engineer', 4), ('Scientist', 4), ('Sales Representative', 2), ('Manager', 1)])
     expected_sql = """SELECT "Occupation", COUNT(*) AS "frequency" FROM "sleep_health_and_lifestyle" GROUP BY "Occupation" ORDER BY "frequency" DESC LIMIT 10
     """
-
-    result, _ar, error = ask(
+    _runtime_value = _generated_sql = ""
+    result, _, _ = ask(
         question=input_q,
         table_info_path=table_info_path,
         sample_queries_path=None,
@@ -98,8 +127,11 @@ def test_input1():
         guardrails=False,
         self_correction=True
     )
-    _generated_sql = str(result[1].split("``` sql\n")[1])
-    _runtime_value = str(result[4])
+    if result and len(result) > 0:
+        _generated_sql = str(result[1].split("``` sql\n")[1])
+        if len(result) > 4:
+            _runtime_value = str(result[4])
+        _runtime_value = str(result[4])
 
     _syntax_score = compute_similarity_score(expected_sql, _generated_sql)
     _execution_val_score = compute_similarity_score(expected_value, _runtime_value)

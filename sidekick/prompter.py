@@ -541,8 +541,8 @@ def ask(
         logger.debug(f"Table info path: {table_info_path}")
 
         # Check if the model is present remotely
-        remote_model_list = ["h2ogpt-sql-sqlcoder-34b-alpha", "gpt-3.5", "gpt-4"]
-        _remote_model = [True if _m in model_name else False for _m in remote_model_list][0]
+        remote_model_list = ["h2ogpt-sql-sqlcoder-34b-alpha", "h2ogpt-sql-sqlcoder2", "h2ogpt-sql-nsql-llama-2-7B", "gpt-3.5", "gpt-4"]
+        _remote_model = any(model_name.lower() in _m.lower() for _m in remote_model_list)
         sql_g = SQLGenerator(
             db_url=db_url,
             openai_key=api_key,
@@ -654,21 +654,21 @@ def ask(
 
                     q_res, err = db_obj.execute_query(query=_val)
                     # Check for runtime/operational errors n attempt auto-correction
-                    count = 0
+                    attempt = 0
                     if self_correction and err and 'OperationalError' in err:
                         logger.info("Attempting to auto-correct the query...")
-                        while count !=2 and err and 'OperationalError' in err:
+                        while attempt !=3 and err and 'OperationalError' in err:
                             try:
-                                logger.debug(f"Attempt: {count+1}")
+                                logger.debug(f"Attempt: {attempt+1}")
                                 _err = err.split("\n")[0].split("Error occurred :")[1]
                                 env_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
                                 env_key = os.environ["RECOMMENDATION_MODEL_API_KEY"]
                                 corr_sql =  sql_g.self_correction(input_prompt=_val, error_msg=_err, remote_url=env_url, client_key=env_key)
                                 q_res, err = db_obj.execute_query(query=corr_sql)
-                                count += 1
+                                attempt += 1
                             except Exception as e:
                                 logger.error(f"Something went wrong, check the supplied credentials:\n{e}")
-                                count += 1
+                                attempt += 1
                     if m:
                         _t = "\nWarning:\n".join([str(q_res), m])
                         q_res = _t

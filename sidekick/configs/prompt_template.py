@@ -48,6 +48,7 @@ QUERY_PROMPT = """
                 # Prefer NOT EXISTS to LEFT JOIN ON null id
                 # Avoid using the WITH statement
                 # When using DESC keep NULLs at the end
+                # Always cast the numerator as float when computing ratios
                 # If JSONB format found in Table schema, do pattern matching on keywords from the question and use SQL functions such as ->> or ->
                 # Use prepared statements with parameterized queries to prevent SQL injection
                 # Add explanation and reasoning for each SQL query
@@ -118,7 +119,7 @@ Adhere to these rules:
 - Only use column names from the CREATE TABLE statement: **{column_info}** for generation. DO NOT USE any other column names outside of this.
 - Avoid overly complex SQL queries, favor concise human readable SQL queries which are easy to understand and debug
 - Avoid patterns that might be vulnerable to SQL injection, e.g. sanitize inputs
-- When creating a ratio, always cast the numerator as float
+- Always cast the numerator as float when computing ratios
 - Always use COUNT(1) instead of COUNT(*)
 - If the question is asking for a rate, use COUNT to compute percentage
 - Avoid using the WITH statement
