@@ -1,7 +1,12 @@
+# 1. python3 -m venv .sidekick_venv
+# 2. source .sidekick_venv/bin/activate
+# 3.. !pip install --force-reinstall sql_sidekick-0.1.9-py3-none-any.whl
+
 import os
 from pathlib import Path
 from typing import Optional
 
+import click
 import pandas as pd
 from sidekick.prompter import ask, db_setup
 from sidekick.query import SQLGenerator
@@ -32,8 +37,21 @@ def compute_similarity_score(x1: str, x2:str):
     return similarities_score
 
 
+@click.group()
+@click.version_option()
+def cli():
+    """For benchmarking SQL-Sidekick.
+    """
 
-def run_eval(input_data_path: str, table_name: str, gold_context_path: str, model_name: str="h2ogpt-sql-sqlcoder-34b-alpha", sample_qna_path: Optional[str]=None, **kwargs):
+@cli.command()
+@click.option("--input_data_path", "-i", help="Path to dataset in .csv format")
+@click.option("--table_name", "-t", help="Table name related to the supplied dataset")
+@click.option("--eval_data_path", "-e", help="Path to eval dataset in .csv format")
+@click.option("--model_name", "-m", default="h2ogpt-sql-sqlcoder-34b-alpha", help="Model name to use for inference")
+@click.option("--sample_qna_path", "-s", default=None, help="Path to sample QnA in .csv format")
+@click.option("--kwargs", "-k", default=None, help="Additional arguments")
+def run_eval(input_data_path: str, table_name: str, eval_data_path: str, model_name: str, sample_qna_path: Optional[str]=None, **kwargs):
+    #  Generate schema for the supplied input data
     _, table_info_path = generate_schema(input_data_path, f"{cache_path}/{table_name}_table_info.jsonl")
     # Db setup
     _, err = db_setup(
@@ -51,16 +69,18 @@ def run_eval(input_data_path: str, table_name: str, gold_context_path: str, mode
 
     # read gold context
     syntax_accuracy = []
-    compare_df = pd.read_csv(gold_context_path)
+    failures = []
+    compare_df = pd.read_csv(eval_data_path)
     for _row in compare_df.itertuples():
         input_q = _row.question
         expected_sql = _row.answer
 
         # With self-correction
-        result, _ar, error = ask(
+        _generated_sql = ''
+        result, _, _ = ask(
             question=input_q,
             table_info_path=table_info_path,
-            sample_queries_path=None,
+            sample_queries_path=sample_qna_path,
             table_name=table_name,
             is_command=False,
             model_name=model_name,
@@ -73,6 +93,17 @@ def run_eval(input_data_path: str, table_name: str, gold_context_path: str, mode
             self_correction=True
         )
 
-        _syntax_score = compute_similarity_score(expected_sql, result)
-        if _syntax_score > 0.9:
-            syntax_accuracy.append(_syntax_score)
+        if  result and len(result) > 1:
+            _tmp = result[1].split("``` sql\n")
+            _generated_sql = _tmp[1].strip() if len((_tmp)) > 1 else ''
+        _syntax_score = compute_similarity_score(expected_sql, _generated_sql)
+        if _syntax_score[0][0] > 0.9:
+            syntax_accuracy.append(_syntax_score[0][0])
+        else:
+            failures.append((input_q, expected_sql, _generated_sql))
+
+    print(f"Syntax accuracy: {float(len(syntax_accuracy)/compare_df.shape[0])}")
+    print(f"Failures cases: {failures}")
+
+if __name__ == "__main__":
+    cli()
