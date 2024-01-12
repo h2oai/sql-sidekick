@@ -1,6 +1,6 @@
 # 1. python3 -m venv .sidekick_venv
 # 2. source .sidekick_venv/bin/activate
-# 3.. !pip install --force-reinstall sql_sidekick-0.1.9-py3-none-any.whl
+# 3. pip install --force-reinstall sql_sidekick-0.1.9-py3-none-any.whl
 
 import os
 from pathlib import Path
