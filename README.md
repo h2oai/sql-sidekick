@@ -46,6 +46,8 @@ Step:
 ```
 ## Start
 ```
+`sql-sidekick`
+
 Welcome to the SQL Sidekick! I am an AI assistant that helps you with SQL
 queries. I can help you with the following:
   0. Generate input schema: 
