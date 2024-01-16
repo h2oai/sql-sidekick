@@ -5,11 +5,13 @@ from pathlib import Path
 import pandas as pd
 import psycopg2 as pg
 import sqlalchemy
+from langchain_community.utilities import SQLDatabase
 from psycopg2.extras import Json
 from sidekick.configs.data_template import data_samples_template
 from sidekick.logger import logger
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.schema import CreateTable
 from sqlalchemy_utils import database_exists
 
 
@@ -61,6 +63,16 @@ class DBConfig:
         else:
             engine = create_engine(f"{self._url}{self.db_name}", echo=True)
         return database_exists(f"{engine.url}")
+
+    def get_table_create_query(self, **kwargs):
+        if self.dialect == "databricks":
+            _catalog = kwargs.get("catalog", "hive_metastore")
+            _schema = kwargs.get("schema", "default")
+            _cluster_id = kwargs.get("cluster_id", None)
+            db = SQLDatabase.from_databricks(catalog=_catalog, schema=_schema, cluster_id=_cluster_id)
+            tbl = [_t for _t in db._metadata.sorted_tables if _t.name == self.table_name.lower()][0]
+            table_info = CreateTable(tbl).compile(self._engine.dialect)
+            return str(table_info)
 
     def create_db(self):
         engine = create_engine(self._url)
