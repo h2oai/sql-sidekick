@@ -1,6 +1,7 @@
 # create db with supplied info
 import json
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import psycopg2 as pg
@@ -64,15 +65,18 @@ class DBConfig:
             engine = create_engine(f"{self._url}{self.db_name}", echo=True)
         return database_exists(f"{engine.url}")
 
-    def get_table_create_query(self, **kwargs):
-        if self.dialect == "databricks":
-            _catalog = kwargs.get("catalog", "hive_metastore")
+    @classmethod
+    def get_table_schema(cls, **kwargs:Any):
+        if cls.dialect == "databricks":
+            _catalog = kwargs.get("catalog", "samples")
             _schema = kwargs.get("schema", "default")
             _cluster_id = kwargs.get("cluster_id", None)
             db = SQLDatabase.from_databricks(catalog=_catalog, schema=_schema, cluster_id=_cluster_id)
-            tbl = [_t for _t in db._metadata.sorted_tables if _t.name == self.table_name.lower()][0]
-            table_info = CreateTable(tbl).compile(self._engine.dialect)
-            return str(table_info)
+            tbl = [_t for _t in db._metadata.sorted_tables if _t.name == cls.table_name.lower()][0]
+        # TODO pending sqlite/postgresql
+        table_info = CreateTable(tbl) if tbl else ''
+        return str(table_info).strip()
+
 
     def create_db(self):
         engine = create_engine(self._url)
