@@ -10,10 +10,10 @@ from langchain_community.utilities import SQLDatabase
 from psycopg2.extras import Json
 from sidekick.configs.data_template import data_samples_template
 from sidekick.logger import logger
+from sidekick.schema_generator import generate_schema
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.schema import CreateTable
-from sidekick.schema_generator import generate_schema
 from sqlalchemy_utils import database_exists
 
 
@@ -42,10 +42,12 @@ class DBConfig:
         self.dialect = dialect
         self.base_path = base_path
         self.column_names = []
-        if dialect == "sqlite":
+        if self.dialect == "sqlite":
             self._url = f"sqlite:///{base_path}/db/sqlite/{db_name}.db"
-        else:
+        elif self.dialect == "postgresql":
             self._url = f"{self.dialect}://{self.user_name}:{self.password}@{self.hostname}:{self.port}/"
+        else:
+            self._url = None # currently databricks is initialized _get_raw_table_schema
 
     @property
     def table_name(self):
@@ -75,6 +77,7 @@ class DBConfig:
             db = SQLDatabase.from_databricks(catalog=_catalog, schema=_schema, cluster_id=_cluster_id)
             tbl = [_t for _t in db._metadata.sorted_tables if _t.name == cls.table_name.lower()][0]
             cls.engine = db._engine
+            cls._url = db._engine.url
         # TODO pending sqlite/postgresql
         create_table_info = CreateTable(tbl).compile(cls.engine) if tbl is not None else ''
         return str(create_table_info).strip()
@@ -246,18 +249,22 @@ class DBConfig:
 
     def execute_query(self, query=None, n_rows=100):
         output = []
-        if self.dialect != "sqlite":
+        if self.dialect == "sqlite" or self.dialect == "databricks":
+            conn_str = self._url
+        elif self.dialect == "postgresql":
             conn_str = f"{self._url}{self.db_name}"
         else:
-            conn_str = self._url
+            conn_str = None
 
+        import pdb; pdb.set_trace()
+        # Create an engine
+        engine = create_engine(conn_str)
+        # Create a connection
+        connection = engine.connect()
+
+        import pdb; pdb.set_trace()
         try:
             if query:
-                # Create an engine
-                engine = create_engine(conn_str)
-
-                # Create a connection
-                connection = engine.connect()
                 logger.debug(f"Executing query:\n {query}")
                 _query = text(query)
                 result = connection.execute(_query)

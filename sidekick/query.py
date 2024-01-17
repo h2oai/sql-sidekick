@@ -151,8 +151,9 @@ class SQLGenerator:
         examples = {}
         for _t in tables:
             f_p = f"{self.path}/var/lib/tmp/data/{_t}_column_values.json"
-            with open(f_p, "r") as f:
-                examples[_t] = json.load(f)
+            if Path(f_p).exists():
+                with open(f_p, "r") as f:
+                    examples[_t] = json.load(f)
         return examples
 
     def build_index(self, persist: bool = True):

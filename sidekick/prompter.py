@@ -533,8 +533,8 @@ def ask(
             db_url = f"{execute_db_dialect}+psycopg2://{user_name}:{passwd}@{host_name}/{db_name}".format(
                 user_name, passwd, host_name, db_name
             )
-        else:
-            db_url = None
+        elif execute_db_dialect.lower() == "databricks":
+            db_url = DBConfig._url
 
         if table_info_path is None:
             table_info_path = _get_table_info(path, table_name)
@@ -542,6 +542,7 @@ def ask(
 
         # Check if the model is present remotely
         _remote_model = any(model_name.lower() in _m.lower() for _m in REMOTE_LLMS)
+
         sql_g = SQLGenerator(
             db_url=db_url,
             openai_key=api_key,
