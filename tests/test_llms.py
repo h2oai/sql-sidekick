@@ -16,13 +16,13 @@ setup_dir(base_path)
 HOST_NAME = "localhost"
 USER_NAME = "sqlite"
 PASSWORD = "abc"
-DB_NAME = "query_test_db"
+DB_NAME = "query_test"
 PORT = "5432"
 
 data_path = "./examples/demo/sleep_health_and_lifestyle_dataset.csv"
 # Replace table_name as needed
 table_name = "sleep_health_and_lifestyle"
-_, table_info_path = generate_schema(data_path, f"{cache_path}/{table_name}_table_info.jsonl")
+_, table_info_path = generate_schema(data_path=data_path, output_path=f"{cache_path}/{table_name}_table_info.jsonl")
 # Set DB and table to test
 # Set add_sample=False if no need to add rows to the table (default: = True)
 # Initialize DB

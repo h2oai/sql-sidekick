@@ -1,7 +1,7 @@
 # create db with supplied info
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import pandas as pd
 import psycopg2 as pg
@@ -13,6 +13,7 @@ from sidekick.logger import logger
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.schema import CreateTable
+from sidekick.schema_generator import generate_schema
 from sqlalchemy_utils import database_exists
 
 
@@ -66,17 +67,26 @@ class DBConfig:
         return database_exists(f"{engine.url}")
 
     @classmethod
-    def get_table_schema(cls, **kwargs:Any):
+    def _get_raw_table_schema(cls, **config_args:Any):
         if cls.dialect == "databricks":
-            _catalog = kwargs.get("catalog", "samples")
-            _schema = kwargs.get("schema", "default")
-            _cluster_id = kwargs.get("cluster_id", None)
+            _catalog = config_args.get("catalog", "samples")
+            _schema = config_args.get("schema", "default")
+            _cluster_id = config_args.get("cluster_id", None)
             db = SQLDatabase.from_databricks(catalog=_catalog, schema=_schema, cluster_id=_cluster_id)
             tbl = [_t for _t in db._metadata.sorted_tables if _t.name == cls.table_name.lower()][0]
+            cls.engine = db._engine
         # TODO pending sqlite/postgresql
-        table_info = CreateTable(tbl) if tbl else ''
-        return str(table_info).strip()
+        create_table_info = CreateTable(tbl).compile(cls.engine) if tbl is not None else ''
+        return str(create_table_info).strip()
 
+    @classmethod
+    def get_column_info(cls, output_path: str, engine_format:bool=True, **config_args:Any):
+        # Getting raw info should help in getting all relevant information about the columns including - foreign keys, primary keys, etc.
+        raw_info = cls._get_raw_table_schema(**config_args)
+        c_info = [_c.strip().split("\n)")[0] for _c in raw_info.split("(\n\t")[1].split(",")[:-1]]
+        c_info_dict = dict([(f"{_c.split(' ')[0]}", _c.split(' ')[1]) for _c in c_info])
+        column_info, output_path = generate_schema(output_path=output_path, column_info=c_info_dict) if engine_format else (c_info_dict, None)
+        return column_info, output_path
 
     def create_db(self):
         engine = create_engine(self._url)
@@ -180,8 +190,8 @@ class DBConfig:
             with engine.connect() as conn:
                 if self.dialect != "sqlite":
                     conn.execute("commit")
-                conn.execute(create_syntax)
-
+                conn.execute(text(create_syntax))
+                logger.info(f"Table created: {self.table_name}")
             return self.table_name, None
         except SQLAlchemyError as sqla_error:
             logger.debug("SQLAlchemy error:", sqla_error)
