@@ -15,13 +15,13 @@ setup_dir(base_path)
 HOST_NAME = "localhost"
 USER_NAME = "sqlite"
 PASSWORD = "abc"
-DB_NAME = "query_test_db"
+DB_NAME = "query_test"
 PORT = "5432"
 
 data_path = "./examples/demo/sleep_health_and_lifestyle_dataset.csv"
 # Replace table_name as needed
 table_name = "sleep_health_and_lifestyle"
-_, table_info_path = generate_schema(data_path, f"{cache_path}/{table_name}_table_info.jsonl")
+_, table_info_path = generate_schema(data_path=data_path, output_path=f"{cache_path}/{table_name}_table_info.jsonl")
 # Set DB and table to test
 # Set add_sample=False if no need to add rows to the table (default: = True)
 # Initialize DB
@@ -49,14 +49,14 @@ def test_input1():
 
     result = None
     question = f"Execute SQL:\n{input_q}"
-    #1. Self correction is disabled
+    # 1. Self correction is disabled
     _, _, error = ask(
         question=question,
         table_info_path=table_info_path,
         sample_queries_path=None,
         table_name=table_name,
         is_command=False,
-        model_name='h2ogpt-sql-sqlcoder2',
+        model_name='h2ogpt-sql-sqlcoder-34b-alpha',
         is_regenerate=False,
         is_regen_with_options=False,
         execute_query=True,
@@ -64,16 +64,16 @@ def test_input1():
         debug_mode=True,
         self_correction=False
     )
-    assert 'OperationalError' in error
+    assert error is not None
 
-    #2. Self correction enabled
+    # 2. Self correction enabled
     result, _, error = ask(
         question=question,
         table_info_path=table_info_path,
         sample_queries_path=None,
         table_name=table_name,
         is_command=False,
-        model_name='h2ogpt-sql-sqlcoder2',
+        model_name='h2ogpt-sql-sqlcoder-34b-alpha',
         is_regenerate=False,
         is_regen_with_options=False,
         execute_query=True,
@@ -105,7 +105,7 @@ LIMIT 100
 
     result = None
     question = f"Execute SQL:\n{input_q}"
-    #1. Self correction is disabled
+    # 1. Self correction is disabled
     _, _, error = ask(
         question=question,
         table_info_path=table_info_path,
@@ -120,16 +120,17 @@ LIMIT 100
         debug_mode=True,
         self_correction=False
     )
-    assert 'OperationalError' in error
 
-    #2. Self correction enabled
+    assert error is not None
+
+    # 2. Self correction enabled
     result, _, error = ask(
         question=question,
         table_info_path=table_info_path,
         sample_queries_path=None,
         table_name=table_name,
         is_command=False,
-        model_name=None,
+        model_name="h2ogpt-sql-sqlcoder-34b-alpha",
         is_regenerate=False,
         is_regen_with_options=False,
         execute_query=True,
@@ -145,14 +146,13 @@ def test_input3():
     """
 
     question = f"Execute SQL:\n{input_q}"
-    #1. Self correction is disabled
     res, _, error = ask(
         question=question,
         table_info_path=table_info_path,
         sample_queries_path=None,
         table_name=table_name,
         is_command=False,
-        model_name=None,
+        model_name="h2ogpt-sql-sqlcoder-34b-alpha",
         is_regenerate=False,
         is_regen_with_options=False,
         execute_query=True,

@@ -1,15 +1,18 @@
 # create db with supplied info
 import json
 from pathlib import Path
+from typing import Any, Optional
 
 import pandas as pd
-import psycopg2 as pg
 import sqlalchemy
+from langchain_community.utilities import SQLDatabase
 from psycopg2.extras import Json
 from sidekick.configs.data_template import data_samples_template
 from sidekick.logger import logger
+from sidekick.schema_generator import generate_schema
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.schema import CreateTable
 from sqlalchemy_utils import database_exists
 
 
@@ -25,6 +28,7 @@ class DBConfig:
         schema_info_path=None,
         schema_info=None,
         dialect="sqlite",
+        url=None
     ) -> None:
         self.db_name = db_name
         self.hostname = hostname
@@ -38,10 +42,14 @@ class DBConfig:
         self.dialect = dialect
         self.base_path = base_path
         self.column_names = []
-        if dialect == "sqlite":
+        if url:
+            self._url = url
+        elif self.dialect == "sqlite":
             self._url = f"sqlite:///{base_path}/db/sqlite/{db_name}.db"
-        else:
+        elif self.dialect == "postgresql":
             self._url = f"{self.dialect}://{self.user_name}:{self.password}@{self.hostname}:{self.port}/"
+        else:
+            self._url = None # currently databricks is initialized _get_raw_table_schema
 
     @property
     def table_name(self):
@@ -61,6 +69,29 @@ class DBConfig:
         else:
             engine = create_engine(f"{self._url}{self.db_name}", echo=True)
         return database_exists(f"{engine.url}")
+
+    @classmethod
+    def _get_raw_table_schema(cls, **config_args:Any):
+        if cls.dialect == "databricks":
+            _catalog = config_args.get("catalog", "samples")
+            _schema = config_args.get("schema", "default")
+            _cluster_id = config_args.get("cluster_id", None)
+            db = SQLDatabase.from_databricks(catalog=_catalog, schema=_schema, cluster_id=_cluster_id)
+            tbl = [_t for _t in db._metadata.sorted_tables if _t.name == cls.table_name.lower()][0]
+            cls.engine = db._engine
+            cls._url = db._engine.url
+        # TODO pending sqlite/postgresql
+        create_table_info = CreateTable(tbl).compile(cls.engine) if tbl is not None else ''
+        return str(create_table_info).strip()
+
+    @classmethod
+    def get_column_info(cls, output_path: str, engine_format:bool=True, **config_args:Any):
+        # Getting raw info should help in getting all relevant information about the columns including - foreign keys, primary keys, etc.
+        raw_info = cls._get_raw_table_schema(**config_args)
+        c_info = [_c.strip().split("\n)")[0] for _c in raw_info.split("(\n\t")[1].split(",")[:-1]]
+        c_info_dict = dict([(f"{_c.split(' ')[0]}", _c.split(' ')[1]) for _c in c_info])
+        column_info, output_path = generate_schema(output_path=output_path, column_info=c_info_dict) if engine_format else (c_info_dict, None)
+        return column_info, output_path
 
     def create_db(self):
         engine = create_engine(self._url)
@@ -164,8 +195,8 @@ class DBConfig:
             with engine.connect() as conn:
                 if self.dialect != "sqlite":
                     conn.execute("commit")
-                conn.execute(create_syntax)
-
+                conn.execute(text(create_syntax))
+                logger.info(f"Table created: {self.table_name}")
             return self.table_name, None
         except SQLAlchemyError as sqla_error:
             logger.debug("SQLAlchemy error:", sqla_error)
@@ -203,12 +234,12 @@ class DBConfig:
             logger.info(f"Data inserted into table: {self.table_name}")
             # Fetch the number of rows from the table
             sample_query = f"SELECT COUNT(*) AS ROWS FROM {self.table_name} LIMIT 1"
-            num_rows = pd.read_sql_query(sample_query, engine)
-            res = num_rows.values[0][0]
+            num_rows = pd.DataFrame(engine.connect().execute(text(sample_query)))
+            res = num_rows.values[0][0] if not num_rows.empty else 0
             logger.info(f"Number of rows inserted: {res}")
             engine.dispose()
             return res, None
-        except SQLAlchemyError as sqla_error:
+        except (SQLAlchemyError, AttributeError) as sqla_error:
             logger.debug("SQLAlchemy error:", sqla_error)
             return None, sqla_error
         except Exception as error:
@@ -220,18 +251,20 @@ class DBConfig:
 
     def execute_query(self, query=None, n_rows=100):
         output = []
-        if self.dialect != "sqlite":
+        if self.dialect == "sqlite" or self.dialect == "databricks":
+            conn_str = self._url
+        elif self.dialect == "postgresql":
             conn_str = f"{self._url}{self.db_name}"
         else:
-            conn_str = self._url
+            conn_str = None
+
+        # Create an engine
+        engine = create_engine(conn_str)
+        # Create a connection
+        connection = engine.connect()
 
         try:
             if query:
-                # Create an engine
-                engine = create_engine(conn_str)
-
-                # Create a connection
-                connection = engine.connect()
                 logger.debug(f"Executing query:\n {query}")
                 _query = text(query)
                 result = connection.execute(_query)

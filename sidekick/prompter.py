@@ -474,6 +474,8 @@ def ask(
     table_context = json.load(open(table_context_file, "r")) if Path(table_context_file).exists() else {}
     table_names = []
 
+    if not model_name:
+        model_name = env_settings["MODEL_INFO"]["MODEL_NAME"]
     if table_name is not None:
         table_names = [table_name.lower().replace(" ", "_")]
     elif table_context and "tables_in_use" in table_context:
@@ -533,15 +535,18 @@ def ask(
             db_url = f"{execute_db_dialect}+psycopg2://{user_name}:{passwd}@{host_name}/{db_name}".format(
                 user_name, passwd, host_name, db_name
             )
-        else:
-            db_url = None
+        elif execute_db_dialect.lower() == "databricks":
+            db_url = DBConfig._url
 
         if table_info_path is None:
             table_info_path = _get_table_info(path, table_name)
         logger.debug(f"Table info path: {table_info_path}")
 
         # Check if the model is present remotely
-        _remote_model = any(model_name.lower() in _m.lower() for _m in REMOTE_LLMS)
+        if model_name:
+            _remote_model = any(model_name.lower() in _m.lower() for _m in REMOTE_LLMS)
+        else:
+            _remote_model = False
         sql_g = SQLGenerator(
             db_url=db_url,
             openai_key=api_key,
@@ -643,30 +648,37 @@ def ask(
                     port = env_settings["LOCAL_DB_CONFIG"]["PORT"]
                     db_name = env_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
 
-                    #TODO This call maybe redundant n might need some cleaning
+                    url = None
+                    # TODO needs improvement
+                    if hasattr(DBConfig, '_url'):
+                        url = DBConfig._url
                     db_obj = DBConfig(
-                        db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect
+                        db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect,
+                        url=url
                     )
-
                     _val = _val.replace("“", '"').replace("”", '"')
                     [_val := _val.replace(s, '"') for s in "‘`’'" if s in _val]
 
                     q_res, err = db_obj.execute_query(query=_val)
                     # Check for runtime/operational errors n attempt auto-correction
                     attempt = 0
-                    if self_correction and err and 'OperationalError' in err:
+                    error_condition = lambda e: ('OperationalError'.lower() in e.lower() or 'OperationError'.lower() in e.lower() or 'Syntax error'.lower() in e.lower()) if e else False
+                    if self_correction and error_condition(err):
                         logger.info("Attempting to auto-correct the query...")
-                        while attempt !=3 and err and 'OperationalError' in err:
+                        while attempt !=3 and error_condition(err):
                             try:
                                 logger.debug(f"Attempt: {attempt+1}")
-                                _err = err.split("\n")[0].split("Error occurred :")[1]
+                                _tmp = err.split("\n")
+                                _err = _tmp[0].split("Error occurred :")[1] if len(_tmp) > 0 else None
                                 env_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
                                 env_key = os.environ["RECOMMENDATION_MODEL_API_KEY"]
                                 corr_sql =  sql_g.self_correction(input_prompt=_val, error_msg=_err, remote_url=env_url, client_key=env_key)
                                 q_res, err = db_obj.execute_query(query=corr_sql)
+                                if not 'Error occurred'.lower() in str(err).lower():
+                                    err = None
                                 attempt += 1
                             except Exception as e:
-                                logger.error(f"Something went wrong, check the supplied credentials:\n{e}")
+                                logger.error(f"Something went wrong:\n{e}")
                                 attempt += 1
                     if m:
                         _t = "\nWarning:\n".join([str(q_res), m])

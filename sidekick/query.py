@@ -151,8 +151,9 @@ class SQLGenerator:
         examples = {}
         for _t in tables:
             f_p = f"{self.path}/var/lib/tmp/data/{_t}_column_values.json"
-            with open(f_p, "r") as f:
-                examples[_t] = json.load(f)
+            if Path(f_p).exists():
+                with open(f_p, "r") as f:
+                    examples[_t] = json.load(f)
         return examples
 
     def build_index(self, persist: bool = True):
@@ -561,6 +562,7 @@ class SQLGenerator:
                 device_type = "cuda" if torch.cuda.is_available() else "cpu"
 
                 # Check if the local models were selected
+                current_temperature = 0.5
                 tokenizer = model = generated_tokens = None
                 if self.models and self.tokenizers and (model_name == "h2ogpt-sql-nsql-llama-2-7B-4bit" or model_name == "h2ogpt-sql-sqlcoder2-4bit" or model_name == "h2ogpt-sql-sqlcoder-34b-alpha-4bit"):
                     tokenizer = self.tokenizers[model_name]
@@ -590,36 +592,32 @@ class SQLGenerator:
                         inputs = tokenizer([query], return_tensors="pt")
                         input_length = 1 if model.config.is_encoder_decoder else inputs.input_ids.shape[1]
                         logger.info(f"Adjusted context length: {input_length}")
-                    # Generate SQL
-                    random_seed = random.randint(0, 50)
-                    torch.manual_seed(random_seed)
 
                 possible_temp_gt_5 = [0.6, 0.75, 0.8, 0.9, 1.0]
                 possible_temp_lt_5 = [0.1, 0.2, 0.3, 0.4]
                 random_seed = random.randint(0, 50)
                 torch.manual_seed(random_seed)
+                random_temperature = np.random.choice(possible_temp_lt_5, 1)[0] if current_temperature >= 0.5 else np.random.choice(possible_temp_gt_5, 1)[0]
 
                 if not self.is_regenerate_with_options and not self.is_regenerate:
-                    # Greedy decoding
+                    # Greedy decoding, for fast response
                     # Reset temperature to 0.5
                     current_temperature = 0.5
-                    logger.debug(f"Generation with default temperature : {current_temperature}")
-                    random_temperature = np.random.choice(possible_temp_lt_5, 1)[0] if current_temperature >= 0.5 else np.random.choice(possible_temp_gt_5, 1)[0]
-
                     if model_name == "h2ogpt-sql-sqlcoder2" or model_name == "h2ogpt-sql-sqlcoder-34b-alpha" or model_name == "h2ogpt-sql-nsql-llama-2-7B":
                         m_name = MODEL_CHOICE_MAP_EVAL_MODE.get(model_name, "h2ogpt-sql-sqlcoder2")
                         query_txt = [{"role": "user", "content": query},]
+                        logger.debug(f"Generation with default temperature : {current_temperature}")
                         completion = self.h2ogpt_client.with_options(max_retries=3).chat.completions.create(
                                     model=m_name,
                                     messages=query_txt,
                                     max_tokens=512,
+                                    temperature=current_temperature,
                                     stop="```",
                                     seed=random_seed)
                         generated_tokens = completion.choices[0].message.content
                         logger.debug(f"Generated tokens: {generated_tokens}")
                     else:
                         if model:
-                            # Greedy search for quick response
                             model.eval()
                             output = model.generate(
                                 **inputs.to(device_type),

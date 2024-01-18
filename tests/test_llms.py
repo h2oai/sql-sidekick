@@ -16,13 +16,13 @@ setup_dir(base_path)
 HOST_NAME = "localhost"
 USER_NAME = "sqlite"
 PASSWORD = "abc"
-DB_NAME = "query_test_db"
+DB_NAME = "query_test"
 PORT = "5432"
 
 data_path = "./examples/demo/sleep_health_and_lifestyle_dataset.csv"
 # Replace table_name as needed
 table_name = "sleep_health_and_lifestyle"
-_, table_info_path = generate_schema(data_path, f"{cache_path}/{table_name}_table_info.jsonl")
+_, table_info_path = generate_schema(data_path=data_path, output_path=f"{cache_path}/{table_name}_table_info.jsonl")
 # Set DB and table to test
 # Set add_sample=False if no need to add rows to the table (default: = True)
 # Initialize DB
@@ -139,9 +139,8 @@ def test_basic_access_openai_models(question, model_name):
 def test_generation_execution_correctness():
     # 2.
     input_q = """What are the most common occupations among individuals in the dataset?"""
+    expected_sql = """SELECT "Occupation", COUNT(*) AS "frequency" FROM "sleep_health_and_lifestyle" GROUP BY "Occupation" ORDER BY "frequency" DESC LIMIT 10"""
     expected_value = str([('Nurse', 73), ('Doctor', 71), ('Engineer', 63), ('Lawyer', 47), ('Teacher', 40), ('Accountant', 37), ('Salesperson', 32), ('Software Engineer', 4), ('Scientist', 4), ('Sales Representative', 2), ('Manager', 1)])
-    expected_sql = """SELECT "Occupation", COUNT(*) AS "frequency" FROM "sleep_health_and_lifestyle" GROUP BY "Occupation" ORDER BY "frequency" DESC LIMIT 10
-    """
     _runtime_value = _generated_sql = ""
     result, _, _ = ask(
         question=input_q,
@@ -158,6 +157,7 @@ def test_generation_execution_correctness():
         guardrails=False,
         self_correction=True
     )
+
     if result and len(result) > 0:
         _generated_sql = str(result[1].split("``` sql\n")[1])
         if len(result) > 4:

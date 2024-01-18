@@ -15,13 +15,13 @@ setup_dir(base_path)
 HOST_NAME = "localhost"
 USER_NAME = "sqlite"
 PASSWORD = "abc"
-DB_NAME = "query_test_db"
+DB_NAME = "query_test"
 PORT = "5432"
 
 data_path = "./examples/demo/sleep_health_and_lifestyle_dataset.csv"
 # Replace table_name as needed
 table_name = "sleep_health_and_lifestyle"
-_, table_info_path = generate_schema(data_path, f"{cache_path}/{table_name}_table_info.jsonl")
+_, table_info_path = generate_schema(data_path=data_path, output_path=f"{cache_path}/{table_name}_table_info.jsonl")
 # Set DB and table to test
 # Set add_sample=False if no need to add rows to the table (default: = True)
 # Initialize DB
@@ -52,7 +52,7 @@ def test_no_error():
         sample_queries_path=None,
         table_name=table_name,
         is_command=False,
-        model_name="h2ogpt-sql-sqlcoder2",
+        model_name="h2ogpt-sql-sqlcoder-34b-alpha",
         is_regenerate=False,
         is_regen_with_options=False,
         execute_query=True,
@@ -77,7 +77,7 @@ def test_blind_select_injection():
         sample_queries_path=None,
         table_name=table_name,
         is_command=False,
-        model_name="h2ogpt-sql-sqlcoder2",
+        model_name="h2ogpt-sql-nsql-llama-2-7B",
         is_regenerate=False,
         is_regen_with_options=False,
         execute_query=True,
@@ -110,7 +110,7 @@ def test_drop_injection():
             sample_queries_path=None,
             table_name=table_name,
             is_command=False,
-            model_name="h2ogpt-sql-sqlcoder2",
+            model_name="h2ogpt-sql-nsql-llama-2-7B",
             is_regenerate=False,
             is_regen_with_options=False,
             execute_query=True,
@@ -134,7 +134,7 @@ def test_stacked_queries():
         sample_queries_path=None,
         table_name=table_name,
         is_command=False,
-        model_name="h2ogpt-sql-sqlcoder2",
+        model_name="h2ogpt-sql-sqlcoder-34b-alpha",
         is_regenerate=False,
         is_regen_with_options=False,
         execute_query=True,
