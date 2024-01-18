@@ -644,20 +644,24 @@ def ask(
                     port = env_settings["LOCAL_DB_CONFIG"]["PORT"]
                     db_name = env_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
 
-                    #TODO This call maybe redundant n might need some cleaning
+                    url = None
+                    # TODO needs improvement
+                    if hasattr(DBConfig, '_url'):
+                        url = DBConfig._url
                     db_obj = DBConfig(
-                        db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect
+                        db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect,
+                        url=url
                     )
-
                     _val = _val.replace("“", '"').replace("”", '"')
                     [_val := _val.replace(s, '"') for s in "‘`’'" if s in _val]
 
                     q_res, err = db_obj.execute_query(query=_val)
                     # Check for runtime/operational errors n attempt auto-correction
                     attempt = 0
-                    if self_correction and err and 'OperationalError' in err:
+                    error_condition = ('OperationalError'.lower() in err.lower() or 'OperationError'.lower() in err.lower() or 'Syntax error'.lower() in err.lower())
+                    if self_correction and err and error_condition:
                         logger.info("Attempting to auto-correct the query...")
-                        while attempt !=3 and err and 'OperationalError' in err:
+                        while attempt !=3 and err and error_condition:
                             try:
                                 logger.debug(f"Attempt: {attempt+1}")
                                 _err = err.split("\n")[0].split("Error occurred :")[1]

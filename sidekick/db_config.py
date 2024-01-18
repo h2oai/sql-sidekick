@@ -29,6 +29,7 @@ class DBConfig:
         schema_info_path=None,
         schema_info=None,
         dialect="sqlite",
+        url=None
     ) -> None:
         self.db_name = db_name
         self.hostname = hostname
@@ -42,7 +43,9 @@ class DBConfig:
         self.dialect = dialect
         self.base_path = base_path
         self.column_names = []
-        if self.dialect == "sqlite":
+        if url:
+            self._url = url
+        elif self.dialect == "sqlite":
             self._url = f"sqlite:///{base_path}/db/sqlite/{db_name}.db"
         elif self.dialect == "postgresql":
             self._url = f"{self.dialect}://{self.user_name}:{self.password}@{self.hostname}:{self.port}/"
@@ -256,13 +259,11 @@ class DBConfig:
         else:
             conn_str = None
 
-        import pdb; pdb.set_trace()
         # Create an engine
         engine = create_engine(conn_str)
         # Create a connection
         connection = engine.connect()
 
-        import pdb; pdb.set_trace()
         try:
             if query:
                 logger.debug(f"Executing query:\n {query}")
