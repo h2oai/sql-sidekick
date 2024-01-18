@@ -5,8 +5,6 @@ import pytest
 from dotenv import load_dotenv
 from sidekick.db_config import DBConfig
 from sidekick.prompter import ask
-from sidekick.query import SQLGenerator
-from sidekick.schema_generator import generate_schema
 from sidekick.utils import generate_text_embeddings, setup_dir
 from sklearn.metrics.pairwise import cosine_similarity
 
