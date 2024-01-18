@@ -539,7 +539,7 @@ def check_vulnerability(input_query: str):
     # Step 2:
     # Step 2 is optional, if remote url is provided, check for SQL injection patterns in the generated SQL code via LLM
     # Currently, only support only for models as an endpoints
-    logger.debug(f"Requesting additional scan using configured LLM model")
+    logger.debug(f"Requesting additional scan using configured models")
     remote_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
     api_key = os.environ["RECOMMENDATION_MODEL_API_KEY"]
 

@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Any, Optional
 
 import pandas as pd
-import psycopg2 as pg
 import sqlalchemy
 from langchain_community.utilities import SQLDatabase
 from psycopg2.extras import Json
@@ -235,12 +234,12 @@ class DBConfig:
             logger.info(f"Data inserted into table: {self.table_name}")
             # Fetch the number of rows from the table
             sample_query = f"SELECT COUNT(*) AS ROWS FROM {self.table_name} LIMIT 1"
-            num_rows = pd.read_sql_query(sample_query, engine)
-            res = num_rows.values[0][0]
+            num_rows = pd.DataFrame(engine.connect().execute(text(sample_query)))
+            res = num_rows.values[0][0] if not num_rows.empty else 0
             logger.info(f"Number of rows inserted: {res}")
             engine.dispose()
             return res, None
-        except SQLAlchemyError as sqla_error:
+        except (SQLAlchemyError, AttributeError) as sqla_error:
             logger.debug("SQLAlchemy error:", sqla_error)
             return None, sqla_error
         except Exception as error:

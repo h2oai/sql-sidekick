@@ -15,7 +15,7 @@ setup_dir(base_path)
 HOST_NAME = "localhost"
 USER_NAME = "sqlite"
 PASSWORD = "abc"
-DB_NAME = "query_test_db"
+DB_NAME = "query_test"
 PORT = "5432"
 
 data_path = "./examples/demo/sleep_health_and_lifestyle_dataset.csv"

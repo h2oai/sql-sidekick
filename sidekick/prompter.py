@@ -474,6 +474,8 @@ def ask(
     table_context = json.load(open(table_context_file, "r")) if Path(table_context_file).exists() else {}
     table_names = []
 
+    if not model_name:
+        model_name = env_settings["MODEL_INFO"]["MODEL_NAME"]
     if table_name is not None:
         table_names = [table_name.lower().replace(" ", "_")]
     elif table_context and "tables_in_use" in table_context:
@@ -541,8 +543,10 @@ def ask(
         logger.debug(f"Table info path: {table_info_path}")
 
         # Check if the model is present remotely
-        _remote_model = any(model_name.lower() in _m.lower() for _m in REMOTE_LLMS)
-
+        if model_name:
+            _remote_model = any(model_name.lower() in _m.lower() for _m in REMOTE_LLMS)
+        else:
+            _remote_model = False
         sql_g = SQLGenerator(
             db_url=db_url,
             openai_key=api_key,
@@ -658,20 +662,23 @@ def ask(
                     q_res, err = db_obj.execute_query(query=_val)
                     # Check for runtime/operational errors n attempt auto-correction
                     attempt = 0
-                    error_condition = ('OperationalError'.lower() in err.lower() or 'OperationError'.lower() in err.lower() or 'Syntax error'.lower() in err.lower())
-                    if self_correction and err and error_condition:
+                    error_condition = lambda e: ('OperationalError'.lower() in e.lower() or 'OperationError'.lower() in e.lower() or 'Syntax error'.lower() in e.lower()) if e else False
+                    if self_correction and error_condition(err):
                         logger.info("Attempting to auto-correct the query...")
-                        while attempt !=3 and err and error_condition:
+                        while attempt !=3 and error_condition(err):
                             try:
                                 logger.debug(f"Attempt: {attempt+1}")
-                                _err = err.split("\n")[0].split("Error occurred :")[1]
+                                _tmp = err.split("\n")
+                                _err = _tmp[0].split("Error occurred :")[1] if len(_tmp) > 0 else None
                                 env_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
                                 env_key = os.environ["RECOMMENDATION_MODEL_API_KEY"]
                                 corr_sql =  sql_g.self_correction(input_prompt=_val, error_msg=_err, remote_url=env_url, client_key=env_key)
                                 q_res, err = db_obj.execute_query(query=corr_sql)
+                                if not 'Error occurred'.lower() in str(err).lower():
+                                    err = None
                                 attempt += 1
                             except Exception as e:
-                                logger.error(f"Something went wrong, check the supplied credentials:\n{e}")
+                                logger.error(f"Something went wrong:\n{e}")
                                 attempt += 1
                     if m:
                         _t = "\nWarning:\n".join([str(q_res), m])
