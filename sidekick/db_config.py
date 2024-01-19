@@ -17,20 +17,20 @@ from sqlalchemy_utils import database_exists
 
 
 class DBConfig:
+    dialect = "sqlite"
+    _url = None
+    db_name = "default"
+
     def __init__(
         self,
-        db_name,
         hostname,
         user_name,
         password,
         port,
         base_path,
         schema_info_path=None,
-        schema_info=None,
-        dialect="sqlite",
-        url=None
+        schema_info=None
     ) -> None:
-        self.db_name = db_name
         self.hostname = hostname
         self.user_name = user_name
         self.password = password
@@ -39,17 +39,16 @@ class DBConfig:
         self.schema_info_path = schema_info_path
         self.schema_info = schema_info
         self._engine = None
-        self.dialect = dialect
         self.base_path = base_path
         self.column_names = []
-        if url:
-            self._url = url
-        elif self.dialect == "sqlite":
-            self._url = f"sqlite:///{base_path}/db/sqlite/{db_name}.db"
+
+        if self.dialect == "sqlite":
+            self._url = f"sqlite:///{base_path}/db/sqlite/{self.db_name}.db"
         elif self.dialect == "postgresql":
             self._url = f"{self.dialect}://{self.user_name}:{self.password}@{self.hostname}:{self.port}/"
         else:
             self._url = None # currently databricks is initialized _get_raw_table_schema
+        DBConfig._url = self._url
 
     @property
     def table_name(self):
@@ -249,12 +248,13 @@ class DBConfig:
             if engine:
                 engine.dispose()
 
-    def execute_query(self, query=None, n_rows=100):
+    @classmethod
+    def execute_query(cls, query=None, n_rows=100):
         output = []
-        if self.dialect == "sqlite" or self.dialect == "databricks":
-            conn_str = self._url
-        elif self.dialect == "postgresql":
-            conn_str = f"{self._url}{self.db_name}"
+        if cls.dialect == "sqlite" or cls.dialect == "databricks":
+            conn_str = cls._url
+        elif cls.dialect == "postgresql":
+            conn_str = f"{cls._url}{cls.db_name}"
         else:
             conn_str = None
 

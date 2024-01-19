@@ -262,7 +262,9 @@ def db_setup(
         base_path = local_base_path if local_base_path else default_base_path
         path = f"{base_path}/var/lib/tmp/data"
         # For current session
-        db_obj = DBConfig(db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect)
+        DBConfig.db_name = db_name
+        DBConfig.dialect = db_dialect
+        db_obj = DBConfig(hostname, user_name, password, port, base_path=base_path)
 
         # Create Database
         if db_obj.dialect == "sqlite" and not os.path.isfile(f"{base_path}/db/sqlite/{db_name}.db"):
@@ -412,10 +414,8 @@ def data_preview(table_name):
     user_name = env_settings["LOCAL_DB_CONFIG"]["USER_NAME"]
     password = env_settings["LOCAL_DB_CONFIG"]["PASSWORD"]
     port = env_settings["LOCAL_DB_CONFIG"]["PORT"]
-    db_name = env_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
 
-    db_obj = DBConfig(
-        db_name, hostname, user_name, password, port, base_path=default_base_path, dialect=db_dialect
+    db_obj = DBConfig(hostname, user_name, password, port, base_path=default_base_path
     )
     if not db_obj.table_name:
         db_obj.table_name = table_name
@@ -642,24 +642,10 @@ def ask(
                 # For the time being, the default option is DB, but the user can be asked to select Database or pandas DF later.
                 option = "DB"  # or DB
                 if option == "DB" and not r:
-                    hostname = env_settings["LOCAL_DB_CONFIG"]["HOST_NAME"]
-                    user_name = env_settings["LOCAL_DB_CONFIG"]["USER_NAME"]
-                    password = env_settings["LOCAL_DB_CONFIG"]["PASSWORD"]
-                    port = env_settings["LOCAL_DB_CONFIG"]["PORT"]
-                    db_name = env_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
-
-                    url = None
-                    # TODO needs improvement
-                    if hasattr(DBConfig, '_url'):
-                        url = DBConfig._url
-                    db_obj = DBConfig(
-                        db_name, hostname, user_name, password, port, base_path=base_path, dialect=db_dialect,
-                        url=url
-                    )
                     _val = _val.replace("“", '"').replace("”", '"')
                     [_val := _val.replace(s, '"') for s in "‘`’'" if s in _val]
 
-                    q_res, err = db_obj.execute_query(query=_val)
+                    q_res, err = DBConfig.execute_query(query=_val)
                     # Check for runtime/operational errors n attempt auto-correction
                     attempt = 0
                     error_condition = lambda e: ('OperationalError'.lower() in e.lower() or 'OperationError'.lower() in e.lower() or 'Syntax error'.lower() in e.lower()) if e else False
@@ -673,7 +659,7 @@ def ask(
                                 env_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
                                 env_key = os.environ["RECOMMENDATION_MODEL_API_KEY"]
                                 corr_sql =  sql_g.self_correction(input_prompt=_val, error_msg=_err, remote_url=env_url, client_key=env_key)
-                                q_res, err = db_obj.execute_query(query=corr_sql)
+                                q_res, err = DBConfig.execute_query(query=corr_sql)
                                 if not 'Error occurred'.lower() in str(err).lower():
                                     err = None
                                 attempt += 1

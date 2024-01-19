@@ -11,6 +11,7 @@ import pandas as pd
 import torch
 from accelerate import infer_auto_device_map, init_empty_weights
 from h2ogpte import H2OGPTE
+from huggingface_hub import snapshot_download
 from InstructorEmbedding import INSTRUCTOR
 from pandasql import sqldf
 from sentence_transformers import SentenceTransformer
@@ -95,6 +96,11 @@ def generate_sentence_embeddings(model_path: str, x, batch_size: int = 32, devic
 
 def load_embedding_model(model_path: str, device: str):
     logger.debug(f"Loading embedding model from: {model_path}")
+    # Check if model exists if not download and cache
+    local_path = Path(f"{model_path}/models--BAAI--bge-base-en/snapshots/*/")
+    if not Path(local_path).is_dir():
+        base_path = local_path.parents[2]
+        snapshot_download(repo_id="BAAI/bge-base-en", cache_dir=f"{base_path}/")
     model_name_path = glob.glob(f"{model_path}/models--BAAI--bge-base-en/snapshots/*/")[0]
 
     sentence_model = SentenceTransformer(model_name_path, cache_folder=model_path, device=device)
