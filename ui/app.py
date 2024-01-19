@@ -73,7 +73,6 @@ async def user_variable(q: Q):
 
     q.user.model_choices = MODEL_CHOICE_MAP_DEFAULT
     q.user.eval_mode = False
-    q.user.model_choice_dropdown = "h2ogpt-sql-sqlcoder-34b-alpha"
 
 
 async def client_variable(q: Q):
@@ -131,8 +130,9 @@ async def chat(q: Q):
                 original_name = meta_data[table].get("original_name", q.user.original_name)
                 table_names.append(ui.choice(table, f"{original_name}"))
 
-    _MODEL_CHOICE_MAP = q.user.model_choices
-    model_choices = [ui.choice(_key, _key) for _key in _MODEL_CHOICE_MAP.keys()]
+    MODEL_CHOICE_MAP = q.user.model_choices
+    model_choices = [ui.choice(_key, _key) for _key in MODEL_CHOICE_MAP.keys()]
+    q.user.model_choice_dropdown = q.args.model_choice_dropdown = "h2ogpt-sql-sqlcoder-34b-alpha"
 
     task_choices = [ui.choice("q_a", "Ask Questions"), ui.choice("sqld", "Debugging")]
     q.user.task_choice_dropdown = q.args.task_dropdown = "q_a"
@@ -220,7 +220,7 @@ async def chat(q: Q):
                             name="suggest",
                             icon="",
                             caption="Suggests possible questions one could start with",
-                            label="Need ideas",
+                            label="Discover",
                         ),
                         ui.button(
                             name="regenerate",
