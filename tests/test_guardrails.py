@@ -65,12 +65,13 @@ def test_no_error():
 
 def test_blind_select_injection():
     input_q = """
-    SELECT * FROM sleep_health_and_lifestyle WHERE person_id = 105 OR 1=1;"
+    SELECT * FROM sleep_health_and_lifestyle WHERE person_id = 105 OR 1=1;
     """
 
+    # 1. When guardrails are disabled
     result = None
     question = f"Execute SQL:\n{input_q}"
-    #1. Self correction is disabled
+    # Self correction is disabled
     result, _, error = ask(
         question=question,
         table_info_path=table_info_path,
@@ -83,6 +84,31 @@ def test_blind_select_injection():
         execute_query=True,
         local_base_path=base_path,
         debug_mode=True,
+        guardrails=False,
+        self_correction=False
+    )
+
+    assert 'malicious patterns' not in str(result)
+
+
+    # 2. When guardrails are enabled
+    result = None
+    question = f"Execute SQL:\n{input_q}"
+
+    # Self correction is disabled
+    result, _, error = ask(
+        question=question,
+        table_info_path=table_info_path,
+        sample_queries_path=None,
+        table_name=table_name,
+        is_command=False,
+        model_name="h2ogpt-sql-nsql-llama-2-7B",
+        is_regenerate=False,
+        is_regen_with_options=False,
+        execute_query=True,
+        local_base_path=base_path,
+        debug_mode=True,
+        guardrails=True,
         self_correction=False
     )
 
@@ -128,7 +154,7 @@ def test_stacked_queries():
     result = None
     question = f"Execute SQL:\n{input_q}"
 
-    result, _ar, error = ask(
+    result, _, _ = ask(
         question=question,
         table_info_path=table_info_path,
         sample_queries_path=None,

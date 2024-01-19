@@ -23,7 +23,7 @@ from sidekick.utils import (REMOTE_LLMS, _execute_sql, check_vulnerability,
                             execute_query_pd, extract_table_names,
                             generate_suggestions, save_query, setup_dir)
 
-__version__ = "0.1.9"
+__version__ = "0.2.0"
 
 # Load the config file and initialize required paths
 app_base_path = (Path(__file__).parent / "../").resolve()
@@ -692,7 +692,6 @@ def ask(
                             json.dump(table_metadata, outfile, indent=4, sort_keys=False)
                     try:
                         q_res = execute_query_pd(query=_val, tables_path=tables_path, n_rows=100)
-                        click.echo(f"The query results are:\n {q_res}")
                     except sqldf.PandaSQLException as e:
                         logger.error(f"Error in executing the query: {e}")
                         click.echo("Error in executing the query. Validate generated SQL and try again.")
@@ -700,7 +699,12 @@ def ask(
 
                 results.append("**Result:** \n")
                 if q_res:
-                    click.echo(f"The query results are:\n {q_res}")
+                    # Check shape of the final result to avoid blowing up memory
+                    # Logging a quick preview of the result
+                    if isinstance(q_res, list) and len(q_res) > 10:
+                        click.echo(f"Preview of the result:\n {pd.DataFrame(q_res).head(2)}")
+                    else:
+                        click.echo(f"The results are:\n {q_res}")
                     results.extend([str(q_res), "\n"])
                 else:
                     click.echo(f"While executing query:\n {err}")
