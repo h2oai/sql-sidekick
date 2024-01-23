@@ -40,13 +40,14 @@ def initialize_models():
     _ = SQLGenerator(
         db_url=None,
         openai_key=None,
-        model_name=None,  # Default: h2ogpt-sql-sqlcoder2
+        model_name="h2ogpt-sql-sqlcoder-34b-alpha",
         job_path=base_path,
         data_input_path="",
         sample_queries_path="",
         is_regenerate_with_options="",
         is_regenerate="",
-        db_dialect="sqlite"
+        db_dialect="sqlite",
+        remote_model=True
     )
     return
 

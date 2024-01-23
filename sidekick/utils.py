@@ -40,10 +40,10 @@ MODEL_CHOICE_MAP_EVAL_MODE = {
 }
 
 MODEL_CHOICE_MAP_DEFAULT = {
-    "h2ogpt-sql-sqlcoder2-4bit": "defog/sqlcoder2",
-    "h2ogpt-sql-sqlcoder-34b-alpha-4bit": "defog/sqlcoder-34b-alpha",
-    "h2ogpt-sql-nsql-llama-2-7B-4bit": "NumbersStation/nsql-llama-2-7B",
-    "h2ogpt-sql-sqlcoder2": "defog/sqlcoder2",
+    # "h2ogpt-sql-sqlcoder2-4bit": "defog/sqlcoder2",
+    # "h2ogpt-sql-sqlcoder-34b-alpha-4bit": "defog/sqlcoder-34b-alpha",
+    # "h2ogpt-sql-nsql-llama-2-7B-4bit": "NumbersStation/nsql-llama-2-7B",
+    # "h2ogpt-sql-sqlcoder2": "defog/sqlcoder2",
     "h2ogpt-sql-sqlcoder-34b-alpha": "defog/sqlcoder-34b-alpha",
     "h2ogpt-sql-nsql-llama-2-7B": "NumbersStation/nsql-llama-2-7B"
 }
