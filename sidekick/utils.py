@@ -445,13 +445,13 @@ def load_causal_lm_model(
 
         if not model_type:  # if None, load all models
             for device_index in range(n_gpus):
-                model_name = list(MODEL_CHOICE_MAP_DEFAULT.values())[device_index]
+                model_name = list(MODEL_CHOICE_MAP_EVAL_MODE.values())[device_index]
                 model, tokenizer = _load_llm(model_name, device_index)
-                _name = list(MODEL_CHOICE_MAP_DEFAULT.keys())[device_index]
+                _name = list(MODEL_CHOICE_MAP_EVAL_MODE.keys())[device_index]
                 models[_name] = model
                 tokenizers[_name] = tokenizer
         else:
-            model_name = MODEL_CHOICE_MAP_DEFAULT[model_type]
+            model_name = MODEL_CHOICE_MAP_EVAL_MODE[model_type]
             d_index = MODEL_DEVICE_MAP[model_type] if n_gpus > 1 else 0
             model, tokenizer = _load_llm(model_name, d_index)
             models[model_type] = model
@@ -562,18 +562,23 @@ def check_vulnerability(input_query: str):
         }
     }"""
     _user_prompt = H2OGPT_GUARDRAIL_PROMPT["user_prompt"].format(query_txt=input_query, schema=output_schema).strip()
+    temp_result = None
+    try:
+        from h2ogpte import H2OGPTE
+        client = H2OGPTE(address=remote_url, api_key=api_key)
+        text_completion = client.answer_question(
+        system_prompt=_system_prompt,
+        text_context_list=[],
+        question=_user_prompt,
+        llm='h2oai/h2ogpt-4096-llama2-70b-chat')
+        generated_res = text_completion.content.split("\n\n")
 
-    from h2ogpte import H2OGPTE
-    client = H2OGPTE(address=remote_url, api_key=api_key)
-    text_completion = client.answer_question(
-    system_prompt=_system_prompt,
-    text_context_list=[],
-    question=_user_prompt,
-    llm='h2oai/h2ogpt-4096-llama2-70b-chat')
-    generated_res = text_completion.content.split("\n\n")
-
-    _res = generated_res[0].strip()
-    temp_result = json.loads(_res) if _res else None
+        _res = generated_res[0].strip()
+        temp_result = json.loads(_res) if _res else None
+    except json.decoder.JSONDecodeError as je:
+        logger.error(f"Error while parsing the response: {je}")
+        temp_result = None
+        pass
 
     if temp_result:
         vulnerable = temp_result['properties']['vulnerability'].get('value', None)

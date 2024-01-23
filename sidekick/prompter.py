@@ -23,7 +23,7 @@ from sidekick.utils import (REMOTE_LLMS, _execute_sql, check_vulnerability,
                             execute_query_pd, extract_table_names,
                             generate_suggestions, save_query, setup_dir)
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 # Load the config file and initialize required paths
 app_base_path = (Path(__file__).parent / "../").resolve()
@@ -103,7 +103,7 @@ def _get_table_info(cache_path: str, table_name: str = None):
                 if table_info_path is None:
                     # if table_info_path is None, generate default schema n set path
                     data_path = current_meta["samples_path"]
-                    _, table_info_path = generate_schema(data_path, f"{cache_path}/{table_name}_table_info.jsonl")
+                    _, table_info_path = generate_schema(data_path=data_path, output_path=f"{cache_path}/{table_name}_table_info.jsonl")
         table_metadata = {"schema_info_path": table_info_path}
         with open(f"{cache_path}/table_context.json", "w") as outfile:
             json.dump(table_metadata, outfile, indent=4, sort_keys=False)
@@ -178,7 +178,7 @@ def recommend_suggestions(cache_path: str, table_name: str, n_qs: int=10):
 @click.option("--data_path", default="data.csv", help="Enter the path of csv", type=str)
 @click.option("--output_path", default="table_info.jsonl", help="Enter the path of generated schema in jsonl", type=str)
 def generate_input_schema(data_path, output_path):
-    _, o_path = generate_schema(data_path, output_path)
+    _, o_path = generate_schema(data_path=data_path, output_path=output_path)
     click.echo(f"Schema generated for the input data at {o_path}")
 
 
@@ -718,7 +718,7 @@ def ask(
             else:
                 click.echo("Exiting...")
         else:
-            results = ["I was not able to generate a response for the question. Please try re-phrasing."]
+            results = ["I was not able to generate a response for the question. Please try re-phrasing or try again."]
             alt_res, err = None, None
     except (MemoryError, RuntimeError, AttributeError) as e:
         logger.error(f"Something went wrong while generating response: {e}")
