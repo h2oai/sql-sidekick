@@ -1,3 +1,4 @@
+import concurrent.futures
 import gc
 import json
 import os
@@ -364,14 +365,14 @@ async def chatbot(q: Q):
                 )
         else:
             q.client.query = question
-            llm_response, alt_response, err = ask(
-                question=q.client.query,
-                sample_queries_path=q.user.sample_qna_path,
-                table_info_path=q.user.table_info_path,
-                table_name=q.user.table_name,
-                model_name=q.user.model_choice_dropdown,
-                debug_mode=q.args.debug_mode
-            )
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                llm_response, alt_response, err = await q.exec(pool, ask, question=q.client.query,
+                    sample_queries_path=q.user.sample_qna_path,
+                    table_info_path=q.user.table_info_path,
+                    table_name=q.user.table_name,
+                    model_name=q.user.model_choice_dropdown,
+                    debug_mode=q.args.debug_mode
+                )
             llm_response = "\n".join(llm_response)
     except (MemoryError, RuntimeError) as e:
         logging.error(f"Something went wrong while generating response: {e}")
