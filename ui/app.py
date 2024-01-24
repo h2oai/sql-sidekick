@@ -1,3 +1,4 @@
+import concurrent.futures
 import gc
 import json
 import os
@@ -39,13 +40,14 @@ def initialize_models():
     _ = SQLGenerator(
         db_url=None,
         openai_key=None,
-        model_name=None,  # Default: h2ogpt-sql-sqlcoder2
+        model_name="h2ogpt-sql-sqlcoder-34b-alpha",
         job_path=base_path,
         data_input_path="",
         sample_queries_path="",
         is_regenerate_with_options="",
         is_regenerate="",
-        db_dialect="sqlite"
+        db_dialect="sqlite",
+        remote_model=True
     )
     return
 
@@ -364,14 +366,14 @@ async def chatbot(q: Q):
                 )
         else:
             q.client.query = question
-            llm_response, alt_response, err = ask(
-                question=q.client.query,
-                sample_queries_path=q.user.sample_qna_path,
-                table_info_path=q.user.table_info_path,
-                table_name=q.user.table_name,
-                model_name=q.user.model_choice_dropdown,
-                debug_mode=q.args.debug_mode
-            )
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                llm_response, alt_response, err = await q.exec(pool, ask, question=q.client.query,
+                    sample_queries_path=q.user.sample_qna_path,
+                    table_info_path=q.user.table_info_path,
+                    table_name=q.user.table_name,
+                    model_name=q.user.model_choice_dropdown,
+                    debug_mode=q.args.debug_mode
+                )
             llm_response = "\n".join(llm_response)
     except (MemoryError, RuntimeError) as e:
         logging.error(f"Something went wrong while generating response: {e}")

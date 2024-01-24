@@ -3,8 +3,9 @@ name = "ai.h2o.wave.sql-sidekick"
 title = "SQL-Sidekick"
 description = "QnA with tabular data using NLQ"
 LongDescription = "about.md"
-Tags = ["DATA_SCIENCE", "MACHINE_LEARNING", "NLP"]
-Version = "0.2.0"
+InstanceLifecycle = "MANAGED"
+Tags = ["DATA_SCIENCE", "MACHINE_LEARNING", "NLP", "GENERATIVE_AI"]
+Version = "0.2.1"
 
 [Runtime]
 MemoryLimit = "64Gi"

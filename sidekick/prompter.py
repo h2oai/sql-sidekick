@@ -23,7 +23,7 @@ from sidekick.utils import (REMOTE_LLMS, _execute_sql, check_vulnerability,
                             execute_query_pd, extract_table_names,
                             generate_suggestions, save_query, setup_dir)
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 # Load the config file and initialize required paths
 app_base_path = (Path(__file__).parent / "../").resolve()
@@ -41,6 +41,8 @@ h2ogpt_base_model_key = env_settings["MODEL_INFO"]["H2O_BASE_MODEL_API_KEY"]
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
 os.environ["H2O_BASE_MODEL_URL"] = h2ogpt_base_model_url
 os.environ["H2O_BASE_MODEL_API_KEY"] = h2ogpt_base_model_key
+os.environ["RECOMMENDATION_MODEL_REMOTE_URL"] = h2o_remote_url
+os.environ["RECOMMENDATION_MODEL_API_KEY"] = h2o_key
 
 def color(fore="", back="", text=None):
     return f"{fore}{back}{text}{Style.RESET_ALL}"
@@ -103,7 +105,7 @@ def _get_table_info(cache_path: str, table_name: str = None):
                 if table_info_path is None:
                     # if table_info_path is None, generate default schema n set path
                     data_path = current_meta["samples_path"]
-                    _, table_info_path = generate_schema(data_path, f"{cache_path}/{table_name}_table_info.jsonl")
+                    _, table_info_path = generate_schema(data_path=data_path, output_path=f"{cache_path}/{table_name}_table_info.jsonl")
         table_metadata = {"schema_info_path": table_info_path}
         with open(f"{cache_path}/table_context.json", "w") as outfile:
             json.dump(table_metadata, outfile, indent=4, sort_keys=False)
@@ -178,7 +180,7 @@ def recommend_suggestions(cache_path: str, table_name: str, n_qs: int=10):
 @click.option("--data_path", default="data.csv", help="Enter the path of csv", type=str)
 @click.option("--output_path", default="table_info.jsonl", help="Enter the path of generated schema in jsonl", type=str)
 def generate_input_schema(data_path, output_path):
-    _, o_path = generate_schema(data_path, output_path)
+    _, o_path = generate_schema(data_path=data_path, output_path=output_path)
     click.echo(f"Schema generated for the input data at {o_path}")
 
 
@@ -463,7 +465,7 @@ def ask(
     """
 
     results = []
-    err = None  # TODO - Need to handle errors if occurred
+    res = err = alt_res = None  # TODO - Need to handle errors if occurred
     # Book-keeping
     base_path = local_base_path if local_base_path else default_base_path
     setup_dir(base_path)
@@ -575,7 +577,7 @@ def ask(
                     click.echo("Skipping edit...")
             if updated_tasks is not None:
                 sql_g._tasks = updated_tasks
-        alt_res = None
+
         # The interface could also be used to simply execute user provided SQL
         # Keyword: "Execute SQL: <SQL query>"
         if (
@@ -650,12 +652,12 @@ def ask(
                     attempt = 0
                     error_condition = lambda e: ('OperationalError'.lower() in e.lower() or 'OperationError'.lower() in e.lower() or 'Syntax error'.lower() in e.lower()) if e else False
                     if self_correction and error_condition(err):
-                        logger.info("Attempting to auto-correct the query...")
+                        logger.info("Attempting to auto-correct the query during runtime...")
                         while attempt !=3 and error_condition(err):
                             try:
                                 logger.debug(f"Attempt: {attempt+1}")
                                 _tmp = err.split("\n")
-                                _err = _tmp[0].split("Error occurred :")[1] if len(_tmp) > 0 else None
+                                _err = _tmp[0].split("Error occurred:")[1] if len(_tmp) > 0 else None
                                 env_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
                                 env_key = os.environ["RECOMMENDATION_MODEL_API_KEY"]
                                 corr_sql =  sql_g.self_correction(input_prompt=_val, error_msg=_err, remote_url=env_url, client_key=env_key)
@@ -667,7 +669,7 @@ def ask(
                                 logger.error(f"Something went wrong:\n{e}")
                                 attempt += 1
                     if m:
-                        _t = "\nWarning:\n".join([str(q_res), m])
+                        _t = "\n\n**Warning:**\n".join([str(q_res), m])
                         q_res = _t
                 elif option == "pandas":
                     tables = extract_table_names(_val)
@@ -697,7 +699,7 @@ def ask(
                         click.echo("Error in executing the query. Validate generated SQL and try again.")
                         click.echo("No result to display.")
 
-                results.append("**Result:** \n")
+                results.append("**Result:**\n")
                 if q_res:
                     # Check shape of the final result to avoid blowing up memory
                     # Logging a quick preview of the result
@@ -718,7 +720,7 @@ def ask(
             else:
                 click.echo("Exiting...")
         else:
-            results = ["I was not able to generate a response for the question. Please try re-phrasing."]
+            results = ["I was not able to generate a response for the question. Please try re-phrasing or try again."]
             alt_res, err = None, None
     except (MemoryError, RuntimeError, AttributeError) as e:
         logger.error(f"Something went wrong while generating response: {e}")

@@ -35,7 +35,7 @@ QUERY_PROMPT = """
                 ### *History*:\n{_sample_queries}
                 ### *Question*: For table {_table_name}, {_question}
                 # SELECT 1
-                ### *Tasks for table {_table_name}*:\n{_tasks}
+                ### *Plan for table {_table_name}*:\n{_tasks}
                 ### *Policies for SQL generation*:
                 # Avoid overly complex SQL queries, favor concise human readable SQL queries which are easy to understand and debug
                 # Avoid patterns that might be vulnerable to SQL injection
@@ -118,7 +118,7 @@ Adhere to these rules:
 - Only use supplied table names: **{table_name}** for generation
 - Only use column names from the CREATE TABLE statement: **{column_info}** for generation. DO NOT USE any other column names outside of this.
 - Avoid overly complex SQL queries, favor concise human readable SQL queries which are easy to understand and debug
-- Avoid patterns that might be vulnerable to SQL injection, e.g. sanitize inputs
+- Avoid patterns that might be vulnerable to SQL injection, e.g. use proper sanitization and escaping for raw user input
 - Always cast the numerator as float when computing ratios
 - Always use COUNT(1) instead of COUNT(*)
 - If the question is asking for a rate, use COUNT to compute percentage
