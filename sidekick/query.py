@@ -678,12 +678,12 @@ class SQLGenerator:
                             max_new_tokens=512,
                             temperature=random_temperature,
                             top_k=5,
-                            top_p=0.9,
+                            top_p=1.0,
                             num_beams=5,
                             num_beam_groups=5,
                             num_return_sequences=5,
                             output_scores=True,
-                            do_sample=True,
+                            do_sample=False,
                             diversity_penalty=2.0,
                             return_dict_in_generate=True,
                         )
@@ -714,9 +714,7 @@ class SQLGenerator:
                         for idx, sorted_idx in enumerate(prob_sorted_idxs):
                             _out = output_re.sequences[sorted_idx]
                             res = tokenizer.decode(_out[input_length:], skip_special_tokens=True)
-                            result = res.replace("table_name", _table_name)
-                            # Remove the last semi-colon if exists at the end
-                            # we will add it later
+                            result = res.replace("table_name", _table_name).replace("```", "").strip()
                             if result.endswith(";"):
                                 result = result.replace(";", "")
                             if "LIMIT".lower() not in result.lower():
@@ -742,6 +740,8 @@ class SQLGenerator:
                 if not _temp:
                     res = None
                 else:
+                    if _temp.endswith("```"):
+                        _temp = _temp.replace("```", "")
                     _temp = _temp.split("\n```")[0].strip()
                     # TODO Below should not happen, will have to check why its getting generated as part of response.
                     # Not sure, if its a vllm or prompt issue.

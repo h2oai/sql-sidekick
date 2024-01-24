@@ -41,6 +41,8 @@ h2ogpt_base_model_key = env_settings["MODEL_INFO"]["H2O_BASE_MODEL_API_KEY"]
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
 os.environ["H2O_BASE_MODEL_URL"] = h2ogpt_base_model_url
 os.environ["H2O_BASE_MODEL_API_KEY"] = h2ogpt_base_model_key
+os.environ["RECOMMENDATION_MODEL_REMOTE_URL"] = h2o_remote_url
+os.environ["RECOMMENDATION_MODEL_API_KEY"] = h2o_key
 
 def color(fore="", back="", text=None):
     return f"{fore}{back}{text}{Style.RESET_ALL}"
@@ -650,12 +652,12 @@ def ask(
                     attempt = 0
                     error_condition = lambda e: ('OperationalError'.lower() in e.lower() or 'OperationError'.lower() in e.lower() or 'Syntax error'.lower() in e.lower()) if e else False
                     if self_correction and error_condition(err):
-                        logger.info("Attempting to auto-correct the query...")
+                        logger.info("Attempting to auto-correct the query during runtime...")
                         while attempt !=3 and error_condition(err):
                             try:
                                 logger.debug(f"Attempt: {attempt+1}")
                                 _tmp = err.split("\n")
-                                _err = _tmp[0].split("Error occurred :")[1] if len(_tmp) > 0 else None
+                                _err = _tmp[0].split("Error occurred:")[1] if len(_tmp) > 0 else None
                                 env_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
                                 env_key = os.environ["RECOMMENDATION_MODEL_API_KEY"]
                                 corr_sql =  sql_g.self_correction(input_prompt=_val, error_msg=_err, remote_url=env_url, client_key=env_key)
@@ -667,7 +669,7 @@ def ask(
                                 logger.error(f"Something went wrong:\n{e}")
                                 attempt += 1
                     if m:
-                        _t = "\nWarning:\n".join([str(q_res), m])
+                        _t = "\n\n**Warning:**\n".join([str(q_res), m])
                         q_res = _t
                 elif option == "pandas":
                     tables = extract_table_names(_val)
@@ -697,7 +699,7 @@ def ask(
                         click.echo("Error in executing the query. Validate generated SQL and try again.")
                         click.echo("No result to display.")
 
-                results.append("**Result:** \n")
+                results.append("**Result:**\n")
                 if q_res:
                     # Check shape of the final result to avoid blowing up memory
                     # Logging a quick preview of the result
