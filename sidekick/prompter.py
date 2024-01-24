@@ -463,7 +463,7 @@ def ask(
     """
 
     results = []
-    err = None  # TODO - Need to handle errors if occurred
+    res = err = alt_res = None  # TODO - Need to handle errors if occurred
     # Book-keeping
     base_path = local_base_path if local_base_path else default_base_path
     setup_dir(base_path)
@@ -575,7 +575,7 @@ def ask(
                     click.echo("Skipping edit...")
             if updated_tasks is not None:
                 sql_g._tasks = updated_tasks
-        alt_res = None
+
         # The interface could also be used to simply execute user provided SQL
         # Keyword: "Execute SQL: <SQL query>"
         if (

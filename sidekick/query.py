@@ -604,7 +604,7 @@ class SQLGenerator:
                     # Reset temperature to 0.5
                     current_temperature = 0.5
                     if model_name == "h2ogpt-sql-sqlcoder2" or model_name == "h2ogpt-sql-sqlcoder-34b-alpha" or model_name == "h2ogpt-sql-nsql-llama-2-7B":
-                        m_name = MODEL_CHOICE_MAP_EVAL_MODE.get(model_name, "h2ogpt-sql-sqlcoder2")
+                        m_name = MODEL_CHOICE_MAP_EVAL_MODE.get(model_name, "h2ogpt-sql-sqlcoder-34b-alpha")
                         query_txt = [{"role": "user", "content": query},]
                         logger.debug(f"Generation with default temperature : {current_temperature}")
                         completion = self.h2ogpt_client.with_options(max_retries=3).chat.completions.create(
@@ -633,79 +633,104 @@ class SQLGenerator:
                     # throttle temperature for different result
                     logger.info("Regeneration requested on previous query ...")
                     logger.debug(f"Selected temperature for fast regeneration : {random_temperature}")
-                    output = model.generate(
-                        **inputs.to(device_type),
-                        max_new_tokens=512,
-                        temperature=random_temperature,
-                        output_scores=True,
-                        do_sample=True,
-                        return_dict_in_generate=True,
-                    )
-                    generated_tokens = output.sequences[:, input_length:][0]
+                    if model_name == "h2ogpt-sql-sqlcoder2" or model_name == "h2ogpt-sql-sqlcoder-34b-alpha" or model_name == "h2ogpt-sql-nsql-llama-2-7B":
+                        m_name = MODEL_CHOICE_MAP_EVAL_MODE.get(model_name, "h2ogpt-sql-sqlcoder-34b-alpha")
+                        query_txt = [{"role": "user", "content": query},]
+                        completion = self.h2ogpt_client.with_options(max_retries=3).chat.completions.create(
+                                    model=m_name,
+                                    messages=query_txt,
+                                    max_tokens=512,
+                                    temperature=random_temperature,
+                                    stop="```",
+                                    seed=random_seed)
+                        generated_tokens = completion.choices[0].message.content
+                    else:
+                        output = model.generate(
+                            **inputs.to(device_type),
+                            max_new_tokens=512,
+                            temperature=random_temperature,
+                            output_scores=True,
+                            do_sample=True,
+                            return_dict_in_generate=True,
+                        )
+                        generated_tokens = output.sequences[:, input_length:][0]
                     self.current_temps[model_name] = random_temperature
                     logger.debug(f"Temperature saved: {self.current_temps[model_name]}")
                 else:
                     logger.info("Regeneration with options requested on previous query ...")
-                    # Diverse beam search decoding to explore more options
-                    logger.debug(f"Selected temperature for diverse beam search: {random_temperature}")
-                    output_re = model.generate(
-                        **inputs.to(device_type),
-                        max_new_tokens=512,
-                        temperature=random_temperature,
-                        top_k=5,
-                        top_p=0.9,
-                        num_beams=5,
-                        num_beam_groups=5,
-                        num_return_sequences=5,
-                        output_scores=True,
-                        do_sample=False,
-                        diversity_penalty=2.0,
-                        return_dict_in_generate=True,
-                    )
-
-                    transition_scores = model.compute_transition_scores(
-                        output_re.sequences, output_re.scores, output_re.beam_indices, normalize_logits=False
-                    )
-
-                    # Create a boolean tensor where elements are True if the corresponding element in transition_scores is less than 0
-                    mask = transition_scores < 0
-                    # Sum the True values along axis 1
-                    counts = torch.sum(mask, dim=1)
-                    output_length = inputs.input_ids.shape[1] + counts
-                    length_penalty = model.generation_config.length_penalty
-                    reconstructed_scores = transition_scores.sum(axis=1) / (output_length**length_penalty)
-
-                    # Converting logit scores to prob scores
-                    probabilities_scores = F.softmax(reconstructed_scores, dim=-1)
-                    out_idx = torch.argmax(probabilities_scores)
-                    # Final output
-                    output = output_re.sequences[out_idx]
-                    generated_tokens = output[input_length:]
-
-                    logger.info(f"Generated options:\n")
-                    prob_sorted_idxs = sorted(
-                        range(len(probabilities_scores)), key=lambda k: probabilities_scores[k], reverse=True
-                    )
-                    for idx, sorted_idx in enumerate(prob_sorted_idxs):
-                        _out = output_re.sequences[sorted_idx]
-                        res = tokenizer.decode(_out[input_length:], skip_special_tokens=True)
-                        result = res.replace("table_name", _table_name)
-                        # Remove the last semi-colon if exists at the end
-                        # we will add it later
-                        if result.endswith(";"):
-                            result = result.replace(";", "")
-                        if "LIMIT".lower() not in result.lower():
-                            res = "SELECT " + result.strip() + " LIMIT 100;"
-                        else:
-                            res = "SELECT " + result.strip() + ";"
-
-                        pretty_sql = sqlparse.format(res, reindent=True, keyword_case="upper")
-                        syntax_highlight = f"""``` sql\n{pretty_sql}\n```\n\n"""
-                        alt_res = (
-                            f"Option {idx+1}: (_probability_: {probabilities_scores[sorted_idx]})\n{syntax_highlight}\n"
+                    if model_name == "h2ogpt-sql-sqlcoder2" or model_name == "h2ogpt-sql-sqlcoder-34b-alpha" or model_name == "h2ogpt-sql-nsql-llama-2-7B":
+                        logger.info("Generating diverse options, not enabled for remote models")
+                        m_name = MODEL_CHOICE_MAP_EVAL_MODE.get(model_name, "h2ogpt-sql-sqlcoder-34b-alpha")
+                        query_txt = [{"role": "user", "content": query},]
+                        completion = self.h2ogpt_client.with_options(max_retries=3).chat.completions.create(
+                                    model=m_name,
+                                    messages=query_txt,
+                                    max_tokens=512,
+                                    temperature=random_temperature,
+                                    stop="```",
+                                    seed=random_seed)
+                        generated_tokens = completion.choices[0].message.content
+                    else:
+                        # Diverse beam search decoding to explore more options
+                        logger.debug(f"Selected temperature for diverse beam search: {random_temperature}")
+                        output_re = model.generate(
+                            **inputs.to(device_type),
+                            max_new_tokens=512,
+                            temperature=random_temperature,
+                            top_k=5,
+                            top_p=0.9,
+                            num_beams=5,
+                            num_beam_groups=5,
+                            num_return_sequences=5,
+                            output_scores=True,
+                            do_sample=True,
+                            diversity_penalty=2.0,
+                            return_dict_in_generate=True,
                         )
-                        alternate_queries.append(alt_res)
-                        logger.info(alt_res)
+
+                        transition_scores = model.compute_transition_scores(
+                            output_re.sequences, output_re.scores, output_re.beam_indices, normalize_logits=False
+                        )
+
+                        # Create a boolean tensor where elements are True if the corresponding element in transition_scores is less than 0
+                        mask = transition_scores < 0
+                        # Sum the True values along axis 1
+                        counts = torch.sum(mask, dim=1)
+                        output_length = inputs.input_ids.shape[1] + counts
+                        length_penalty = model.generation_config.length_penalty
+                        reconstructed_scores = transition_scores.sum(axis=1) / (output_length**length_penalty)
+
+                        # Converting logit scores to prob scores
+                        probabilities_scores = F.softmax(reconstructed_scores, dim=-1)
+                        out_idx = torch.argmax(probabilities_scores)
+                        # Final output
+                        output = output_re.sequences[out_idx]
+                        generated_tokens = output[input_length:]
+
+                        logger.info(f"Generated options:\n")
+                        prob_sorted_idxs = sorted(
+                            range(len(probabilities_scores)), key=lambda k: probabilities_scores[k], reverse=True
+                        )
+                        for idx, sorted_idx in enumerate(prob_sorted_idxs):
+                            _out = output_re.sequences[sorted_idx]
+                            res = tokenizer.decode(_out[input_length:], skip_special_tokens=True)
+                            result = res.replace("table_name", _table_name)
+                            # Remove the last semi-colon if exists at the end
+                            # we will add it later
+                            if result.endswith(";"):
+                                result = result.replace(";", "")
+                            if "LIMIT".lower() not in result.lower():
+                                res = "SELECT " + result.strip() + " LIMIT 100;"
+                            else:
+                                res = "SELECT " + result.strip() + ";"
+
+                            pretty_sql = sqlparse.format(res, reindent=True, keyword_case="upper")
+                            syntax_highlight = f"""``` sql\n{pretty_sql}\n```\n\n"""
+                            alt_res = (
+                                f"Option {idx+1}: (_probability_: {probabilities_scores[sorted_idx]})\n{syntax_highlight}\n"
+                            )
+                            alternate_queries.append(alt_res)
+                            logger.info(f"Alternate options:\n{alt_res}")
 
                 _res = generated_tokens
                 if not self.remote_model and tokenizer:
@@ -721,7 +746,7 @@ class SQLGenerator:
                     # TODO Below should not happen, will have to check why its getting generated as part of response.
                     # Not sure, if its a vllm or prompt issue.
                     _temp = _temp.replace("/[/INST]", "").replace("[INST]", "").replace("[/INST]", "").strip()
-                    if "SELECT".lower() not in _temp.lower():
+                    if not _temp.lower().startswith('SELECT'.lower()):
                             _temp = "SELECT " + _temp.strip()
                             res = _temp
                     if "LIMIT".lower() not in _temp.lower():
