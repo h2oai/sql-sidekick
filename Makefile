@@ -19,5 +19,9 @@ download_demo_data:
 run:
 	./.sidekickvenv/bin/python3 start.py
 
+clean:
+	rm -rf ./db
+	rm  -rf .var
+
 cloud_bundle:
 	h2o bundle -L debug 2>&1 | tee -a h2o-bundle.log
