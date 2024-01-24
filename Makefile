@@ -21,7 +21,7 @@ run:
 
 clean:
 	rm -rf ./db
-	rm  -rf .var
+	rm -rf ./var
 
 cloud_bundle:
 	h2o bundle -L debug 2>&1 | tee -a h2o-bundle.log
