@@ -287,7 +287,7 @@ class DBConfig:
                 logger.info("Query Empty or None!")
             return output, query
         except Exception as e:
-            err = f"Error occurred : {format(e)}"
+            err = f"Error occurred: {format(e)}"
             logger.info(err)
             return None, err
         finally:

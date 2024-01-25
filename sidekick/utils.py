@@ -12,7 +12,6 @@ import torch
 from accelerate import infer_auto_device_map, init_empty_weights
 from h2ogpte import H2OGPTE
 from huggingface_hub import snapshot_download
-from InstructorEmbedding import INSTRUCTOR
 from pandasql import sqldf
 from sentence_transformers import SentenceTransformer
 from sidekick.configs.prompt_template import (H2OGPT_GUARDRAIL_PROMPT,

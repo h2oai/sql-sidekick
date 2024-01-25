@@ -39,10 +39,15 @@ h2ogpt_base_model_url = env_settings["MODEL_INFO"]["H2O_BASE_MODEL_URL"]
 h2ogpt_base_model_key = env_settings["MODEL_INFO"]["H2O_BASE_MODEL_API_KEY"]
 
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
-os.environ["H2O_BASE_MODEL_URL"] = h2ogpt_base_model_url
-os.environ["H2O_BASE_MODEL_API_KEY"] = h2ogpt_base_model_key
-os.environ["RECOMMENDATION_MODEL_REMOTE_URL"] = h2o_remote_url
-os.environ["RECOMMENDATION_MODEL_API_KEY"] = h2o_key
+# Env variables
+if not os.getenv("H2O_BASE_MODEL_URL"):
+    os.environ["H2O_BASE_MODEL_URL"] = h2ogpt_base_model_url
+if not os.getenv("H2O_BASE_MODEL_API_KEY"):
+    os.environ["H2O_BASE_MODEL_API_KEY"] = h2ogpt_base_model_key
+if not os.getenv("RECOMMENDATION_MODEL_REMOTE_URL"):
+    os.environ["RECOMMENDATION_MODEL_REMOTE_URL"] = h2o_remote_url
+if not os.getenv("RECOMMENDATION_MODEL_API_KEY"):
+    os.environ["RECOMMENDATION_MODEL_API_KEY"] = h2o_key
 
 def color(fore="", back="", text=None):
     return f"{fore}{back}{text}{Style.RESET_ALL}"
