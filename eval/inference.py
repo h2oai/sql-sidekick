@@ -1,6 +1,6 @@
 # 1. python3 -m venv .sidekick_venv
 # 2. source .sidekick_venv/bin/activate
-# 3. pip install --force-reinstall sql_sidekick-0.1.9-py3-none-any.whl
+# 3. pip install --force-reinstall sql_sidekick-x.x.x-py3-none-any.whl (# replace x.x.x with the latest version number)
 
 import os
 from pathlib import Path
@@ -49,10 +49,12 @@ def cli():
 @click.option("--eval_data_path", "-e", help="Path to eval dataset in .csv format")
 @click.option("--model_name", "-m", default="h2ogpt-sql-sqlcoder-34b-alpha", help="Model name to use for inference")
 @click.option("--sample_qna_path", "-s", default=None, help="Path to sample QnA in .csv format")
+@click.option("--iterations", "-n", default=1, help="Number of iterations to run")
+@click.option("--threshold", "-th", default=0.9, help="Similarity threshold")
 @click.option("--kwargs", "-k", default=None, help="Additional arguments")
-def run_eval(input_data_path: str, table_name: str, eval_data_path: str, model_name: str, sample_qna_path: Optional[str]=None, **kwargs):
+def run_eval(input_data_path: str, table_name: str, eval_data_path: str, model_name: str, iterations: int, threshold: float, sample_qna_path: Optional[str]=None, **kwargs):
     #  Generate schema for the supplied input data
-    _, table_info_path = generate_schema(input_data_path, f"{cache_path}/{table_name}_table_info.jsonl")
+    _, table_info_path = generate_schema(data_path=input_data_path, output_path=f"{cache_path}/{table_name}_table_info.jsonl")
     # Db setup
     _, err = db_setup(
                 db_name=DB_NAME,
@@ -68,40 +70,44 @@ def run_eval(input_data_path: str, table_name: str, eval_data_path: str, model_n
 
 
     # read gold context
-    syntax_accuracy = []
-    failures = []
+    syntax_accuracy = {}
+    failures = {}
     compare_df = pd.read_csv(eval_data_path)
-    for _row in compare_df.itertuples():
-        input_q = _row.question
-        expected_sql = _row.answer
+    count = 0
+    while count < iterations:
+        for _row in compare_df.itertuples():
+            input_q = _row.question
+            expected_sql = _row.answer
 
-        # With self-correction
-        _generated_sql = ''
-        result, _, _ = ask(
-            question=input_q,
-            table_info_path=table_info_path,
-            sample_queries_path=sample_qna_path,
-            table_name=table_name,
-            is_command=False,
-            model_name=model_name,
-            is_regenerate=False,
-            is_regen_with_options=False,
-            execute_query=True,
-            local_base_path=base_path,
-            debug_mode=False,
-            guardrails=False,
-            self_correction=True
-        )
+            # With self-correction
+            _generated_sql = ''
+            result, _, _ = ask(
+                question=input_q,
+                table_info_path=table_info_path,
+                sample_queries_path=sample_qna_path,
+                table_name=table_name,
+                is_command=False,
+                model_name=model_name,
+                is_regenerate=False,
+                is_regen_with_options=False,
+                execute_query=True,
+                local_base_path=base_path,
+                debug_mode=False,
+                guardrails=False,
+                self_correction=True
+            )
 
-        if  result and len(result) > 1:
-            _tmp = result[1].split("``` sql\n")
-            _generated_sql = _tmp[1].strip() if len((_tmp)) > 1 else ''
-        _syntax_score = compute_similarity_score(expected_sql, _generated_sql)
-        if _syntax_score[0][0] > 0.9:
-            syntax_accuracy.append(_syntax_score[0][0])
-        else:
-            failures.append((input_q, expected_sql, _generated_sql))
-
+            if  result and len(result) > 1:
+                _tmp = result[1].split("``` sql\n")
+                _generated_sql = _tmp[1].strip() if len((_tmp)) > 1 else ''
+            _syntax_score = compute_similarity_score(expected_sql, _generated_sql)
+            if _syntax_score[0][0] > threshold:
+                if input_q not in syntax_accuracy:
+                    syntax_accuracy[input_q] = _syntax_score[0][0]
+            else:
+                if input_q not in failures:
+                    failures[input_q] = (expected_sql, _generated_sql)
+        count+=1
     print(f"Syntax accuracy: {float(len(syntax_accuracy)/compare_df.shape[0])}")
     print(f"Failures cases: {failures}")
 
