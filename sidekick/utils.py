@@ -189,7 +189,7 @@ def remove_duplicates(
     if input_x is None or len(input_x) < 2:
         res = []
     else:
-        embeddings, _ = generate_text_embeddings(model_path, x=input_x, model_obj=similarity_model, device=device)
+        embeddings = generate_text_embeddings(model_path, x=input_x, model_obj=similarity_model, device=device)
         similarity_scores = cosine_similarity(embeddings)
         similar_indices = [(x, y) for (x, y) in np.argwhere(similarity_scores > threshold) if x != y]
 

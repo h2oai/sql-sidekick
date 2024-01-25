@@ -80,7 +80,6 @@ def test_basic_access_local():
     ("What is the average sleep duration for each gender?", "h2ogpt-sql-nsql-llama-2-7B")]
     )
 def test_basic_access_remote_models(question, model_name):
-    # 1.
     input_q = question
     expected_1 = "Male"
     expected_2 = "Female"
@@ -111,7 +110,6 @@ def test_basic_access_remote_models(question, model_name):
     ]
     )
 def test_basic_access_openai_models(question, model_name):
-    # 1.
     input_q = question
     expected_1 = "Male"
     expected_2 = "Female"
@@ -135,10 +133,12 @@ def test_basic_access_openai_models(question, model_name):
     assert expected_1 in str(result)
     assert expected_2 in str(result)
 
-
-def test_generation_execution_correctness():
-    # 2.
-    input_q = """What are the most common occupations among individuals in the dataset?"""
+@pytest.mark.parametrize("question, model_name", [("What are the most common occupations among individuals in the dataset?", "h2ogpt-sql-sqlcoder-34b-alpha"),
+("What are the most common occupations among individuals in the dataset?", "h2ogpt-sql-nsql-llama-2-7B"),
+("What are the most common occupations among individuals in the dataset?", "gpt-4-1106-preview-128k")]
+)
+def test_generation_execution_correctness(question, model_name):
+    input_q = question
     expected_sql = """SELECT "Occupation", COUNT(*) AS "frequency" FROM "sleep_health_and_lifestyle" GROUP BY "Occupation" ORDER BY "frequency" DESC LIMIT 10"""
     expected_value = str([('Nurse', 73), ('Doctor', 71), ('Engineer', 63), ('Lawyer', 47), ('Teacher', 40), ('Accountant', 37), ('Salesperson', 32), ('Software Engineer', 4), ('Scientist', 4), ('Sales Representative', 2), ('Manager', 1)])
     _runtime_value = _generated_sql = ""
@@ -148,7 +148,7 @@ def test_generation_execution_correctness():
         sample_queries_path=None,
         table_name=table_name,
         is_command=False,
-        model_name="h2ogpt-sql-sqlcoder-34b-alpha",
+        model_name=model_name,
         is_regenerate=False,
         is_regen_with_options=False,
         execute_query=True,
@@ -159,13 +159,17 @@ def test_generation_execution_correctness():
     )
 
     if result and len(result) > 0:
-        _generated_sql = str(result[1].split("``` sql\n")[1])
-        if len(result) > 4:
-            _runtime_value = str(result[4])
-        _runtime_value = str(result[4])
+        _idx = [result.index(_r) for _r in result if _r.startswith("``` sql")]
+        if _idx:
+            _generated_sql = str(result[_idx[0]].split("``` sql\n")[1]).replace("```", "").strip()
+            split_text = _generated_sql.split("\n")
+            _generated_sql = " ".join(split_text).strip()
+        result_idx = [result.index(_r) for _r in result if _r.startswith("**Result:**")]
+        if result_idx:
+            _runtime_value = str(result[result_idx[0]+1])
 
     _syntax_score = compute_similarity_score(expected_sql, _generated_sql)
     _execution_val_score = compute_similarity_score(expected_value, _runtime_value)
     # compute similarity score
     assert _syntax_score[0][0] > 0.9
-    assert _execution_val_score[0][0] > 0.85
+    assert _execution_val_score[0][0] > 0.9

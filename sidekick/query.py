@@ -392,7 +392,7 @@ class SQLGenerator:
                 model_choices = MODEL_CHOICE_MAP_EVAL_MODE
                 m_name = model_choices.get(model_name, "gpt-3.5-turbo-1106")
 
-                llm_predictor_gpt3 = LOpenAI(temperature=0, model_name=m_name, max_tokens=512, seed=42)
+                llm_predictor_gpt3 = LOpenAI(temperature=0.7, model_name=m_name, max_tokens=512, seed=42)
                 service_context_gpt3 = ServiceContext.from_defaults(
                     llm=llm_predictor_gpt3, chunk_size_limit=512
                 )

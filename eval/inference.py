@@ -68,7 +68,6 @@ def run_eval(input_data_path: str, table_name: str, eval_data_path: str, model_n
                 local_base_path=base_path
             )
 
-
     # read gold context
     syntax_accuracy = {}
     failures = {}
@@ -97,16 +96,18 @@ def run_eval(input_data_path: str, table_name: str, eval_data_path: str, model_n
                 self_correction=True
             )
 
-            if  result and len(result) > 1:
-                _tmp = result[1].split("``` sql\n")
-                _generated_sql = _tmp[1].strip() if len((_tmp)) > 1 else ''
+            if result and len(result) > 0:
+                _idx = [result.index(_r) for _r in result if _r.startswith("``` sql")]
+                if _idx:
+                    _generated_sql = str(result[_idx[0]].split("``` sql\n")[1]).replace("```", "").strip()
+                    split_text = _generated_sql.split("\n")
+                    _generated_sql = " ".join(split_text).strip()
             _syntax_score = compute_similarity_score(expected_sql, _generated_sql)
+
             if _syntax_score[0][0] > threshold:
-                if input_q not in syntax_accuracy:
-                    syntax_accuracy[input_q] = _syntax_score[0][0]
+                syntax_accuracy[input_q] = _syntax_score[0][0]
             else:
-                if input_q not in failures:
-                    failures[input_q] = (expected_sql, _generated_sql)
+                failures[input_q] = (expected_sql, _generated_sql)
         count+=1
     print(f"Syntax accuracy: {float(len(syntax_accuracy)/compare_df.shape[0])}")
     print(f"Failures cases: {failures}")
