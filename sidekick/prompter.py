@@ -23,7 +23,7 @@ from sidekick.utils import (REMOTE_LLMS, _execute_sql, check_vulnerability,
                             execute_query_pd, extract_table_names,
                             generate_suggestions, save_query, setup_dir)
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 # Load the config file and initialize required paths
 app_base_path = (Path(__file__).parent / "../").resolve()
@@ -37,6 +37,7 @@ h2o_key = env_settings["MODEL_INFO"]["RECOMMENDATION_MODEL_API_KEY"]
 # h2ogpt base model urls
 h2ogpt_base_model_url = env_settings["MODEL_INFO"]["H2O_BASE_MODEL_URL"]
 h2ogpt_base_model_key = env_settings["MODEL_INFO"]["H2O_BASE_MODEL_API_KEY"]
+self_correction_model = env_settings["MODEL_INFO"]["SELF_CORRECTION_MODEL"]
 
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
 # Env variables
@@ -48,6 +49,8 @@ if not os.getenv("RECOMMENDATION_MODEL_REMOTE_URL"):
     os.environ["RECOMMENDATION_MODEL_REMOTE_URL"] = h2o_remote_url
 if not os.getenv("RECOMMENDATION_MODEL_API_KEY"):
     os.environ["RECOMMENDATION_MODEL_API_KEY"] = h2o_key
+if not os.getenv("SELF_CORRECTION_MODEL"):
+    os.environ["SELF_CORRECTION_MODEL"] = self_correction_model
 
 def color(fore="", back="", text=None):
     return f"{fore}{back}{text}{Style.RESET_ALL}"
@@ -665,7 +668,7 @@ def ask(
                                 _err = _tmp[0].split("Error occurred:")[1] if len(_tmp) > 0 else None
                                 env_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
                                 env_key = os.environ["RECOMMENDATION_MODEL_API_KEY"]
-                                corr_sql =  sql_g.self_correction(input_prompt=_val, error_msg=_err, remote_url=env_url, client_key=env_key)
+                                corr_sql =  sql_g.self_correction(input_query=_val, error_msg=_err, remote_url=env_url, client_key=env_key)
                                 q_res, err = DBConfig.execute_query(query=corr_sql)
                                 if not 'Error occurred'.lower() in str(err).lower():
                                     err = None
