@@ -147,10 +147,10 @@ def test_drop_injection():
         assert 'malicious patterns' in str(result)
         assert 'SQL keywords does not start with SELECT' in str(result)
 
-
-def test_stacked_queries():
-    input_q = """SELECT * FROM sleep_health_and_lifestyle; DROP sleep_health_and_lifestyle"""
-
+@pytest.mark.parametrize("input_q, scanner", [("""SELECT * FROM sleep_health_and_lifestyle; DROP sleep_health_and_lifestyle""", "h2oai/h2ogpt-4096-llama2-70b-chat"),
+("""SELECT * FROM sleep_health_and_lifestyle; DROP sleep_health_and_lifestyle""", "gpt-3.5-turbo")])
+def test_stacked_queries(input_q, scanner):
+    os.environ["VULNERABILITY_SCANNER"] = scanner
     result = None
     question = f"Execute SQL:\n{input_q}"
 

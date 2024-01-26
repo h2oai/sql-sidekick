@@ -144,7 +144,7 @@ LIMIT 100
 @pytest.mark.parametrize("input_q, debugger", [("""SELECT CONCAT("age", " ", "heart_rate") AS "age_heart_rate" FROM "sleep_health_and_lifestyle" ORDER BY "age_heart_rate" DESC LIMIT 100
     """, "h2oai/h2ogpt-4096-llama2-70b-chat"),
 ("""SELECT CONCAT("age", " ", "heart_rate") AS "age_heart_rate" FROM "sleep_health_and_lifestyle" ORDER BY "age_heart_rate" DESC LIMIT 100
-    """, "gpt-3.5-turbo-1106")])
+    """, "gpt-3.5-turbo")])
 def test_input3(input_q, debugger):
     # There is no CONCAT function in SQLite
     os.environ["SELF_CORRECTION_MODEL"] = debugger
