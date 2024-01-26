@@ -141,10 +141,13 @@ LIMIT 100
     assert result != input_q
     assert error is None
 
-def test_input3():
-    input_q = """SELECT CONCAT("age", " ", "heart_rate") AS "age_heart_rate" FROM "sleep_health_and_lifestyle" ORDER BY "age_heart_rate" DESC LIMIT 100
-    """
-
+@pytest.mark.parametrize("input_q, debugger", [("""SELECT CONCAT("age", " ", "heart_rate") AS "age_heart_rate" FROM "sleep_health_and_lifestyle" ORDER BY "age_heart_rate" DESC LIMIT 100
+    """, "h2oai/h2ogpt-4096-llama2-70b-chat"),
+("""SELECT CONCAT("age", " ", "heart_rate") AS "age_heart_rate" FROM "sleep_health_and_lifestyle" ORDER BY "age_heart_rate" DESC LIMIT 100
+    """, "gpt-3.5-turbo-1106")])
+def test_input3(input_q, debugger):
+    # There is no CONCAT function in SQLite
+    os.environ["SELF_CORRECTION_MODEL"] = debugger
     question = f"Execute SQL:\n{input_q}"
     res, _, error = ask(
         question=question,
@@ -158,6 +161,7 @@ def test_input3():
         execute_query=True,
         local_base_path=base_path,
         debug_mode=True,
+        guardrails=False,
         self_correction=True
     )
     assert error == None

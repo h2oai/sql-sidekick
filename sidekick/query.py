@@ -17,7 +17,6 @@ from llama_index.indices.struct_store.sql import GPTSQLStructStoreIndex
 from llama_index.llms import OpenAI as LOpenAI
 from openai import OpenAI
 from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
-                                              H2OGPT_DEBUGGING_PROMPT,
                                               NSQL_QUERY_PROMPT, QUERY_PROMPT,
                                               STARCODER2_PROMPT, TASK_PROMPT)
 from sidekick.logger import logger
@@ -138,7 +137,7 @@ class SQLGenerator:
         self.eval_mode = eval_mode,
         self.debug_mode = debug_mode,
         self.remote_model = remote_model
-        self.openai_client = OpenAI() if openai.api_key else None
+        self.openai_client = OpenAI() if openai_key else None
         self.h2ogpt_client = None
 
     def clear(self):
@@ -240,24 +239,42 @@ class SQLGenerator:
             res = ex_value.statement if ex_value.statement else None
             return res
 
-    def self_correction(self, error_msg, input_prompt, remote_url, client_key):
+    def self_correction(self, error_msg, input_query, remote_url, client_key):
         try:
             # Reference: Teaching Large Language Models to Self-Debug, https://arxiv.org/abs/2304.05128
-            system_prompt = H2OGPT_DEBUGGING_PROMPT["system_prompt"].format(dialect=self.dialect).strip()
-            user_prompt = H2OGPT_DEBUGGING_PROMPT["user_prompt"].format(ex_traceback=error_msg, qry_txt=input_prompt).strip()
+            system_prompt = DEBUGGING_PROMPT["system_prompt"].format(dialect=self.dialect).strip()
+            user_prompt = DEBUGGING_PROMPT["user_prompt"].format(ex_traceback=error_msg, qry_txt=input_query).strip()
+            _response = []
+            _res = input_query
+            self_correction_model = os.getenv("SELF_CORRECTION_MODEL", "h2oai/h2ogpt-4096-llama2-70b-chat")
+            if "h2ogpt-" in self_correction_model:
+                from h2ogpte import H2OGPTE
+                client = H2OGPTE(address=remote_url, api_key=client_key)
+                text_completion = client.answer_question(
+                system_prompt=system_prompt,
+                text_context_list=[],
+                question=user_prompt,
+                llm=self_correction_model)
+                _response = text_completion.content
+            elif 'gpt-3.5' in self_correction_model.lower() or 'gpt-4' in self_correction_model.lower():
+                # Check if the API key is set, else inform user
+                    query_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
+                    completion = self.openai_client.chat.completions.create(
+                        model=self_correction_model,
+                        messages=query_msg,
+                        max_tokens=512,
+                        seed=42,
+                        temperature=0.7
+                    )
+                    _response = completion.choices[0].message.content
+            else:
+                raise ValueError(f"Invalid model name: {self_correction_model}")
 
-            from h2ogpte import H2OGPTE
-            client = H2OGPTE(address=remote_url, api_key=client_key)
-            text_completion = client.answer_question(
-            system_prompt=system_prompt,
-            text_context_list=[],
-            question=user_prompt,
-            llm='h2oai/h2ogpt-4096-llama2-70b-chat')
-
-            _response = text_completion.content.split("```sql")
-            _res = _response[1].split("```")[0].strip() if len(_response) > 0 else _response[0].split("```")[0].strip()
-            if "SELECT" not in _res:
-                _res = input_prompt
+            _response = _response.split("```sql")
+            _idx = [_response.index(_r) for _r in _response if _r.lower().strip().startswith("select")]
+            _res = _response[_idx[0]].split("```")[0].strip()
+            if "SELECT".lower() not in _res.lower():
+                _res = input_query
             result = sqlglot.transpile(_res, identify=True, write=self.dialect)[0]
             return result
         except Exception as se:
@@ -770,7 +787,7 @@ class SQLGenerator:
                     env_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
                     env_key = os.environ["RECOMMENDATION_MODEL_API_KEY"]
                     try:
-                        result =  self.self_correction(res, error_msg=str(ex_traceback), remote_url=env_url, client_key=env_key)
+                        result =  self.self_correction(input_query=res, error_msg=str(ex_traceback), remote_url=env_url, client_key=env_key)
                     except Exception as se:
                     # Another exception occurred, return the original SQL
                         logger.info(f"We did the best we could to fix syntactical error, there might be still be some issues:\n {se}")
