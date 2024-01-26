@@ -20,8 +20,7 @@ from sidekick.configs.prompt_template import (DEBUGGING_PROMPT,
                                               NSQL_QUERY_PROMPT, QUERY_PROMPT,
                                               STARCODER2_PROMPT, TASK_PROMPT)
 from sidekick.logger import logger
-from sidekick.utils import (MODEL_CHOICE_MAP_DEFAULT,
-                            MODEL_CHOICE_MAP_EVAL_MODE, _check_file_info,
+from sidekick.utils import (MODEL_CHOICE_MAP_EVAL_MODE, _check_file_info,
                             is_resource_low, load_causal_lm_model,
                             load_embedding_model, make_dir, re_rank,
                             read_sample_pairs, remove_duplicates,
@@ -258,9 +257,10 @@ class SQLGenerator:
                 _response = text_completion.content
             elif 'gpt-3.5' in self_correction_model.lower() or 'gpt-4' in self_correction_model.lower():
                 # Check if the API key is set, else inform user
+                    _self_correction_model = MODEL_CHOICE_MAP_EVAL_MODE[self_correction_model.lower()]
                     query_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
                     completion = self.openai_client.chat.completions.create(
-                        model=self_correction_model,
+                        model=_self_correction_model,
                         messages=query_msg,
                         max_tokens=512,
                         seed=42,

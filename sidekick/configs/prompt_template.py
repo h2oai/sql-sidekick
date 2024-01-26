@@ -74,7 +74,7 @@ Help fix the provided incorrect SQL Query mentioned below in the *Query* section
 """,
 }
 
-H2OGPT_GUARDRAIL_PROMPT = {
+GUARDRAIL_PROMPT = {
 "system_prompt": "Act as a Security expert your job is to detect SQL injection vulnerabilities",
 "user_prompt":"""
 Help audit SQL injection patterns within the provided the SQL *Query*.
