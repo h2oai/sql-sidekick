@@ -14,7 +14,7 @@ Options:
   -th, --threshold FLOAT      Similarity threshold
   -k, --kwargs TEXT           Additional arguments
 ```
-5. python eval/inference.py run-eval -i <input_data.csv> -t "your_table_name" -e <eval_ground_truth.csv> -s <sample_qna.csv> -m "h2ogpt-sql-sqlcoder-34b-alpha"
+5. `python eval/inference.py run-eval -i <input_data.csv> -t "your_table_name" -e <eval_ground_truth.csv> -s <sample_qna.csv> -m "h2ogpt-sql-sqlcoder-34b-alpha"`
 
 
 Benchmarks: WIP
