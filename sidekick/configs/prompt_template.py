@@ -54,23 +54,23 @@ QUERY_PROMPT = """
                 # Add explanation and reasoning for each SQL query
             """
 
-DEBUGGING_PROMPT = {
-    "system_prompt": "Act as a SQL expert for {dialect} database",
-    "user_prompt": """
-                ### Help fix syntax errors for provided incorrect SQL Query.
-                # Error: {ex_traceback}
-                # Query:\n {qry_txt}
-                # Output: Add ``` as prefix and ``` as suffix to generated SQL
-                """,
-}
+# DEBUGGING_PROMPT = {
+# "system_prompt": "Act as a SQL expert for {dialect} database",
+# "user_prompt": """
+#     ### Help fix syntax errors for provided incorrect SQL Query.
+#     # Error: {ex_traceback}
+#     # Query:\n {qry_txt}
+#     # Output: Add ``` as prefix and ``` as suffix to generated SQL
+#     """,
+# }
 
-H2OGPT_DEBUGGING_PROMPT = {
+DEBUGGING_PROMPT = {
 "system_prompt": "Act as a SQL expert for {dialect} database",
 "user_prompt": """
 Help fix the provided incorrect SQL Query mentioned below in the *Query* section",\n
 ### Error: {ex_traceback}\n
 ### Query:\n {qry_txt}\n\n
-Output: Add '```sql' as prefix and '```' as suffix to generated SQL
+### Output: Add '```sql' as prefix and '```' as suffix to generated SQL
 """,
 }
 
