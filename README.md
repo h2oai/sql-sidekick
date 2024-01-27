@@ -1,8 +1,9 @@
 # sql-sidekick
 A simple SQL assistant (WIP)
+Turn ★ into ⭐ (top-right corner) if you like the project! 🙏
 
 ## Motivation
-- Historically, it’s common for data to be stored on Databases, democratize insight generation
+- Historically, it’s common for data to be stored in Databases, democratizing insight generation.
 - Enable a helpful assistant to help write complex queries across different database dialects with acceptable efficient execution accuracy (not just matching accuracy) 
 - Push to derive consistent generation without errors using smaller OSS models to save on compute costs.
 - Provide a toolkit for users to mix and match different model sizes to optimize compute cost - e.g., smaller models for generation, remote bigger models for syntax correction or spell correction …
@@ -17,9 +18,9 @@ A simple SQL assistant (WIP)
 - Entity mapping/Schema linking: Ability to build memory for mapping business context to the data schema dynamically; **Note: currently enabled only via CLI, others WIP.
 - Ability to save the chat history of query/answer pairs for future reference and improvements.
 - Self-correction loop back: Validates syntactic correction of generation. **Note: Self-correction is currently enabled for all openAI GPT models. WIP for other OSS models.
-- Integration with different database dialects - currently, SQLite/Postgres is enabled. WIP to add support for Duckdb/Databricks next.
+- Integration with different database dialects - currently, SQLite/Postgres(_might be broken temporarily_)/Databricks is enabled. WIP to add support for Duckdb and others.
 - Debug mode: Ability to evaluate/modify and validate SQL query against the configured database via UI
-- Recommendation sample questions: Often, given a dataset, we are unsure what to ask. To come around this problem, we have enabled the ability to generate recommendations for possible questions.
+- Recommend sample questions: Often, given a dataset, we are unsure what to ask. To come around this problem, we have enabled the ability to generate recommendations for possible questions.
 
 # Installation
 ## Dev
@@ -83,14 +84,15 @@ Commands:
 7. make run
 <img width="1670" alt="Screen Shot 2023-11-15 at 6 19 14 PM" src="https://github.com/h2oai/sql-sidekick/assets/1318029/5cf8a3ef-0d36-4416-ae2f-52672024fead">
 
-Citation
+## Citation & Acknowledgment
 Please consider citing our project if you find it useful:
 
 ```bibtex
 @software{sql-sidekick,
-    author = {h2o.ai/sql-sidekick Team},
-    title = {{sql-sidekick}},
+    title = {{sql-sidekick: A simple SQL assistant}},
+    author = {Pramit Choudhary, Michal Malohlava, Narasimha Durgam, Robin Liu, h2o.ai Team}
     url = {https://github.com/h2oai/sql-sidekick},
-    year = {2023}
+    year = {2024}
 }
 ```
+LLM frameworks adopted: [h2ogpt](https://github.com/h2oai/h2ogpt), [h2ogpte](https://pypi.org/project/h2ogpte/), [LangChain](https://github.com/langchain-ai/langchain), [llama_index](https://github.com/run-llama/llama_index), [openai](https://openai.com/blog/openai-api)
