@@ -8,6 +8,7 @@ from sidekick.prompter import ask
 from sidekick.utils import generate_text_embeddings, setup_dir
 from sklearn.metrics.pairwise import cosine_similarity
 
+# Rename .env.example to .env and set the mentioned env variables before running the tests
 load_dotenv()
 
 base_path = (Path(__file__).parent / "../").resolve()
