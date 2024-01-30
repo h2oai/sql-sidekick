@@ -1,7 +1,7 @@
 [App]
-name = "ai.h2o.wave.sql-sidekick"
-title = "SQL-Sidekick"
-description = "QnA with tabular data using NLQ"
+Name = "ai.h2o.wave.sql-sidekick"
+Title = "SQL-Sidekick"
+Description = "QnA with tabular data using NLQ"
 LongDescription = "about.md"
 InstanceLifecycle = "MANAGED"
 Tags = ["DATA_SCIENCE", "MACHINE_LEARNING", "NLP", "GENERATIVE_AI"]
@@ -22,3 +22,8 @@ EnableOIDC = true
 [[Env]]
 Name = "H2O_WAVE_MAX_REQUEST_SIZE"
 Value = "20M"
+
+[[Env]]
+Name = "HEAP_ID"
+Secret = "heap-analytics"
+SecretKey = "id"

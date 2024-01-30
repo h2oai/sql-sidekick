@@ -1,5 +1,6 @@
 import concurrent.futures
 import gc
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -643,6 +644,13 @@ async def init(q: Q) -> None:
 
     username, profile_pic = q.auth.username, q.app.persona_path
     q.page["meta"] = ui.meta_card(
+        script=heap_analytics(
+        userid=q.auth.subject,
+        event_properties=f"{{"
+          f"version: '{q.app.toml['App']['Version']}', "
+          f"product: '{q.app.toml['App']['Title']}'"
+          f"}}",
+        ),
         box="",
         layouts=[
             ui.layout(
@@ -914,6 +922,28 @@ async def on_event(q: Q):
         event_handled = True
     logging.info(f"Event handled: {event_handled} ... ")
     return event_handled
+
+
+# Record analytics and usage
+def heap_analytics(userid, event_properties=None) -> ui.inline_script:
+
+    if "HEAP_ID" not in os.environ:
+        return
+
+    heap_id = os.getenv("HEAP_ID")
+    script = f"""
+window.heap=window.heap||[],heap.load=function(e,t){{window.heap.appid=e,window.heap.config=t=t||{{}};var r=document.createElement("script");r.type="text/javascript",r.async=!0,r.src="https://cdn.heapanalytics.com/js/heap-"+e+".js";var a=document.getElementsByTagName("script")[0];a.parentNode.insertBefore(r,a);for(var n=function(e){{return function(){{heap.push([e].concat(Array.prototype.slice.call(arguments,0)))}}}},p=["addEventProperties","addUserProperties","clearEventProperties","identify","resetIdentity","removeEventProperty","setEventProperties","track","unsetEventProperty"],o=0;o<p.length;o++)heap[p[o]]=n(p[o])}};
+heap.load("{heap_id}");
+    """
+
+    if userid is not None:  # is OIDC Enabled? we do not want to identify all non-logged in users as "none"
+        identity = hashlib.sha256(userid.encode()).hexdigest()
+        script += f"heap.identify('{identity}');"
+
+    if event_properties is not None:
+        script += f"heap.addEventProperties({event_properties})"
+
+    return ui.inline_script(content=script)
 
 
 @app("/", on_shutdown=on_shutdown)
