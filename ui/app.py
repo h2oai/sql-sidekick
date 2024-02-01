@@ -59,23 +59,23 @@ initialize_models()
 async def user_variable(q: Q):
     db_settings = toml.load(f"{app_base_path}/sidekick/configs/env.toml")
 
-    q.user.db_dialect = db_settings["DB-DIALECT"]["DB_TYPE"]
-    q.user.host_name = db_settings["LOCAL_DB_CONFIG"]["HOST_NAME"]
-    q.user.user_name = db_settings["LOCAL_DB_CONFIG"]["USER_NAME"]
-    q.user.password = db_settings["LOCAL_DB_CONFIG"]["PASSWORD"]
-    q.user.db_name = db_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
-    q.user.port = db_settings["LOCAL_DB_CONFIG"]["PORT"]
+    q.client.db_dialect = db_settings["DB-DIALECT"]["DB_TYPE"]
+    q.client.host_name = db_settings["LOCAL_DB_CONFIG"]["HOST_NAME"]
+    q.client.user_name = db_settings["LOCAL_DB_CONFIG"]["USER_NAME"]
+    q.client.password = db_settings["LOCAL_DB_CONFIG"]["PASSWORD"]
+    q.client.db_name = db_settings["LOCAL_DB_CONFIG"]["DB_NAME"]
+    q.client.port = db_settings["LOCAL_DB_CONFIG"]["PORT"]
 
     tables, tables_info = get_table_keys(f"{tmp_path}/data/tables.json", None)
     table_info = tables_info[tables[0]] if len(tables) > 0 else None
 
-    q.user.table_info_path = table_info["schema_info_path"] if len(tables) > 0 else None
-    q.user.table_samples_path = table_info["samples_path"] if len(tables) > 0 else None
-    q.user.sample_qna_path = table_info["samples_qa"] if len(tables) > 0 else None
-    q.user.table_name = tables[0] if len(tables) > 0 else None
+    q.client.table_info_path = table_info["schema_info_path"] if len(tables) > 0 else None
+    q.client.table_samples_path = table_info["samples_path"] if len(tables) > 0 else None
+    q.client.sample_qna_path = table_info["samples_qa"] if len(tables) > 0 else None
+    q.client.table_name = tables[0] if len(tables) > 0 else None
 
-    q.user.model_choices = MODEL_CHOICE_MAP_DEFAULT
-    q.user.eval_mode = False
+    q.client.model_choices = MODEL_CHOICE_MAP_DEFAULT
+    q.client.eval_mode = False
 
 
 async def client_variable(q: Q):
@@ -130,15 +130,15 @@ async def chat(q: Q):
         with open(f"{tmp_path}/data/tables.json", "r") as json_file:
             meta_data = json.load(json_file)
             for table in tables:
-                original_name = meta_data[table].get("original_name", q.user.original_name)
+                original_name = meta_data[table].get("original_name", q.client.original_name)
                 table_names.append(ui.choice(table, f"{original_name}"))
 
-    MODEL_CHOICE_MAP = q.user.model_choices
+    MODEL_CHOICE_MAP = q.client.model_choices
     model_choices = [ui.choice(_key, _key) for _key in MODEL_CHOICE_MAP.keys()]
-    q.user.model_choice_dropdown = q.args.model_choice_dropdown = "h2ogpt-sql-sqlcoder-34b-alpha"
+    q.client.model_choice_dropdown = q.args.model_choice_dropdown = "h2ogpt-sql-sqlcoder-34b-alpha"
 
     task_choices = [ui.choice("q_a", "Ask Questions"), ui.choice("sqld", "Debugging")]
-    q.user.task_choice_dropdown = q.args.task_dropdown = "q_a"
+    q.client.task_choice_dropdown = q.args.task_dropdown = "q_a"
 
     chat_card_command_items = [
         ui.command(name="download_accept", label="Download QnA history", icon="Download"),
@@ -168,7 +168,7 @@ async def chat(q: Q):
                     label="Table",
                     required=True,
                     choices=table_names,
-                    value=q.user.table_name if q.user.table_name else None,
+                    value=q.client.table_name if q.client.table_name else None,
                     trigger=True,
                 ),
                 ui.dropdown(
@@ -176,7 +176,7 @@ async def chat(q: Q):
                     label="Model Choice",
                     required=True,
                     choices=model_choices,
-                    value=q.user.model_choice_dropdown if q.user.model_choice_dropdown else None,
+                    value=q.client.model_choice_dropdown if q.client.model_choice_dropdown else None,
                     trigger=True,
                 ),
             ],
@@ -193,7 +193,7 @@ async def chat(q: Q):
                     label="Mode",
                     required=True,
                     choices=task_choices,
-                    value=q.user.task_choice_dropdown if q.user.task_choice_dropdown else None,
+                    value=q.client.task_choice_dropdown if q.client.task_choice_dropdown else None,
                     trigger=True,
                 )
             ],
@@ -275,13 +275,13 @@ async def chatbot(q: Q):
     # Append user message.
     q.page["chat_card"].data += [q.args.chatbot, True]
 
-    if q.page["select_tables"].table_dropdown.value is None or q.user.table_name is None:
+    if q.page["select_tables"].table_dropdown.value is None or q.client.table_name is None:
         q.page["chat_card"].data += ["Please select a table to continue!", False]
         return
 
     if (
-        f"Table {q.user.table_dropdown} selected" in q.args.chatbot
-        or f"Model {q.user.model_choice_dropdown} selected" in q.args.chatbot
+        f"Table {q.client.table_dropdown} selected" in q.args.chatbot
+        or f"Model {q.client.model_choice_dropdown} selected" in q.args.chatbot
         or f"mode selected" in q.args.chatbot
     ):
         return
@@ -289,7 +289,7 @@ async def chatbot(q: Q):
     # Append bot response.
     question = f"{q.args.chatbot}"
     # Check on task choice.
-    if q.user.task_dropdown == "sqld" or q.args.task_dropdown == "sqld":
+    if q.client.task_dropdown == "sqld" or q.args.task_dropdown == "sqld":
         question = f"Execute SQL:\n{q.args.chatbot}"
         q.args.debug_mode = True
     logging.info(f"Question: {question}")
@@ -299,29 +299,29 @@ async def chatbot(q: Q):
     # 2. "Try harder mode (THM)" Slow approach by using the diverse beam search
     llm_response = None
     try:
-        if q.args.chatbot and ("preview data" in q.args.chatbot.lower() or "data preview" in q.args.chatbot.lower() or "preview" in q.args.chatbot.lower()) or f"preview {q.user.table_name}" in q.args.chatbot.lower():
-            _response_df = data_preview(q.user.table_name)
+        if q.args.chatbot and ("preview data" in q.args.chatbot.lower() or "data preview" in q.args.chatbot.lower() or "preview" in q.args.chatbot.lower()) or f"preview {q.client.table_name}" in q.args.chatbot.lower():
+            _response_df = data_preview(q.client.table_name)
             # Format as markdown table
             if not _response_df.empty:
                 df_markdown = make_markdown_table(fields = _response_df.columns.tolist(), rows=_response_df.values.tolist())
                 n_cols = len(_response_df.columns)
                 llm_response = f"The selected dataset has total number of {n_cols} columns.\nBelow is quick preview:\n{df_markdown}"
         elif q.args.chatbot and (q.args.chatbot.lower() == "recommend questions" or q.args.chatbot.lower() == "recommend qs"):
-            llm_response = recommend_suggestions(cache_path=q.user.table_info_path, table_name=q.user.table_name)
+            llm_response = recommend_suggestions(cache_path=q.client.table_info_path, table_name=q.client.table_name)
             if not llm_response:
                 llm_response = "Something went wrong, check the API Keys provided."
             logging.info(f"Recommended Questions:\n{llm_response}")
             q.args.chatbot = None
         elif q.args.chatbot and q.args.chatbot.lower() == "db setup":
             llm_response, err = db_setup(
-                db_name=q.user.db_name,
-                hostname=q.user.host_name,
-                user_name=q.user.user_name,
-                password=q.user.password,
-                port=q.user.port,
-                table_info_path=q.user.table_info_path,
-                table_samples_path=q.user.table_samples_path,
-                table_name=q.user.table_name,
+                db_name=q.client.db_name,
+                hostname=q.client.host_name,
+                user_name=q.client.user_name,
+                password=q.client.password,
+                port=q.client.port,
+                table_info_path=q.client.table_info_path,
+                table_samples_path=q.client.table_samples_path,
+                table_name=q.client.table_name,
             )
         elif q.args.chatbot and q.args.chatbot.lower() == "regenerate" or q.args.regenerate:
             # Attempts to regenerate response on the last supplied query
@@ -329,10 +329,10 @@ async def chatbot(q: Q):
             if q.client.query is not None and q.client.query.strip() != "":
                 llm_response, alt_response, err = ask(
                     question=q.client.query,
-                    sample_queries_path=q.user.sample_qna_path,
-                    table_info_path=q.user.table_info_path,
-                    table_name=q.user.table_name,
-                    model_name=q.user.model_choice_dropdown,
+                    sample_queries_path=q.client.sample_qna_path,
+                    table_info_path=q.client.table_info_path,
+                    table_name=q.client.table_name,
+                    model_name=q.client.model_choice_dropdown,
                     is_regenerate=True,
                     is_regen_with_options=False
                 )
@@ -348,10 +348,10 @@ async def chatbot(q: Q):
             if q.client.query is not None and q.client.query.strip() != "":
                 llm_response, alt_response, err = ask(
                     question=q.client.query,
-                    sample_queries_path=q.user.sample_qna_path,
-                    table_info_path=q.user.table_info_path,
-                    table_name=q.user.table_name,
-                    model_name=q.user.model_choice_dropdown,
+                    sample_queries_path=q.client.sample_qna_path,
+                    table_info_path=q.client.table_info_path,
+                    table_name=q.client.table_name,
+                    model_name=q.client.model_choice_dropdown,
                     is_regenerate=False,
                     is_regen_with_options=True
                 )
@@ -370,10 +370,10 @@ async def chatbot(q: Q):
             q.client.query = question
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 llm_response, alt_response, err = await q.exec(pool, ask, question=q.client.query,
-                    sample_queries_path=q.user.sample_qna_path,
-                    table_info_path=q.user.table_info_path,
-                    table_name=q.user.table_name,
-                    model_name=q.user.model_choice_dropdown,
+                    sample_queries_path=q.client.sample_qna_path,
+                    table_info_path=q.client.table_info_path,
+                    table_name=q.client.table_name,
+                    model_name=q.client.model_choice_dropdown,
                     debug_mode=q.args.debug_mode
                 )
             llm_response = "\n".join(llm_response)
@@ -469,20 +469,20 @@ async def fileupload(q: Q):
             logging.info(f"Table metadata: {table_metadata}")
             update_tables(f"{tmp_path}/data/tables.json", table_metadata)
 
-            q.user.table_name = usr_table_name
-            q.user.table_samples_path = usr_samples_path
-            q.user.table_info_path = usr_info_path
-            q.user.sample_qna_path = usr_sample_qa
+            q.client.table_name = usr_table_name
+            q.client.table_samples_path = usr_samples_path
+            q.client.table_info_path = usr_info_path
+            q.client.sample_qna_path = usr_sample_qa
 
             n_rows, db_resp = db_setup(
-                db_name=q.user.db_name,
-                hostname=q.user.host_name,
-                user_name=q.user.user_name,
-                password=q.user.password,
-                port=q.user.port,
-                table_info_path=q.user.table_info_path,
-                table_samples_path=q.user.table_samples_path,
-                table_name=q.user.table_name,
+                db_name=q.client.db_name,
+                hostname=q.client.host_name,
+                user_name=q.client.user_name,
+                password=q.client.password,
+                port=q.client.port,
+                table_info_path=q.client.table_info_path,
+                table_samples_path=q.client.table_samples_path,
+                table_name=q.client.table_name,
             )
             logging.info(f"DB updates: \n {db_resp}")
             if "error" in str(db_resp).lower():
@@ -506,7 +506,7 @@ async def on_settings(q: Q):
     clear_cards(q)  # When routing, drop all the cards except of the main ones (header, sidebar, meta).
     add_card(q, "settings_header", ui.form_card(box="horizontal", title="Configure", items=[]))
 
-    toggle_state = q.user.eval_mode if q.user.eval_mode else False
+    toggle_state = q.client.eval_mode if q.client.eval_mode else False
     add_card(
         q,
         "settings",
@@ -628,14 +628,14 @@ async def submit_table(q: Q):
         table_name = table_key.lower().replace(" ", "_")
         _, table_info = get_table_keys(f"{tmp_path}/data/tables.json", table_name)
 
-        q.user.table_info_path = table_info["schema_info_path"]
-        q.user.table_samples_path = table_info["samples_path"]
-        q.user.sample_qna_path = table_info["samples_qa"]
-        q.user.table_name = table_key.replace(" ", "_")
-        q.user.original_name = table_info["original_name"]
+        q.client.table_info_path = table_info["schema_info_path"]
+        q.client.table_samples_path = table_info["samples_path"]
+        q.client.sample_qna_path = table_info["samples_qa"]
+        q.client.table_name = table_key.replace(" ", "_")
+        q.client.original_name = table_info["original_name"]
         q.page["select_tables"].table_dropdown.value = table_name
     else:
-        q.page["select_tables"].table_dropdown.value = q.user.table_name
+        q.page["select_tables"].table_dropdown.value = q.client.table_name
     await q.page.save()
 
 
@@ -762,21 +762,21 @@ def upload_demo_examples(q: Q):
         }
         update_tables(f"{tmp_path}/data/tables.json", table_metadata)
 
-        q.user.org_table_name = org_table_name
-        q.user.table_name = usr_table_name
-        q.user.table_samples_path = f"{sample_data_path}/sleep_health_and_lifestyle_dataset.csv"
-        q.user.table_info_path = f"{sample_data_path}/table_info.jsonl"
-        q.user.sample_qna_path = None
+        q.client.org_table_name = org_table_name
+        q.client.table_name = usr_table_name
+        q.client.table_samples_path = f"{sample_data_path}/sleep_health_and_lifestyle_dataset.csv"
+        q.client.table_info_path = f"{sample_data_path}/table_info.jsonl"
+        q.client.sample_qna_path = None
 
         _, db_resp = db_setup(
-            db_name=q.user.db_name,
-            hostname=q.user.host_name,
-            user_name=q.user.user_name,
-            password=q.user.password,
-            port=q.user.port,
-            table_info_path=q.user.table_info_path,
-            table_samples_path=q.user.table_samples_path,
-            table_name=q.user.table_name,
+            db_name=q.client.db_name,
+            hostname=q.client.host_name,
+            user_name=q.client.user_name,
+            password=q.client.password,
+            port=q.client.port,
+            table_info_path=q.client.table_info_path,
+            table_samples_path=q.client.table_samples_path,
+            table_name=q.client.table_name,
         )
         logging.info(f"DB updated with demo examples: \n {db_resp}")
     q.args.table_dropdown = usr_table_name
@@ -791,18 +791,18 @@ async def on_event(q: Q):
         q.args.chatbot = "try harder"
     elif q.args.regenerate:
         q.args.chatbot = "regenerate"
-    q.user.eval_mode  = False
+    q.client.eval_mode  = False
 
     if q.args.suggest:
         q.args.chatbot = "Recommend questions"
         await chatbot(q)
         event_handled = True
     if q.args.eval_mode:
-        q.user.eval_mode = True
-        q.user.model_choices = MODEL_CHOICE_MAP_EVAL_MODE
+        q.client.eval_mode = True
+        q.client.model_choices = MODEL_CHOICE_MAP_EVAL_MODE
         await chat(q)
         event_handled = True
-    if q.args.table_dropdown and not q.args.chatbot and q.user.table_name != q.args.table_dropdown:
+    if q.args.table_dropdown and not q.args.chatbot and q.client.table_name != q.args.table_dropdown:
         logging.info(f"User selected table: {q.args.table_dropdown}")
         await submit_table(q)
         q.args.chatbot = f"Table {q.args.table_dropdown} selected"
@@ -810,20 +810,20 @@ async def on_event(q: Q):
         event_handled = True
     if (
         q.args.model_choice_dropdown
-        and not q.args.chatbot and q.args.model_choice_dropdown != q.user.model_choice_dropdown
+        and not q.args.chatbot and q.args.model_choice_dropdown != q.client.model_choice_dropdown
     ):
         logging.info(f"User selected model type: {q.args.model_choice_dropdown}")
-        q.user.model_choice_dropdown = q.args.model_choice_dropdown
-        q.page["select_tables"].model_choice_dropdown.value = q.user.model_choice_dropdown
-        q.args.chatbot = f"Model {q.user.model_choice_dropdown} selected"
+        q.client.model_choice_dropdown = q.args.model_choice_dropdown
+        q.page["select_tables"].model_choice_dropdown.value = q.client.model_choice_dropdown
+        q.args.chatbot = f"Model {q.client.model_choice_dropdown} selected"
         # Refresh response is triggered when user selects a table via dropdown
         q.args.model_choice_dropdown = None
         event_handled = True
-    if q.args.task_dropdown and not q.args.chatbot and q.user.task_dropdown != q.args.task_dropdown:
+    if q.args.task_dropdown and not q.args.chatbot and q.client.task_dropdown != q.args.task_dropdown:
         logging.info(f"User selected task: {q.args.task_dropdown}")
-        q.user.task_dropdown = q.args.task_dropdown
-        q.page["task_choice"].task_dropdown.value = q.user.task_dropdown
-        q.args.chatbot = f"'{TASK_CHOICE[q.user.task_dropdown]}' mode selected"
+        q.client.task_dropdown = q.args.task_dropdown
+        q.page["task_choice"].task_dropdown.value = q.client.task_dropdown
+        q.args.chatbot = f"'{TASK_CHOICE[q.client.task_dropdown]}' mode selected"
         q.args.task_dropdown = None
         # Refresh response is triggered when user selects a table via dropdown
         event_handled = True
@@ -835,7 +835,7 @@ async def on_event(q: Q):
         question = q.client.query
         _val = q.client.llm_response
         # Currently, any manual input by the user is a Question by default
-        table_name = q.user.table_name if q.user.table_name else "default"
+        table_name = q.client.table_name if q.client.table_name else "default"
         _is_invalid = True if q.args.save_rejected_conversation else False
         _msg = (
             "Conversation saved successfully!"
@@ -859,12 +859,12 @@ async def on_event(q: Q):
         q.page["chat_card"].data += [_msg, False]
         event_handled = True
     elif q.args.download_accept:
-        result_path = f"{base_path}/var/lib/tmp/.cache/{q.user.table_name}/history.jsonl"
+        result_path = f"{base_path}/var/lib/tmp/.cache/{q.client.table_name}/history.jsonl"
         # Check if path exists
         # If the model selected is GPT models from openAI then disable download
         # We don't want to use those for further improvements externally.
-        if Path(result_path).exists() and "gpt-4" not in q.user.model_choice_dropdown and "gpt-3.5-turbo" not in q.user.model_choice_dropdown:
-            logging.info(f"Downloading accepted QnA history for table: {q.user.table_name}")
+        if Path(result_path).exists() and "gpt-4" not in q.client.model_choice_dropdown and "gpt-3.5-turbo" not in q.client.model_choice_dropdown:
+            logging.info(f"Downloading accepted QnA history for table: {q.client.table_name}")
             (server_path,) = await q.site.upload([result_path])
             q.page["meta"].script = ui.inline_script(f'window.open("{server_path}", "_blank");')
             os.remove(result_path)
@@ -873,9 +873,9 @@ async def on_event(q: Q):
             _msg = "No history found!"
         q.page["chat_card"].data += [_msg, False]
         event_handled = True
-    elif q.args.download_reject and "gpt-4" not in q.user.model_choice_dropdown and "gpt-3.5" not in q.user.model_choice_dropdown:
-        logging.info(f"Downloading rejected QnA history for table: {q.user.table_name}")
-        result_path = f"{base_path}/var/lib/tmp/.cache/{q.user.table_name}/invalid/history.jsonl"
+    elif q.args.download_reject and "gpt-4" not in q.client.model_choice_dropdown and "gpt-3.5" not in q.client.model_choice_dropdown:
+        logging.info(f"Downloading rejected QnA history for table: {q.client.table_name}")
+        result_path = f"{base_path}/var/lib/tmp/.cache/{q.client.table_name}/invalid/history.jsonl"
         if Path(result_path).exists():
             (server_path,) = await q.site.upload([result_path])
             q.page["meta"].script = ui.inline_script(f'window.open("{server_path}", "_blank");')
@@ -892,7 +892,7 @@ async def on_event(q: Q):
         logging.info(f"Switching to demo mode!")
         # If demo datasets are not present, register them.
         upload_demo_examples(q)
-        logging.info(f"Demo dataset selected: {q.user.table_name}")
+        logging.info(f"Demo dataset selected: {q.client.table_name}")
         await submit_table(q)
         sample_qs = """
         Data description: The Sleep Health and Lifestyle Dataset comprises 400 rows and 13 columns,
