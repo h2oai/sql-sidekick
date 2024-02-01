@@ -54,16 +54,6 @@ QUERY_PROMPT = """
                 # Add explanation and reasoning for each SQL query
             """
 
-# DEBUGGING_PROMPT = {
-# "system_prompt": "Act as a SQL expert for {dialect} database",
-# "user_prompt": """
-#     ### Help fix syntax errors for provided incorrect SQL Query.
-#     # Error: {ex_traceback}
-#     # Query:\n {qry_txt}
-#     # Output: Add ``` as prefix and ``` as suffix to generated SQL
-#     """,
-# }
-
 DEBUGGING_PROMPT = {
 "system_prompt": "Act as a SQL expert for {dialect} database",
 "user_prompt": """
