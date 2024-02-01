@@ -1,0 +1,90 @@
+[tool.poetry]
+name = "sql-sidekick"
+version = "0.2.2"
+license = "Apache-2.0 license"
+description = "An AI assistant for SQL generation"
+authors = [
+  "Pramit Choudhary <pramit.choudhary@h2o.ai>",
+  "Michal Malohlava <michal@h2o.ai>"
+]
+readme = "README.md"
+classifiers = [
+  "Development Status :: Alpha",
+  "Environment :: CLI",
+  "Intended Audience :: Developers, Analysts",
+  "License :: Apache-2.0 license",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.8+",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence"
+]
+packages = [{include = "sidekick"}]
+
+[tool.poetry.dependencies]
+python = ">=3.8.1,<=3.10"
+pandas = "^1.3.3"
+numpy = "^1.21.2"
+click = "^8.0.1"
+sqlalchemy = "^2.0.25"
+psycopg2-binary = "^2.9.6"
+colorama = "^0.4.6"
+llama_index = "^0.9.0"
+loguru = "^0.7.0"
+toml = "^0.10.2"
+sqlglot = "^12.2.0"
+sqlparse = "^0.4.4"
+transformers = "^4.29.0"
+sentence-transformers = "^2.2.2"
+torch = "2.0.1"
+sqlalchemy-utils = "^0.41.1"
+h2o-wave = "0.26.3"
+pandasql = "0.7.3"
+accelerate = "0.21.0"
+bitsandbytes = "0.41.0"
+InstructorEmbedding = "^1.0.1"
+h2ogpte = "1.2.7"
+openai = "^1.3.0"
+langchain-community = "^0.0.13"
+python-dotenv = "^1.0.0"
+databricks-sql-connector = "^3.0.1"
+
+[tool.poetry.scripts]
+sql-sidekick = "sidekick.prompter:cli"
+
+[tool.poetry.dev-dependencies]
+pylint = { version = "^2.12.2", allow-prereleases = true }
+flake8 = { version = "^4.0.1", allow-prereleases = true }
+black = { version = "21.12b0", allow-prereleases = true }
+pytest = { version = "^7.4.4", allow-prereleases = true }
+
+[tool.black]
+line-length = 120
+skip-string-normalization = true
+target-version = ['py38.16']
+include = '\.pyi?$'
+exclude = '''
+(
+  /(
+      \.eggs         # exclude a few common directories in the
+    | \.git          # root of the project
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | _build
+    | buck-out
+    | build
+    | dist
+  )/
+  | notebooks
+  | local
+)
+'''
+
+[tool.isort]
+line_length = 120
+multi_line_output = 3
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
