@@ -311,6 +311,7 @@ async def chatbot(q: Q):
             if not llm_response:
                 llm_response = "Something went wrong, check the API Keys provided."
             logging.info(f"Recommended Questions:\n{llm_response}")
+            q.args.chatbot = None
         elif q.args.chatbot and q.args.chatbot.lower() == "db setup":
             llm_response, err = db_setup(
                 db_name=q.user.db_name,
