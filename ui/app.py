@@ -22,7 +22,7 @@ from sidekick.utils import (MODEL_CHOICE_MAP_DEFAULT,
 
 # Load the config file and initialize required paths
 app_base_path = (Path(__file__).parent / "../").resolve()
-app_settings = toml.load(f"{app_base_path}/ui/app_config.toml")
+app_settings = toml.load(f"{app_base_path}/ui/ui_config.toml")
 # Below check is to handle the case when the app is running on the h2o.ai cloud or locally
 base_path = app_base_path if os.path.isdir("./.sidekickvenv/bin/") else "/meta_data"
 tmp_path = f"{base_path}/var/lib/tmp"
@@ -389,11 +389,11 @@ async def chatbot(q: Q):
 async def submit_url_keys(q: Q):
     # Read/Update env variable
     if q.args.textbox_remote_url:
-        env_settings["MODEL_INFO"]["RECOMMENDATION_MODEL_REMOTE_URL"] = q.args.textbox_remote_url
-        os.environ["RECOMMENDATION_MODEL_REMOTE_URL"] = q.args.textbox_remote_url
+        env_settings["MODEL_INFO"]["H2OGPTE_URL"] = q.args.textbox_remote_url
+        os.environ["H2OGPTE_URL"] = q.args.textbox_remote_url
     if q.args.textbox_h2o_api_key:
-        env_settings["MODEL_INFO"]["RECOMMENDATION_MODEL_API_KEY"] = q.args.textbox_h2o_api_key
-        os.environ["RECOMMENDATION_MODEL_API_KEY"] = q.args.textbox_h2o_api_key
+        env_settings["MODEL_INFO"]["H2OGPTE_API_TOKEN"] = q.args.textbox_h2o_api_key
+        os.environ["H2OGPTE_API_TOKEN"] = q.args.textbox_h2o_api_key
     if q.args.textbox_openai_api_key:
         env_settings["MODEL_INFO"]["OPENAI_API_KEY"] = q.args.textbox_openai_api_key
         os.environ["OPENAI_API_KEY"]  = q.args.textbox_openai_api_key
@@ -641,15 +641,16 @@ async def submit_table(q: Q):
 async def init(q: Q) -> None:
     q.client.timezone = "UTC"
     q.args.demo_mode = False
+    q.app.toml = toml.load("app.toml")
 
     username, profile_pic = q.auth.username, q.app.persona_path
     q.page["meta"] = ui.meta_card(
         script=heap_analytics(
-        userid=q.auth.subject,
-        event_properties=f"{{"
-          f"version: '{q.app.toml['App']['Version']}', "
-          f"product: '{q.app.toml['App']['Title']}'"
-          f"}}",
+            userid=q.auth.subject,
+            event_properties=f"{{"
+                             f"version: '{q.app.toml['App']['Version']}', "
+                             f"product: '{q.app.toml['App']['Title']}'"
+                             f"}}",
         ),
         box="",
         layouts=[
