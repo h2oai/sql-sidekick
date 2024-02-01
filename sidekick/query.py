@@ -444,7 +444,7 @@ class SQLGenerator:
             else:
                 if self.h2ogpt_client is None:
                     # Check if env variable has info about remote hosting
-                    remote_h2ogpt_base_url = os.environ.get("H2O_BASE_MODEL_URL", None)
+                    remote_h2ogpt_base_url = os.environ.get("H2OGPT_URL", None)
                     if model_name == 'h2ogpt-sql-sqlcoder-34b-alpha':
                         remote_h2ogpt_base_url = f"{remote_h2ogpt_base_url}:5000/v1"
                     elif model_name == 'h2ogpt-sql-sqlcoder2':
@@ -453,7 +453,7 @@ class SQLGenerator:
                         remote_h2ogpt_base_url = f"{remote_h2ogpt_base_url}:5002/v1"
                     else:
                         remote_h2ogpt_base_url = None
-                    remote_h2ogpt_key = os.environ.get("H2O_BASE_MODEL_API_KEY", None)
+                    remote_h2ogpt_key = os.environ.get("H2OGPT_API_TOKEN", None)
                     _api_key = remote_h2ogpt_key if remote_h2ogpt_key else "EMPTY"
                     if remote_h2ogpt_base_url:
                         client_args = dict(base_url=remote_h2ogpt_base_url, api_key=_api_key, timeout=20.0)

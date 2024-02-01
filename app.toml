@@ -27,3 +27,18 @@ Value = "20M"
 Name = "HEAP_ID"
 Secret = "heap-analytics"
 SecretKey = "id"
+
+[[Env]]
+Name = "H2OGPT_API_TOKEN"
+Secret = "h2ogpt-oss"
+SecretKey = "h2ogpt-key"
+
+[[Env]]
+Name = "H2OGPTE_API_TOKEN"
+Secret = "h2ogpte-secret-token"
+SecretKey = "h2ogpte-api-token"
+
+[[Env]]
+Name = "H2OGPTE_URL"
+Secret = "h2ogpte-secret-url"
+SecretKey = "h2ogpte-url"
