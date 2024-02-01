@@ -548,8 +548,8 @@ def check_vulnerability(input_query: str):
     # Step 2 is optional, if remote url is provided, check for SQL injection patterns in the generated SQL code via LLM
     # Currently, only support only for models as an endpoints
     logger.debug(f"Requesting additional scan using configured models")
-    remote_url = os.environ["RECOMMENDATION_MODEL_REMOTE_URL"]
-    api_key = os.environ["RECOMMENDATION_MODEL_API_KEY"]
+    remote_url = os.environ["H2OGPTE_URL"]
+    api_key = os.environ["H2OGPTE_API_TOKEN"]
 
     _system_prompt = GUARDRAIL_PROMPT["system_prompt"].strip()
     output_schema = """{
@@ -618,12 +618,13 @@ def generate_suggestions(remote_url, client_key:str, column_names: list, n_qs: i
         input_prompt  = RECOMMENDATION_PROMPT.format(data_schema=column_info, n_questions=n_qs
         )
 
+        recommender_model = os.getenv("RECOMMENDATION_MODEL", "h2oai/h2ogpt-4096-llama2-70b-chat")
         client = H2OGPTE(address=remote_url, api_key=client_key)
         text_completion = client.answer_question(
             system_prompt=f"Act as a data analyst, based on below data schema help answer the question",
             text_context_list=[],
             question=input_prompt,
-            llm='h2oai/h2ogpt-4096-llama2-70b-chat'
+            llm=recommender_model
         )
         _res = text_completion.content.split("\n")[2:]
         results = "\n".join(_res)

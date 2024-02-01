@@ -37,7 +37,9 @@ h2o_key = env_settings["MODEL_INFO"]["H2OGPTE_API_TOKEN"]
 # h2ogpt base model urls
 h2ogpt_base_model_url = env_settings["MODEL_INFO"]["H2OGPT_URL"]
 h2ogpt_base_model_key = env_settings["MODEL_INFO"]["H2OGPT_API_TOKEN"]
+
 self_correction_model = env_settings["MODEL_INFO"]["SELF_CORRECTION_MODEL"]
+recommendation_model = env_settings["MODEL_INFO"]['RECOMMENDATION_MODEL']
 
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
 # Env variables
@@ -51,6 +53,8 @@ if not os.getenv("H2OGPTE_API_TOKEN"):
     os.environ["H2OGPTE_API_TOKEN"] = h2o_key
 if not os.getenv("SELF_CORRECTION_MODEL"):
     os.environ["SELF_CORRECTION_MODEL"] = self_correction_model
+if not os.getenv("RECOMMENDATION_MODEL"):
+    os.environ["RECOMMENDATION_MODEL"] = recommendation_model
 
 def color(fore="", back="", text=None):
     return f"{fore}{back}{text}{Style.RESET_ALL}"
