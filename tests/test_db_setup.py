@@ -2,8 +2,7 @@ import os
 from pathlib import Path
 
 import pytest
-from sidekick.prompter import ask, db_setup
-from sidekick.query import SQLGenerator
+from sidekick.prompter import db_setup
 from sidekick.schema_generator import generate_schema
 from sidekick.utils import setup_dir
 

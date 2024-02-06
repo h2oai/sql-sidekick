@@ -136,7 +136,7 @@ class SQLGenerator:
         self.eval_mode = eval_mode,
         self.debug_mode = debug_mode,
         self.remote_model = remote_model
-        self.openai_client = OpenAI() if openai_key else None
+        self.openai_client = OpenAI(api_key=openai_key) if openai_key else None
         self.h2ogpt_client = None
 
     def clear(self):
@@ -247,13 +247,30 @@ class SQLGenerator:
             _res = input_query
             self_correction_model = os.getenv("SELF_CORRECTION_MODEL", "h2oai/h2ogpt-4096-llama2-70b-chat")
             if "h2ogpt-" in self_correction_model:
-                from h2ogpte import H2OGPTE
-                client = H2OGPTE(address=remote_url, api_key=client_key)
-                text_completion = client.answer_question(
-                system_prompt=system_prompt,
-                text_context_list=[],
-                question=user_prompt,
-                llm=self_correction_model)
+                if remote_url and client_key:
+                    try:
+                        from h2ogpte import H2OGPTE
+                        client = H2OGPTE(address=remote_url, api_key=client_key)
+                        text_completion = client.answer_question(
+                        system_prompt=system_prompt,
+                        text_context_list=[],
+                        question=user_prompt,
+                        llm=self_correction_model)
+                    except Exception as e:
+                        logger.info(f"H2OGPTE client is not configured, reach out if API key is needed, {e}. Attempting to use H2OGPT client")
+                        # Make attempt to use h2ogpt client with OSS access
+                        _api_key = client_key if client_key else "***"
+                        client_args = dict(base_url=remote_url, api_key=_api_key, timeout=20.0)
+                        query_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
+                        h2ogpt_base_client = OpenAI(**client_args)
+                        h2ogpt_base_client.with_options(max_retries=3).chat.completions.create(
+                                    model=self_correction_model,
+                                    messages=query_msg,
+                                    max_tokens=512,
+                                    temperature=0.5,
+                                    stop="```",
+                                    seed=42)
+                        text_completion = completion.choices[0].message
                 _response = text_completion.content
             elif 'gpt-3.5' in self_correction_model.lower() or 'gpt-4' in self_correction_model.lower():
                 # Check if the API key is set, else inform user
@@ -268,7 +285,7 @@ class SQLGenerator:
                     )
                     _response = completion.choices[0].message.content
             else:
-                raise ValueError(f"Invalid model name: {self_correction_model}")
+                raise ValueError(f"Invalid request for: {self_correction_model}")
 
             _response = _response.split("```sql")
             _idx = [_response.index(_r) for _r in _response if _r.lower().strip().startswith("select")]
@@ -775,8 +792,8 @@ class SQLGenerator:
                 # Validate the generate SQL for parsing errors, along with dialect specific validation
                 # Note: Doesn't do well with handling date-time conversions
                 # e.g.
-                # sqlite: SELECT DATETIME(MAX(timestamp), '-5 minute') FROM demo WHERE isin_id = 'VM88109EGG92'
-                # postgres: SELECT MAX(timestamp) - INTERVAL '5 minutes' FROM demo where isin_id='VM88109EGG92'
+                # sqlite: SELECT DATETIME(MAX(timestamp), '-5 minute') FROM demo WHERE isin_id = 'VM123'
+                # postgres: SELECT MAX(timestamp) - INTERVAL '5 minutes' FROM demo where isin_id='VM123'
                 # Reference ticket: https://github.com/tobymao/sqlglot/issues/2011
                 result = res
                 try:
@@ -784,10 +801,15 @@ class SQLGenerator:
                 except (sqlglot.errors.ParseError, ValueError, RuntimeError) as e:
                     _, ex_value, ex_traceback = sys.exc_info()
                     logger.info(f"Attempting to fix syntax error ...,\n {e}")
-                    env_url = os.environ["H2OGPTE_URL"]
-                    env_key = os.environ["H2OGPTE_API_TOKEN"]
+
+                    h2o_client_url = os.getenv("H2OGPT_API_TOKEN", None)
+                    h2o_client_key = os.getenv("H2OGPTE_API_TOKEN", None)
+                    if not h2o_client_url or not h2o_client_key:
+                        logger.info(f"H2OGPTE client is not configured, attempting to use OSS H2OGPT client")
+                        h2o_client_url = os.getenv("H2OGPT_BASE_URL", None)
+                        h2o_client_key = os.getenv("H2OGPT_BASE_API_TOKEN", None)
                     try:
-                        result =  self.self_correction(input_query=res, error_msg=str(ex_traceback), remote_url=env_url, client_key=env_key)
+                        result =  self.self_correction(input_query=res, error_msg=str(ex_traceback), remote_url=h2o_client_url, client_key=h2o_client_key)
                     except Exception as se:
                     # Another exception occurred, return the original SQL
                         logger.info(f"We did the best we could to fix syntactical error, there might be still be some issues:\n {se}")

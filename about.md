@@ -4,7 +4,7 @@
 
 **Actively Being Maintained:** Yes (Demo release)
 
-**Last Updated:** January, 2024
+**Last Updated:** February, 2024
 
 **Allows uploading and using new model and data:** Yes
 

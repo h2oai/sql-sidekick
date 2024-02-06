@@ -13,6 +13,7 @@ import torch
 from colorama import Back as B
 from colorama import Fore as F
 from colorama import Style
+from dotenv import load_dotenv
 from pandasql import sqldf
 from sidekick.db_config import DBConfig
 from sidekick.logger import logger
@@ -23,7 +24,7 @@ from sidekick.utils import (REMOTE_LLMS, _execute_sql, check_vulnerability,
                             execute_query_pd, extract_table_names,
                             generate_suggestions, save_query, setup_dir)
 
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 
 # Load the config file and initialize required paths
 app_base_path = (Path(__file__).parent / "../").resolve()
@@ -34,23 +35,33 @@ db_dialect = env_settings["DB-DIALECT"]["DB_TYPE"]
 model_name = env_settings["MODEL_INFO"]["MODEL_NAME"]
 h2o_remote_url = env_settings["MODEL_INFO"]["H2OGPTE_URL"]
 h2o_key = env_settings["MODEL_INFO"]["H2OGPTE_API_TOKEN"]
-# h2ogpt base model urls
-h2ogpt_base_model_url = env_settings["MODEL_INFO"]["H2OGPT_URL"]
-h2ogpt_base_model_key = env_settings["MODEL_INFO"]["H2OGPT_API_TOKEN"]
+# h2ogpt code-sql model urls
+h2ogpt_sql_model_url = env_settings["MODEL_INFO"]["H2OGPT_URL"]
+h2ogpt_sql_model_key = env_settings["MODEL_INFO"]["H2OGPT_API_TOKEN"]
+
+h2ogpt_base_model_url = env_settings["MODEL_INFO"]["H2OGPT_BASE_URL"]
+h2ogpt_base_model_key = env_settings["MODEL_INFO"]["H2OGPT_BASE_API_TOKEN"]
 
 self_correction_model = env_settings["MODEL_INFO"]["SELF_CORRECTION_MODEL"]
 recommendation_model = env_settings["MODEL_INFO"]['RECOMMENDATION_MODEL']
 
+# Load .env file
+load_dotenv()
+
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
 # Env variables
 if not os.getenv("H2OGPT_URL"):
-    os.environ["H2OGPT_URL"] = h2ogpt_base_model_url
+    os.environ["H2OGPT_URL"] = h2ogpt_sql_model_url
 if not os.getenv("H2OGPT_API_TOKEN"):
-    os.environ["H2OGPT_API_TOKEN"] = h2ogpt_base_model_key
+    os.environ["H2OGPT_API_TOKEN"] = h2ogpt_sql_model_key
 if not os.getenv("H2OGPTE_URL"):
     os.environ["H2OGPTE_URL"] = h2o_remote_url
 if not os.getenv("H2OGPTE_API_TOKEN"):
     os.environ["H2OGPTE_API_TOKEN"] = h2o_key
+if not os.getenv("H2OGPT_BASE_URL"):
+    os.environ["H2OGPT_BASE_URL"] = h2ogpt_base_model_url
+if not os.getenv("H2OGPT_BASE_API_TOKEN"):
+    os.environ["H2OGPT_BASE_API_TOKEN"] = h2ogpt_base_model_url
 if not os.getenv("SELF_CORRECTION_MODEL"):
     os.environ["SELF_CORRECTION_MODEL"] = self_correction_model
 if not os.getenv("RECOMMENDATION_MODEL"):
@@ -163,20 +174,9 @@ def recommend_suggestions(cache_path: str, table_name: str, n_qs: int=10):
         r_url = _key =  None
         # First check for keys in env variables
         logger.debug(f"Checking environment settings ...")
-        env_url = os.environ["H2OGPTE_URL"]
-        env_key = os.environ["H2OGPTE_API_TOKEN"]
-        if env_url and env_key:
-            r_url = env_url
-            _key = env_key
-        elif Path(f"{app_base_path}/sidekick/configs/env.toml").exists():
-            # Reload .env info
-            logger.debug(f"Checking configuration file ...")
-            env_settings = toml.load(f"{app_base_path}/sidekick/configs/env.toml")
-            r_url = env_settings["MODEL_INFO"]["H2OGPTE_URL"]
-            _key = env_settings["MODEL_INFO"]["H2OGPTE_API_TOKEN"]
-        else:
-            raise Exception("Model url or key is missing.")
-
+        # By default use H2OGPTE client key and remote url
+        r_url = os.getenv("H2OGPTE_URL", None)
+        _key = os.getenv("H2OGPTE_API_TOKEN", None)
         result = generate_suggestions(remote_url=r_url, client_key=_key, column_names=column_names, n_qs=n_qs
                                       )
     except Exception as e:
