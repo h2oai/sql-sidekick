@@ -548,9 +548,13 @@ def check_vulnerability(input_query: str):
     # Step 2 is optional, if remote url is provided, check for SQL injection patterns in the generated SQL code via LLM
     # Currently, only support only for models as an endpoints
     logger.debug(f"Requesting additional scan using configured models")
-    remote_url = os.environ["H2OGPTE_URL"]
-    api_key = os.environ["H2OGPTE_API_TOKEN"]
-
+    h2ogpt_client_url = h2ogpt_client_key = None
+    h2ogpte_client_url = os.getenv("H2OGPT_API_TOKEN", None)
+    h2ogpte_client_key = os.getenv("H2OGPTE_API_TOKEN", None)
+    if not h2ogpte_client_url or not h2ogpte_client_key:
+        logger.info(f"H2OGPTE client is not configured, attempting to use OSS H2OGPT client")
+        h2ogpt_client_url = os.getenv("H2OGPT_BASE_URL", None)
+        h2ogpt_client_key = os.getenv("H2OGPT_BASE_API_TOKEN", None)
     _system_prompt = GUARDRAIL_PROMPT["system_prompt"].strip()
     output_schema = """{
         "type": "object",
@@ -567,15 +571,28 @@ def check_vulnerability(input_query: str):
     temp_result = None
     try:
         llm_scanner = os.getenv("VULNERABILITY_SCANNER", "h2oai/h2ogpt-4096-llama2-70b-chat")
-        if "h2ogpt-" in llm_scanner:
+        if "h2ogpt-" in llm_scanner and h2ogpte_client_url !='' and h2ogpte_client_url and h2ogpte_client_key != '' and h2ogpte_client_key:
             from h2ogpte import H2OGPTE
-            client = H2OGPTE(address=remote_url, api_key=api_key)
+            client = H2OGPTE(address=h2ogpte_client_url, api_key=h2ogpte_client_key)
             text_completion = client.answer_question(
             system_prompt=_system_prompt,
             text_context_list=[],
             question=_user_prompt,
             llm=llm_scanner)
             generated_res = text_completion.content.split("\n\n")[0]
+        elif h2ogpt_client_url:
+            _api_key = h2ogpt_client_key if h2ogpt_client_key else "EMPTY"
+            client_args = dict(base_url=h2ogpt_client_url, api_key=_api_key, timeout=20.0)
+            query_msg = [{"role": "system", "content": _system_prompt}, {"role": "user", "content": _user_prompt}]
+            h2ogpt_base_client = OpenAI(**client_args)
+            completion = h2ogpt_base_client.with_options(max_retries=3).chat.completions.create(
+                        model=llm_scanner,
+                        messages=query_msg,
+                        max_tokens=512,
+                        temperature=0.5,
+                        stop="```",
+                        seed=42)
+            generated_res = completion.choices[0].message.content.split("\n\n")[0]
         elif 'gpt-3.5' in llm_scanner.lower() or 'gpt-4' in llm_scanner.lower():
             # Check if the API key is set, else inform user
                 query_msg = [{"role": "system", "content": _system_prompt}, {"role": "user", "content": _user_prompt}]
@@ -590,7 +607,7 @@ def check_vulnerability(input_query: str):
                 )
                 generated_res = completion.choices[0].message.content
         else:
-            raise ValueError(f"Invalid model name: {llm_scanner}")
+            raise ValueError(f"Invalid request for: {llm_scanner}")
 
         _res = generated_res.strip()
         temp_result = json.loads(_res) if _res else None
@@ -615,17 +632,32 @@ def generate_suggestions(remote_url, client_key:str, column_names: list, n_qs: i
         results = "Currently not supported or remote API key is missing."
     else:
         column_info = ','.join(column_names)
-        input_prompt  = RECOMMENDATION_PROMPT.format(data_schema=column_info, n_questions=n_qs
+        _system_prompt = f"Act as a data analyst, based on below data schema help answer the question"
+        _user_prompt  = RECOMMENDATION_PROMPT.format(data_schema=column_info, n_questions=n_qs
         )
 
         recommender_model = os.getenv("RECOMMENDATION_MODEL", "h2oai/h2ogpt-4096-llama2-70b-chat")
-        client = H2OGPTE(address=remote_url, api_key=client_key)
-        text_completion = client.answer_question(
-            system_prompt=f"Act as a data analyst, based on below data schema help answer the question",
-            text_context_list=[],
-            question=input_prompt,
-            llm=recommender_model
-        )
+        try:
+            client = H2OGPTE(address=remote_url, api_key=client_key)
+            text_completion = client.answer_question(
+                system_prompt=_system_prompt,
+                text_context_list=[],
+                question=_user_prompt,
+                llm=recommender_model
+            )
+        except Exception as e:
+            logger.info(f"H2OGPTE client is not configured, reach out if API key is needed. {e}. Attempting to use H2OGPT client")
+            # Make attempt to use h2ogpt client with OSS access
+            client_args = dict(base_url=remote_url, api_key=client_key, timeout=20.0)
+            query_msg = [{"role": "system", "content": _system_prompt}, {"role": "user", "content": _user_prompt}]
+            h2ogpt_base_client = OpenAI(**client_args)
+            completion  = h2ogpt_base_client.with_options(max_retries=3).chat.completions.create(
+                        model=recommender_model,
+                        messages=query_msg,
+                        max_tokens=512,
+                        temperature=0.5,
+                        seed=42)
+            text_completion = completion.choices[0].message
         _res = text_completion.content.split("\n")[2:]
         results = "\n".join(_res)
     return results
