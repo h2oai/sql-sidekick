@@ -136,7 +136,7 @@ class SQLGenerator:
         self.eval_mode = eval_mode,
         self.debug_mode = debug_mode,
         self.remote_model = remote_model
-        self.openai_client = OpenAI() if openai_key else None
+        self.openai_client = OpenAI(api_key=openai_key) if openai_key else None
         self.h2ogpt_client = None
 
     def clear(self):

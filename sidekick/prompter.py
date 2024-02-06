@@ -174,15 +174,9 @@ def recommend_suggestions(cache_path: str, table_name: str, n_qs: int=10):
         r_url = _key =  None
         # First check for keys in env variables
         logger.debug(f"Checking environment settings ...")
-        r_url = os.getenv("H2OGPT_API_TOKEN", None)
+        # By default use H2OGPTE client key and remote url
+        r_url = os.getenv("H2OGPTE_URL", None)
         _key = os.getenv("H2OGPTE_API_TOKEN", None)
-        if not r_url or not _key:
-            logger.info(f"H2OGPTE client is not configured, attempting to use OSS H2OGPT client")
-            r_url = os.getenv("H2OGPT_BASE_URL", None)
-            _key = os.getenv("H2OGPT_BASE_API_TOKEN", None)
-        else:
-            raise Exception("Model url or key is missing.")
-
         result = generate_suggestions(remote_url=r_url, client_key=_key, column_names=column_names, n_qs=n_qs
                                       )
     except Exception as e:

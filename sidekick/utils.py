@@ -627,16 +627,14 @@ def check_vulnerability(input_query: str):
 
 def generate_suggestions(remote_url, client_key:str, column_names: list, n_qs: int=10):
     results = []
-    # Check if remote url contains h2o.ai/openai endpoints
-    if not remote_url or not client_key:
-        results = "Currently not supported or remote API key is missing."
-    else:
-        column_info = ','.join(column_names)
-        _system_prompt = f"Act as a data analyst, based on below data schema help answer the question"
-        _user_prompt  = RECOMMENDATION_PROMPT.format(data_schema=column_info, n_questions=n_qs
-        )
 
-        recommender_model = os.getenv("RECOMMENDATION_MODEL", "h2oai/h2ogpt-4096-llama2-70b-chat")
+    column_info = ','.join(column_names)
+    _system_prompt = f"Act as a data analyst, based on below data schema help answer the question"
+    _user_prompt  = RECOMMENDATION_PROMPT.format(data_schema=column_info, n_questions=n_qs
+    )
+
+    recommender_model = os.getenv("RECOMMENDATION_MODEL", "h2oai/h2ogpt-4096-llama2-70b-chat")
+    if "h2ogpt-" in recommender_model:
         try:
             client = H2OGPTE(address=remote_url, api_key=client_key)
             text_completion = client.answer_question(
@@ -646,6 +644,8 @@ def generate_suggestions(remote_url, client_key:str, column_names: list, n_qs: i
                 llm=recommender_model
             )
         except Exception as e:
+            remote_url = os.getenv("H2OGPT_BASE_URL", None)
+            client_key = os.getenv("H2OGPT_BASE_API_TOKEN", None)
             logger.info(f"H2OGPTE client is not configured, reach out if API key is needed. {e}. Attempting to use H2OGPT client")
             # Make attempt to use h2ogpt client with OSS access
             client_args = dict(base_url=remote_url, api_key=client_key, timeout=20.0)
@@ -658,6 +658,22 @@ def generate_suggestions(remote_url, client_key:str, column_names: list, n_qs: i
                         temperature=0.5,
                         seed=42)
             text_completion = completion.choices[0].message
-        _res = text_completion.content.split("\n")[2:]
-        results = "\n".join(_res)
+    elif 'gpt-3.5' in recommender_model.lower() or 'gpt-4' in recommender_model.lower():
+        # Check if the API key is set, else inform user
+        logger.info(f"Using OpenAI model: {recommender_model}")
+        _recommender_model = MODEL_CHOICE_MAP_EVAL_MODE[recommender_model.lower()]
+        query_msg = [{"role": "system", "content": _system_prompt}, {"role": "user", "content": _user_prompt}]
+        openai_client = OpenAI()
+        completion = openai_client.chat.completions.create(
+            model=_recommender_model,
+            messages=query_msg,
+            max_tokens=512,
+            seed=42,
+            temperature=0.7
+        )
+        text_completion = completion.choices[0].message
+    else:
+        raise Exception("Model url or key is missing.")
+    _res = text_completion.content.split("\n")[2:]
+    results = "\n".join(_res)
     return results
