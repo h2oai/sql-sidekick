@@ -24,7 +24,7 @@ from sidekick.utils import (REMOTE_LLMS, _execute_sql, check_vulnerability,
                             execute_query_pd, extract_table_names,
                             generate_suggestions, save_query, setup_dir)
 
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 
 # Load the config file and initialize required paths
 app_base_path = (Path(__file__).parent / "../").resolve()
