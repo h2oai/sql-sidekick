@@ -4,7 +4,7 @@ import os
 import random
 import sys
 from pathlib import Path
-
+import requests
 import numpy as np
 import openai
 import sqlglot
@@ -247,30 +247,30 @@ class SQLGenerator:
             _res = input_query
             self_correction_model = os.getenv("SELF_CORRECTION_MODEL", "h2oai/h2ogpt-4096-llama2-70b-chat")
             if "h2ogpt-" in self_correction_model:
-                if remote_url and client_key:
-                    try:
-                        from h2ogpte import H2OGPTE
-                        client = H2OGPTE(address=remote_url, api_key=client_key)
-                        text_completion = client.answer_question(
-                        system_prompt=system_prompt,
-                        text_context_list=[],
-                        question=user_prompt,
-                        llm=self_correction_model)
-                    except Exception as e:
-                        logger.info(f"H2OGPTE client is not configured, reach out if API key is needed, {e}. Attempting to use H2OGPT client")
-                        # Make attempt to use h2ogpt client with OSS access
-                        _api_key = client_key if client_key else "***"
-                        client_args = dict(base_url=remote_url, api_key=_api_key, timeout=20.0)
-                        query_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
-                        h2ogpt_base_client = OpenAI(**client_args)
-                        h2ogpt_base_client.with_options(max_retries=3).chat.completions.create(
-                                    model=self_correction_model,
-                                    messages=query_msg,
-                                    max_tokens=512,
-                                    temperature=0.5,
-                                    stop="```",
-                                    seed=42)
-                        text_completion = completion.choices[0].message
+                if remote_url and client_key and remote_url != "" and client_key != "":
+                    from h2ogpte import H2OGPTE
+                    client = H2OGPTE(address=remote_url, api_key=client_key)
+                    text_completion = client.answer_question(
+                    system_prompt=system_prompt,
+                    text_context_list=[],
+                    question=user_prompt,
+                    llm=self_correction_model)
+                else:
+                    logger.info(f"H2OGPTE client is not configured, attempting to use OSS H2OGPT client")
+                    h2o_client_url = os.getenv("H2OGPT_BASE_URL", None)
+                    h2o_client_key = os.getenv("H2OGPT_BASE_API_TOKEN", None)
+                    # Make attempt to use h2ogpt client with OSS access
+                    client_args = dict(base_url=h2o_client_url, api_key=h2o_client_key, timeout=20.0)
+                    query_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
+                    h2ogpt_base_client = OpenAI(**client_args)
+                    completion = h2ogpt_base_client.with_options(max_retries=3).chat.completions.create(
+                                model=self_correction_model,
+                                messages=query_msg,
+                                max_tokens=512,
+                                temperature=0.5,
+                                stop="```",
+                                seed=42)
+                    text_completion = completion.choices[0].message
                 _response = text_completion.content
             elif 'gpt-3.5' in self_correction_model.lower() or 'gpt-4' in self_correction_model.lower():
                 # Check if the API key is set, else inform user
@@ -390,7 +390,7 @@ class SQLGenerator:
         self,
         table_names: list,
         input_question: str,
-        model_name: str = "h2ogpt-sql-nsql-llama-2-7B",
+        model_name: str = "h2ogpt-sql-sqlcoder-7b-2",
     ):
         # TODO: Update needed to support multiple tables
         table_name = str(table_names[0].replace(" ", "_")).lower()
@@ -464,7 +464,7 @@ class SQLGenerator:
                     remote_h2ogpt_base_url = os.environ.get("H2OGPT_URL", None)
                     if model_name == 'h2ogpt-sql-sqlcoder-34b-alpha':
                         remote_h2ogpt_base_url = f"{remote_h2ogpt_base_url}:5000/v1"
-                    elif model_name == 'h2ogpt-sql-sqlcoder2':
+                    elif model_name == 'h2ogpt-sql-sqlcoder-7b-2':
                         remote_h2ogpt_base_url = f"{remote_h2ogpt_base_url}:5001/v1"
                     elif model_name == 'h2ogpt-sql-nsql-llama-2-7B':
                         remote_h2ogpt_base_url = f"{remote_h2ogpt_base_url}:5002/v1"
@@ -637,7 +637,7 @@ class SQLGenerator:
                     # Greedy decoding, for fast response
                     # Reset temperature to 0.5
                     current_temperature = 0.5
-                    if model_name == "h2ogpt-sql-sqlcoder2" or model_name == "h2ogpt-sql-sqlcoder-34b-alpha" or model_name == "h2ogpt-sql-nsql-llama-2-7B":
+                    if model_name == "h2ogpt-sql-sqlcoder-7b-2" or model_name == "h2ogpt-sql-sqlcoder-34b-alpha" or model_name == "h2ogpt-sql-nsql-llama-2-7B":
                         m_name = MODEL_CHOICE_MAP_EVAL_MODE.get(model_name, "h2ogpt-sql-sqlcoder-34b-alpha")
                         query_txt = [{"role": "user", "content": query},]
                         logger.debug(f"Generation with default temperature : {current_temperature}")
@@ -667,7 +667,7 @@ class SQLGenerator:
                     # throttle temperature for different result
                     logger.info("Regeneration requested on previous query ...")
                     logger.debug(f"Selected temperature for fast regeneration : {random_temperature}")
-                    if model_name == "h2ogpt-sql-sqlcoder2" or model_name == "h2ogpt-sql-sqlcoder-34b-alpha" or model_name == "h2ogpt-sql-nsql-llama-2-7B":
+                    if model_name == "h2ogpt-sql-sqlcoder-7b-2" or model_name == "h2ogpt-sql-sqlcoder-34b-alpha" or model_name == "h2ogpt-sql-nsql-llama-2-7B":
                         m_name = MODEL_CHOICE_MAP_EVAL_MODE.get(model_name, "h2ogpt-sql-sqlcoder-34b-alpha")
                         query_txt = [{"role": "user", "content": query},]
                         completion = self.h2ogpt_client.with_options(max_retries=3).chat.completions.create(
@@ -692,7 +692,7 @@ class SQLGenerator:
                     logger.debug(f"Temperature saved: {self.current_temps[model_name]}")
                 else:
                     logger.info("Regeneration with options requested on previous query ...")
-                    if model_name == "h2ogpt-sql-sqlcoder2" or model_name == "h2ogpt-sql-sqlcoder-34b-alpha" or model_name == "h2ogpt-sql-nsql-llama-2-7B":
+                    if model_name == "h2ogpt-sql-sqlcoder-7b-2" or model_name == "h2ogpt-sql-sqlcoder-34b-alpha" or model_name == "h2ogpt-sql-nsql-llama-2-7B":
                         logger.info("Generating diverse options, not enabled for remote models")
                         m_name = MODEL_CHOICE_MAP_EVAL_MODE.get(model_name, "h2ogpt-sql-sqlcoder-34b-alpha")
                         query_txt = [{"role": "user", "content": query},]
@@ -804,10 +804,6 @@ class SQLGenerator:
 
                     h2o_client_url = os.getenv("H2OGPT_API_TOKEN", None)
                     h2o_client_key = os.getenv("H2OGPTE_API_TOKEN", None)
-                    if not h2o_client_url or not h2o_client_key:
-                        logger.info(f"H2OGPTE client is not configured, attempting to use OSS H2OGPT client")
-                        h2o_client_url = os.getenv("H2OGPT_BASE_URL", None)
-                        h2o_client_key = os.getenv("H2OGPT_BASE_API_TOKEN", None)
                     try:
                         result =  self.self_correction(input_query=res, error_msg=str(ex_traceback), remote_url=h2o_client_url, client_key=h2o_client_key)
                     except Exception as se:

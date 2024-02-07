@@ -22,11 +22,9 @@ setup_dir(base_path)
 # Model 1:
 print(f"Download model 1...")
 snapshot_download(repo_id="NumbersStation/nsql-llama-2-7B", cache_dir=f"{base_path}/models/")
+
 # Model 2:
 print(f"Download model 2...")
-snapshot_download(repo_id="defog/sqlcoder2", cache_dir=f"{base_path}/models/")
-# Model 3:
-print(f"Download model 3...")
 snapshot_download(repo_id="defog/sqlcoder-34b-alpha", cache_dir=f"{base_path}/models/")
 
 print(f"Download embedding model...")

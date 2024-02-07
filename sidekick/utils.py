@@ -23,8 +23,9 @@ from sqlglot import Dialects
 from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
                           BitsAndBytesConfig)
 
+
 REMOTE_LLMS = ["h2ogpt-sql-sqlcoder-34b-alpha", "h2ogpt-sql-sqlcoder2", "h2ogpt-sql-nsql-llama-2-7B",
-                             "gpt-3.5-turbo", "gpt-4-8k", "gpt-4-1106-preview-128k"]
+               "h2ogpt-sql-sqlcoder-7b-2", "gpt-3.5-turbo", "gpt-4-8k", "gpt-4-1106-preview-128k"]
 
 # clone of models from https://huggingface.co/models
 # suffix `h2ogpt-sql-` is added to avoid conflict with the original models (we haven't done any changes to the original models yet)
@@ -33,6 +34,7 @@ MODEL_CHOICE_MAP_EVAL_MODE = {
     "h2ogpt-sql-sqlcoder-34b-alpha-4bit": "defog/sqlcoder-34b-alpha",
     "h2ogpt-sql-nsql-llama-2-7B-4bit": "NumbersStation/nsql-llama-2-7B",
     "h2ogpt-sql-sqlcoder2": "defog/sqlcoder2",
+    "h2ogpt-sql-sqlcoder-7b-2": "defog/sqlcoder-7b-2",
     "h2ogpt-sql-sqlcoder-34b-alpha": "defog/sqlcoder-34b-alpha",
     "h2ogpt-sql-nsql-llama-2-7B": "NumbersStation/nsql-llama-2-7B",
     "gpt-3.5-turbo": "gpt-3.5-turbo-1106",
@@ -47,6 +49,7 @@ MODEL_CHOICE_MAP_DEFAULT = {
     # "h2ogpt-sql-nsql-llama-2-7B-4bit": "NumbersStation/nsql-llama-2-7B",
     # "h2ogpt-sql-sqlcoder2": "defog/sqlcoder2",
     "h2ogpt-sql-sqlcoder-34b-alpha": "defog/sqlcoder-34b-alpha",
+    "h2ogpt-sql-sqlcoder-7b-2": "defog/sqlcoder-7b-2",
     "h2ogpt-sql-nsql-llama-2-7B": "NumbersStation/nsql-llama-2-7B"
 }
 
@@ -549,7 +552,7 @@ def check_vulnerability(input_query: str):
     # Currently, only support only for models as an endpoints
     logger.debug(f"Requesting additional scan using configured models")
     h2ogpt_client_url = h2ogpt_client_key = None
-    h2ogpte_client_url = os.getenv("H2OGPT_API_TOKEN", None)
+    h2ogpte_client_url = os.getenv("H2OGPTE_URL", None)
     h2ogpte_client_key = os.getenv("H2OGPTE_API_TOKEN", None)
     if not h2ogpte_client_url or not h2ogpte_client_key:
         logger.info(f"H2OGPTE client is not configured, attempting to use OSS H2OGPT client")

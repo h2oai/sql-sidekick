@@ -672,8 +672,8 @@ def ask(
                                 _err = _tmp[0].split("Error occurred:")[1] if len(_tmp) > 0 else None
                                 env_url = os.environ["H2OGPTE_URL"]
                                 env_key = os.environ["H2OGPTE_API_TOKEN"]
-                                corr_sql =  sql_g.self_correction(input_query=_val, error_msg=_err, remote_url=env_url, client_key=env_key)
-                                q_res, err = DBConfig.execute_query(query=corr_sql)
+                                corrected_sql =  sql_g.self_correction(input_query=_val, error_msg=_err, remote_url=env_url, client_key=env_key)
+                                q_res, err = DBConfig.execute_query(query=corrected_sql)
                                 if not 'Error occurred'.lower() in str(err).lower():
                                     err = None
                                 attempt += 1

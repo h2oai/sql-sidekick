@@ -33,6 +33,7 @@ ui_description = app_settings["WAVE_UI"]["SUB_TITLE"]
 
 # env variables
 env_settings = toml.load(f"{app_base_path}/sidekick/configs/env.toml")
+DEFAULT_MODEL = "h2ogpt-sql-sqlcoder-34b-alpha"
 
 # Pre-initialize the models for faster response
 def initialize_models():
@@ -41,7 +42,7 @@ def initialize_models():
     _ = SQLGenerator(
         db_url=None,
         openai_key=None,
-        model_name="h2ogpt-sql-sqlcoder-34b-alpha",
+        model_name=DEFAULT_MODEL,
         job_path=base_path,
         data_input_path="",
         sample_queries_path="",
@@ -135,7 +136,7 @@ async def chat(q: Q):
 
     MODEL_CHOICE_MAP = q.client.model_choices
     model_choices = [ui.choice(_key, _key) for _key in MODEL_CHOICE_MAP.keys()]
-    q.client.model_choice_dropdown = q.args.model_choice_dropdown = "h2ogpt-sql-sqlcoder-34b-alpha"
+    q.client.model_choice_dropdown = q.args.model_choice_dropdown = DEFAULT_MODEL
 
     task_choices = [ui.choice("q_a", "Ask Questions"), ui.choice("sqld", "Debugging")]
     q.client.task_choice_dropdown = q.args.task_dropdown = "q_a"

@@ -141,11 +141,15 @@ LIMIT 100
     assert result != input_q
     assert error is None
 
-@pytest.mark.parametrize("input_q, debugger", [("""SELECT CONCAT("age", " ", "heart_rate") AS "age_heart_rate" FROM "sleep_health_and_lifestyle" ORDER BY "age_heart_rate" DESC LIMIT 100
-    """, "h2oai/h2ogpt-4096-llama2-70b-chat"),
+@pytest.mark.parametrize("input_q, debugger, base_model", [("""SELECT CONCAT("age", " ", "heart_rate") AS "age_heart_rate" FROM "sleep_health_and_lifestyle" ORDER BY "age_heart_rate" DESC LIMIT 100
+    """, "h2oai/h2ogpt-4096-llama2-70b-chat", "h2ogpt-sql-sqlcoder-34b-alpha"),
 ("""SELECT CONCAT("age", " ", "heart_rate") AS "age_heart_rate" FROM "sleep_health_and_lifestyle" ORDER BY "age_heart_rate" DESC LIMIT 100
-    """, "gpt-3.5-turbo")])
-def test_input3(input_q, debugger):
+    """, "h2oai/h2ogpt-4096-llama2-70b-chat", "h2ogpt-sql-sqlcoder-34b-alpha"),
+("""SELECT CONCAT("age", " ", "heart_rate") AS "age_heart_rate" FROM "sleep_health_and_lifestyle" ORDER BY "age_heart_rate" DESC LIMIT 100
+    """, "h2oai/h2ogpt-4096-llama2-70b-chat", "h2ogpt-sql-sqlcoder-7b-2"),
+("""SELECT CONCAT("age", " ", "heart_rate") AS "age_heart_rate" FROM "sleep_health_and_lifestyle" ORDER BY "age_heart_rate" DESC LIMIT 100
+    """, "gpt-3.5-turbo", "h2ogpt-sql-sqlcoder-7b-2")])
+def test_input3(input_q, debugger, base_model):
     # There is no CONCAT function in SQLite
     os.environ["SELF_CORRECTION_MODEL"] = debugger
     question = f"Execute SQL:\n{input_q}"
@@ -155,12 +159,41 @@ def test_input3(input_q, debugger):
         sample_queries_path=None,
         table_name=table_name,
         is_command=False,
-        model_name="h2ogpt-sql-sqlcoder-34b-alpha",
+        model_name=base_model,
         is_regenerate=False,
         is_regen_with_options=False,
         execute_query=True,
         local_base_path=base_path,
         debug_mode=True,
+        guardrails=False,
+        self_correction=True
+    )
+    assert error == None
+    assert res != None
+
+# Fixing correlation function needs further investigation
+@pytest.mark.parametrize("input_q, debugger, base_model", [
+("""Correlation between sleep duration and quality of sleep""", "h2oai/h2ogpt-4096-llama2-70b-chat", "h2ogpt-sql-sqlcoder-34b-alpha"),
+("""Correlation between sleep duration and quality of sleep""", "h2oai/h2ogpt-4096-llama2-70b-chat", "h2ogpt-sql-sqlcoder-7b-2"),
+("""Correlation between sleep duration and quality of sleep""", "gpt-3.5-turbo", "h2ogpt-sql-sqlcoder-7b-2"),
+("""Correlation between sleep duration and quality of sleep" AS "s" LIMIT 100?""", "gpt-4-8k", "h2ogpt-sql-sqlcoder-7b-2")])
+def test_input4(input_q, debugger, base_model):
+    # There is no CONCAT function in SQLite
+    os.environ["SELF_CORRECTION_MODEL"] = debugger
+    question = f"Execute SQL:\n{input_q}"
+    print(f"Model Name/Debugger: {base_model}/{debugger}")
+    res, _, error = ask(
+        question=question,
+        table_info_path=table_info_path,
+        sample_queries_path=None,
+        table_name=table_name,
+        is_command=False,
+        model_name=base_model,
+        is_regenerate=False,
+        is_regen_with_options=False,
+        execute_query=True,
+        local_base_path=base_path,
+        debug_mode=False,
         guardrails=False,
         self_correction=True
     )
