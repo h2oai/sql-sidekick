@@ -29,13 +29,18 @@ Secret = "heap-analytics"
 SecretKey = "id"
 
 [[Env]]
+Name = "OPENAI_API_KEY"
+Secret = "h2o-internal-keys"
+SecretKey = "open_ai_key"
+
+[[Env]]
 Name = "H2OGPT_URL"
-Secret = "h2ogpt-oss-sqlsidekick"
+Secret = "h2ogpt-sql-oss-sqlsidekick"
 SecretKey = "h2ogpt-url"
 
 [[Env]]
 Name = "H2OGPT_API_TOKEN"
-Secret = "h2ogpt-oss-sqlsidekick"
+Secret = "h2ogpt-sql-oss-sqlsidekick"
 SecretKey = "h2ogpt-key"
 
 [[Env]]
@@ -47,3 +52,13 @@ SecretKey = "h2ogpte-url"
 Name = "H2OGPTE_API_TOKEN"
 Secret = "h2ogpte-sqlsidekick"
 SecretKey = "h2ogpte-key"
+
+[[Env]]
+Name = "H2OGPT_BASE_URL"
+Secret = "h2ogpt-base-sqlsidekick"
+SecretKey = "h2ogpt-base-url"
+
+[[Env]]
+Name = "H2OGPT_BASE_API_TOKEN"
+Secret = "h2ogpt-base-sqlsidekick"
+SecretKey = "h2ogpt-sql-key"
