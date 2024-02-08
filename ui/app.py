@@ -308,7 +308,8 @@ async def chatbot(q: Q):
                 n_cols = len(_response_df.columns)
                 llm_response = f"The selected dataset has total number of {n_cols} columns.\nBelow is quick preview:\n{df_markdown}"
         elif q.args.chatbot and (q.args.chatbot.lower() == "recommend questions" or q.args.chatbot.lower() == "recommend qs"):
-            llm_response = recommend_suggestions(cache_path=q.client.table_info_path, table_name=q.client.table_name)
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                    llm_response  = await q.exec(pool, recommend_suggestions, cache_path=q.client.table_info_path, table_name=q.client.table_name)
             if not llm_response:
                 llm_response = "Something went wrong, check the API Keys provided."
             logging.info(f"Recommended Questions:\n{llm_response}")
@@ -328,15 +329,15 @@ async def chatbot(q: Q):
             # Attempts to regenerate response on the last supplied query
             logging.info(f"Attempt for regeneration")
             if q.client.query is not None and q.client.query.strip() != "":
-                llm_response, alt_response, err = ask(
-                    question=q.client.query,
-                    sample_queries_path=q.client.sample_qna_path,
-                    table_info_path=q.client.table_info_path,
-                    table_name=q.client.table_name,
-                    model_name=q.client.model_choice_dropdown,
-                    is_regenerate=True,
-                    is_regen_with_options=False
-                )
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    llm_response, alt_response, err = await q.exec(pool, ask, question=q.client.query,
+                        sample_queries_path=q.client.sample_qna_path,
+                        table_info_path=q.client.table_info_path,
+                        table_name=q.client.table_name,
+                        model_name=q.client.model_choice_dropdown,
+                        is_regenerate=True,
+                        is_regen_with_options=False
+                    )
                 llm_response = "\n".join(llm_response)
             else:
                 llm_response = (
@@ -347,15 +348,16 @@ async def chatbot(q: Q):
             # Attempts to regenerate response on the last supplied query
             logging.info(f"Attempt for regeneration with options.")
             if q.client.query is not None and q.client.query.strip() != "":
-                llm_response, alt_response, err = ask(
-                    question=q.client.query,
-                    sample_queries_path=q.client.sample_qna_path,
-                    table_info_path=q.client.table_info_path,
-                    table_name=q.client.table_name,
-                    model_name=q.client.model_choice_dropdown,
-                    is_regenerate=False,
-                    is_regen_with_options=True
-                )
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    llm_response, alt_response, err = await q.exec(pool, ask,
+                        question=q.client.query,
+                        sample_queries_path=q.client.sample_qna_path,
+                        table_info_path=q.client.table_info_path,
+                        table_name=q.client.table_name,
+                        model_name=q.client.model_choice_dropdown,
+                        is_regenerate=False,
+                        is_regen_with_options=True
+                    )
                 response = "\n".join(llm_response)
                 if alt_response:
                     llm_response = response + "\n\n" + "**Alternate options:**\n" + "\n".join(alt_response)
