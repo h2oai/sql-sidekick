@@ -1,8 +1,10 @@
+import asyncio
 import concurrent.futures
 import gc
 import hashlib
 import json
 import os
+import time
 from pathlib import Path
 from typing import List, Optional
 
@@ -218,6 +220,7 @@ async def chat(q: Q):
         ui.form_card(
             box=ui.box("vertical", height="120px"),
             items=[
+                ui.progress(name='progress', label='Thinking ...', value=0),
                 ui.buttons(
                     [
                         ui.button(
@@ -269,6 +272,30 @@ One could start by learning about the dataset by asking questions like:
     logging.info(f"Chatbot response: {q.args.chatbot}")
 
 
+async def update_ui(q: Q, value: int):
+    q.page['additional_actions'].progress.value = value
+    await q.page.save()
+
+
+def _execute_suggestions(q: Q, loop: asyncio.AbstractEventLoop):
+    count = 0
+    time_out = 50
+    future = executor = None
+    result = task = None
+    while count < time_out:
+        if not task:
+            executor = concurrent.futures.ThreadPoolExecutor()
+            task  = executor.submit(recommend_suggestions, cache_path=q.client.table_info_path, table_name=q.client.table_name)
+        time.sleep(1)
+        count += 1
+        if not future or future.done():
+            future = asyncio.ensure_future(update_ui(q, count / time_out), loop=loop)
+            if task.done():
+                result = task.result(timeout=1)
+                break
+    return result
+
+
 @on("chatbot")
 async def chatbot(q: Q):
     q.page["sidebar"].value = "#chat"
@@ -308,8 +335,10 @@ async def chatbot(q: Q):
                 n_cols = len(_response_df.columns)
                 llm_response = f"The selected dataset has total number of {n_cols} columns.\nBelow is quick preview:\n{df_markdown}"
         elif q.args.chatbot and (q.args.chatbot.lower() == "recommend questions" or q.args.chatbot.lower() == "recommend qs"):
+            await q.page.save()
+            loop = asyncio.get_event_loop()
             with concurrent.futures.ThreadPoolExecutor() as pool:
-                    llm_response  = await q.exec(pool, recommend_suggestions, cache_path=q.client.table_info_path, table_name=q.client.table_name)
+                llm_response = await q.exec(pool, _execute_suggestions, q, loop=loop)
             if not llm_response:
                 llm_response = "Something went wrong, check the API Keys provided."
             logging.info(f"Recommended Questions:\n{llm_response}")
