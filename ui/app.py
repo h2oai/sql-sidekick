@@ -254,19 +254,18 @@ async def chat(q: Q):
             ],
         ),
     ),
-    if not q.args.chatbot:
-        add_card(
-            q,
-            "chat_card",
-            ui.chatbot_card(
-                box=ui.box("vertical", height="500px"),
-                name="chatbot",
-                placeholder = "Type your question here, happy to help!",
-                data=data(fields="content from_user", t="list", size=-50, rows=q.client.chat_buffer),
-                commands=chat_card_command_items,
-                events=["scroll_up"],
-            ),
+    add_card(
+        q,
+        "chat_card",
+        ui.chatbot_card(
+            box=ui.box("vertical", height="500px"),
+            name="chatbot",
+            placeholder = "Type your question here, happy to help!",
+            data=data(fields="content from_user", t="list", size=-50, rows=q.client.chat_buffer),
+            commands=chat_card_command_items,
+            events=["scroll_up"],
         ),
+    ),
 
     # additional actions
     await draw_additional_actions(q)
@@ -298,6 +297,7 @@ def _execute_suggestions(q: Q, loop: asyncio.AbstractEventLoop, time_out=50):
 @on("chatbot")
 async def chatbot(q: Q):
     q.page["sidebar"].value = "#chat"
+    q.args.re_drawn = False
 
     # Append user message.
     q.client.chat_buffer.append([q.args.chatbot, True])
@@ -337,8 +337,6 @@ async def chatbot(q: Q):
                 llm_response = f"The selected dataset has total number of {n_cols} columns.\nBelow is quick preview:\n{df_markdown}"
         elif q.args.chatbot and (q.args.chatbot.lower() == "recommend questions" or q.args.chatbot.lower() == "recommend qs"):
             await q.page.save()
-            #_rows = q.page["chat_card"].data.rows
-            #import pdb; pdb.set_trace()
             del q.page["chat_card"]
             del q.page["additional_actions"]
             add_card(
@@ -373,7 +371,7 @@ async def chatbot(q: Q):
                 events=["scroll_up"],
             )),
             await draw_additional_actions(q)
-            q.args.chatbot = None
+            q.args.re_drawn = True
         elif q.args.chatbot and q.args.chatbot.lower() == "db setup":
             llm_response, err = db_setup(
                 db_name=q.client.db_name,
@@ -447,6 +445,8 @@ async def chatbot(q: Q):
         llm_response = "Something went wrong, try executing the query again!"
     q.client.llm_response = llm_response
     q.client.chat_buffer.append([llm_response, False])
+    if not q.args.re_drawn:
+        q.page["chat_card"].data += [llm_response, False]
 
 
 @on("submit_url_keys")
@@ -851,12 +851,15 @@ async def on_event(q: Q):
 
     if q.args.regenerate_with_options:
         q.args.chatbot = "try harder"
+        q.client.chat_buffer.append([q.args.chatbot, True])
     elif q.args.regenerate:
         q.args.chatbot = "regenerate"
+        q.client.chat_buffer.append([q.args.chatbot, True])
     q.client.eval_mode  = False
 
     if q.args.suggest:
         q.args.chatbot = "Recommend questions"
+        q.client.chat_buffer.append([q.args.chatbot, True])
         await chatbot(q)
         event_handled = True
     if q.args.eval_mode:
@@ -868,6 +871,7 @@ async def on_event(q: Q):
         logging.info(f"User selected table: {q.args.table_dropdown}")
         await submit_table(q)
         q.args.chatbot = f"Table {q.args.table_dropdown} selected"
+        q.client.chat_buffer.append([q.args.chatbot, True])
         # Refresh response is triggered when user selects a table via dropdown
         event_handled = True
     if (
@@ -878,6 +882,7 @@ async def on_event(q: Q):
         q.client.model_choice_dropdown = q.args.model_choice_dropdown
         q.page["select_tables"].model_choice_dropdown.value = q.client.model_choice_dropdown
         q.args.chatbot = f"Model {q.client.model_choice_dropdown} selected"
+        q.client.chat_buffer.append([q.args.chatbot, True])
         # Refresh response is triggered when user selects a table via dropdown
         q.args.model_choice_dropdown = None
         event_handled = True
@@ -886,6 +891,7 @@ async def on_event(q: Q):
         q.client.task_dropdown = q.args.task_dropdown
         q.page["task_choice"].task_dropdown.value = q.client.task_dropdown
         q.args.chatbot = f"'{TASK_CHOICE[q.client.task_dropdown]}' mode selected"
+        q.client.chat_buffer.append([q.args.chatbot, True])
         q.args.task_dropdown = None
         # Refresh response is triggered when user selects a table via dropdown
         event_handled = True
@@ -975,6 +981,7 @@ async def on_event(q: Q):
         q.args.chatbot = (
             f"Demo mode is enabled.\nTry below example questions for the selected data to get started,\n{sample_qs}"
         )
+        q.client.chat_buffer.append([q.args.chatbot, True])
         q.page["chat_card"].data += [q.args.chatbot, False]
         q.args.table_dropdown = None
         q.args.model_choice_dropdown = None
