@@ -83,6 +83,12 @@ async def user_variable(q: Q):
 
 async def client_variable(q: Q):
     q.client.query = None
+    _gretting_msg = ["""Welcome to the SQL Sidekick!\nI am an AI assistant, i am here to help you find answers to questions on structured data.
+    To get started, please select a table from the dropdown and ask your question.
+    One could start by learning about the dataset by asking questions like:
+    - Describe data.
+    - Preview.""", True]
+    q.client.chat_buffer =  [_gretting_msg]
 
 # Reference: https://wave.h2o.ai/docs/examples/table-markdown-pandas/
 def make_markdown_row(values):
@@ -113,6 +119,52 @@ def clear_cards(q, ignore: Optional[List[str]] = []) -> None:
             del q.page[name]
             q.client.cards.remove(name)
 
+async def draw_additional_actions(q: Q):
+    add_card(
+    q,
+    "additional_actions",
+    ui.form_card(
+        box=ui.box("vertical", height="120px"),
+        items=[
+            ui.buttons(
+                [
+                    ui.button(
+                        name="suggest",
+                        icon="",
+                        caption="Suggests possible questions one could start with",
+                        label="Discover",
+                    ),
+                    ui.button(
+                        name="regenerate",
+                        icon="RepeatOne",
+                        caption="Attempts regeneration of the last response",
+                        label="Try Again",
+                        primary=True,
+                    ),
+                    ui.button(
+                        name="regenerate_with_options",
+                        icon="RepeatAll",
+                        caption="Regenerates with options",
+                        label="Try Harder",
+                    ),
+                    ui.button(
+                        name="save_conversation",
+                        caption="Saves the conversation in the history for future reference to improve response",
+                        label="Accept",
+                        icon="Emoji2",
+                    ),
+                    ui.button(
+                        name="save_rejected_conversation",
+                        caption="Saves the disappointed conversation to improve response.",
+                        label="Reject",
+                        icon="EmojiDisappointed",
+                    ),
+                ],
+                justify="center",
+            )
+        ],
+    ),
+)
 
 @on("#chat")
 async def chat(q: Q):
@@ -209,77 +261,24 @@ async def chat(q: Q):
             ui.chatbot_card(
                 box=ui.box("vertical", height="500px"),
                 name="chatbot",
-                data=data(fields="content from_user", t="list", size=-50),
+                placeholder = "Type your question here, happy to help!",
+                data=data(fields="content from_user", t="list", size=-50, rows=q.client.chat_buffer),
                 commands=chat_card_command_items,
-                events=["scroll"],
+                events=["scroll_up"],
             ),
         ),
-    add_card(
-        q,
-        "additional_actions",
-        ui.form_card(
-            box=ui.box("vertical", height="120px"),
-            items=[
-                ui.progress(name='progress', label='Thinking ...', value=0),
-                ui.buttons(
-                    [
-                        ui.button(
-                            name="suggest",
-                            icon="",
-                            caption="Suggests possible questions one could start with",
-                            label="Discover",
-                        ),
-                        ui.button(
-                            name="regenerate",
-                            icon="RepeatOne",
-                            caption="Attempts regeneration of the last response",
-                            label="Try Again",
-                            primary=True,
-                        ),
-                        ui.button(
-                            name="regenerate_with_options",
-                            icon="RepeatAll",
-                            caption="Regenerates with options",
-                            label="Try Harder",
-                        ),
-                        ui.button(
-                            name="save_conversation",
-                            caption="Saves the conversation in the history for future reference to improve response",
-                            label="Accept",
-                            icon="Emoji2",
-                        ),
-                        ui.button(
-                            name="save_rejected_conversation",
-                            caption="Saves the disappointed conversation to improve response.",
-                            label="Reject",
-                            icon="EmojiDisappointed",
-                        ),
-                    ],
-                    justify="center",
-                )
-            ],
-        ),
-    )
 
-    if q.args.chatbot is None or q.args.chatbot.strip() == "":
-        _msg = """Welcome to the SQL Sidekick!\nI am an AI assistant, i am here to help you find answers to questions on structured data.
-To get started, please select a table from the dropdown and ask your question.
-One could start by learning about the dataset by asking questions like:
-- Describe data.
-- Preview."""
-        q.args.chatbot = _msg
-        q.page["chat_card"].data += [q.args.chatbot, False]
-    logging.info(f"Chatbot response: {q.args.chatbot}")
+    # additional actions
+    await draw_additional_actions(q)
 
 
 async def update_ui(q: Q, value: int):
-    q.page['additional_actions'].progress.value = value
+    q.page['chat_card_progress'].progress.value = value
     await q.page.save()
 
 
-def _execute_suggestions(q: Q, loop: asyncio.AbstractEventLoop):
+def _execute_suggestions(q: Q, loop: asyncio.AbstractEventLoop, time_out=50):
     count = 0
-    time_out = 50
     future = executor = None
     result = task = None
     while count < time_out:
@@ -301,10 +300,12 @@ async def chatbot(q: Q):
     q.page["sidebar"].value = "#chat"
 
     # Append user message.
+    q.client.chat_buffer.append([q.args.chatbot, True])
     q.page["chat_card"].data += [q.args.chatbot, True]
 
     if q.page["select_tables"].table_dropdown.value is None or q.client.table_name is None:
         q.page["chat_card"].data += ["Please select a table to continue!", False]
+        q.client.chat_buffer.append([q.args.chatbot, False])
         return
 
     if (
@@ -336,12 +337,42 @@ async def chatbot(q: Q):
                 llm_response = f"The selected dataset has total number of {n_cols} columns.\nBelow is quick preview:\n{df_markdown}"
         elif q.args.chatbot and (q.args.chatbot.lower() == "recommend questions" or q.args.chatbot.lower() == "recommend qs"):
             await q.page.save()
+            #_rows = q.page["chat_card"].data.rows
+            #import pdb; pdb.set_trace()
+            del q.page["chat_card"]
+            del q.page["additional_actions"]
+            add_card(
+            q,
+            "chat_card_progress",
+            ui.form_card(
+                box=ui.box("vertical", height="500px"), items=[ui.progress(name='progress', label='Thinking ...', value=0)]))
+            await draw_additional_actions(q)
             loop = asyncio.get_event_loop()
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 llm_response = await q.exec(pool, _execute_suggestions, q, loop=loop)
             if not llm_response:
                 llm_response = "Something went wrong, check the API Keys provided."
             logging.info(f"Recommended Questions:\n{llm_response}")
+            # Re-draw the chat-card
+            del q.page["chat_card_progress"]
+            del q.page["additional_actions"]
+            chat_card_command_items = [
+                ui.command(name="download_accept", label="Download QnA history", icon="Download"),
+                ui.command(name="download_reject", label="Download in-correct QnA history", icon="Download"),
+            ]
+            _chat_history = q.client.chat_buffer
+            add_card(
+            q,
+            "chat_card",
+            ui.chatbot_card(
+                box=ui.box("vertical", height="500px"),
+                name="chatbot",
+                placeholder = "Type your question here, happy to help!",
+                data=data(fields="content from_user", t="list", size=-50, rows=_chat_history),
+                commands=chat_card_command_items,
+                events=["scroll_up"],
+            )),
+            await draw_additional_actions(q)
             q.args.chatbot = None
         elif q.args.chatbot and q.args.chatbot.lower() == "db setup":
             llm_response, err = db_setup(
@@ -415,7 +446,7 @@ async def chatbot(q: Q):
         torch.cuda.empty_cache()
         llm_response = "Something went wrong, try executing the query again!"
     q.client.llm_response = llm_response
-    q.page["chat_card"].data += [llm_response, False]
+    q.client.chat_buffer.append([llm_response, False])
 
 
 @on("submit_url_keys")
@@ -752,7 +783,6 @@ async def init(q: Q) -> None:
         ],
     )
 
-    # Connect to LLM
     openai.api_key = ""
 
     await user_variable(q)
