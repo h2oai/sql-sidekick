@@ -276,14 +276,29 @@ async def update_ui(q: Q, value: int):
     await q.page.save()
 
 
-def _execute_suggestions(q: Q, loop: asyncio.AbstractEventLoop, time_out=50):
+def _execute(q: Q, func_type: str, loop: asyncio.AbstractEventLoop, time_out=50, **kwargs):
     count = 0
     future = executor = None
     result = task = None
+    cache_path = q.client.table_info_path
+    table_name = q.client.table_name
     while count < time_out:
         if not task:
             executor = concurrent.futures.ThreadPoolExecutor()
-            task  = executor.submit(recommend_suggestions, cache_path=q.client.table_info_path, table_name=q.client.table_name)
+            if func_type == "suggest":
+                task = executor.submit(recommend_suggestions, cache_path=cache_path, table_name=table_name)
+            elif func_type == "ask":
+                task = executor.submit(ask, question=q.client.query,
+                        sample_queries_path=q.client.sample_qna_path,
+                        table_info_path=q.client.table_info_path,
+                        table_name=q.client.table_name,
+                        model_name=q.client.model_choice_dropdown,
+                        is_regenerate=kwargs.get('is_regenerate', False),
+                        is_regen_with_options=kwargs.get('is_regen_with_options', False),
+                        debug_mode=kwargs.get('debug_mode', False)
+                )
+            else:
+                raise ValueError(f"Invalid function type: {func_type}")
         time.sleep(1)
         count += 1
         if not future or future.done():
@@ -292,6 +307,41 @@ def _execute_suggestions(q: Q, loop: asyncio.AbstractEventLoop, time_out=50):
                 result = task.result(timeout=1)
                 break
     return result
+
+
+async def _update_before_job_start(q: Q):
+    await q.page.save()
+    del q.page["chat_card"]
+    del q.page["additional_actions"]
+    add_card(
+    q,
+    "chat_card_progress",
+    ui.form_card(
+        box=ui.box("vertical", height="500px"), items=[ui.progress(name='progress', label='Thinking ...', value=0)]))
+    await draw_additional_actions(q)
+
+
+async def _update_after_job_end(q: Q):
+    del q.page["chat_card_progress"]
+    del q.page["additional_actions"]
+    chat_card_command_items = [
+        ui.command(name="download_accept", label="Download QnA history", icon="Download"),
+        ui.command(name="download_reject", label="Download in-correct QnA history", icon="Download"),
+    ]
+    _chat_history = q.client.chat_buffer
+    add_card(
+    q,
+    "chat_card",
+    ui.chatbot_card(
+        box=ui.box("vertical", height="500px"),
+        name="chatbot",
+        placeholder = "Type your question here, happy to help!",
+        data=data(fields="content from_user", t="list", size=-50, rows=_chat_history),
+        commands=chat_card_command_items,
+        events=["scroll_up"],
+    )),
+    await draw_additional_actions(q)
+    q.args.re_drawn = True
 
 
 @on("chatbot")
@@ -328,6 +378,7 @@ async def chatbot(q: Q):
     # 2. "Try harder mode (THM)" Slow approach by using the diverse beam search
     llm_response = None
     try:
+        loop = asyncio.get_event_loop()
         if q.args.chatbot and ("preview data" in q.args.chatbot.lower() or "data preview" in q.args.chatbot.lower() or "preview" in q.args.chatbot.lower()) or f"preview {q.client.table_name}" in q.args.chatbot.lower():
             _response_df = data_preview(q.client.table_name)
             # Format as markdown table
@@ -336,42 +387,14 @@ async def chatbot(q: Q):
                 n_cols = len(_response_df.columns)
                 llm_response = f"The selected dataset has total number of {n_cols} columns.\nBelow is quick preview:\n{df_markdown}"
         elif q.args.chatbot and (q.args.chatbot.lower() == "recommend questions" or q.args.chatbot.lower() == "recommend qs"):
-            await q.page.save()
-            del q.page["chat_card"]
-            del q.page["additional_actions"]
-            add_card(
-            q,
-            "chat_card_progress",
-            ui.form_card(
-                box=ui.box("vertical", height="500px"), items=[ui.progress(name='progress', label='Thinking ...', value=0)]))
-            await draw_additional_actions(q)
-            loop = asyncio.get_event_loop()
+            await _update_before_job_start(q)
             with concurrent.futures.ThreadPoolExecutor() as pool:
-                llm_response = await q.exec(pool, _execute_suggestions, q, loop=loop)
+                llm_response = await q.exec(pool, _execute, q, "suggest", loop=loop)
             if not llm_response:
                 llm_response = "Something went wrong, check the API Keys provided."
             logging.info(f"Recommended Questions:\n{llm_response}")
-            # Re-draw the chat-card
-            del q.page["chat_card_progress"]
-            del q.page["additional_actions"]
-            chat_card_command_items = [
-                ui.command(name="download_accept", label="Download QnA history", icon="Download"),
-                ui.command(name="download_reject", label="Download in-correct QnA history", icon="Download"),
-            ]
-            _chat_history = q.client.chat_buffer
-            add_card(
-            q,
-            "chat_card",
-            ui.chatbot_card(
-                box=ui.box("vertical", height="500px"),
-                name="chatbot",
-                placeholder = "Type your question here, happy to help!",
-                data=data(fields="content from_user", t="list", size=-50, rows=_chat_history),
-                commands=chat_card_command_items,
-                events=["scroll_up"],
-            )),
-            await draw_additional_actions(q)
-            q.args.re_drawn = True
+            # Update
+            await _update_after_job_end(q)
         elif q.args.chatbot and q.args.chatbot.lower() == "db setup":
             llm_response, err = db_setup(
                 db_name=q.client.db_name,
@@ -387,16 +410,15 @@ async def chatbot(q: Q):
             # Attempts to regenerate response on the last supplied query
             logging.info(f"Attempt for regeneration")
             if q.client.query is not None and q.client.query.strip() != "":
+                await _update_before_job_start(q)
                 with concurrent.futures.ThreadPoolExecutor() as pool:
-                    llm_response, alt_response, err = await q.exec(pool, ask, question=q.client.query,
-                        sample_queries_path=q.client.sample_qna_path,
-                        table_info_path=q.client.table_info_path,
-                        table_name=q.client.table_name,
-                        model_name=q.client.model_choice_dropdown,
+                    llm_response, alt_response, _ = await q.exec(pool, _execute, q, "ask",
+                        loop=loop,
                         is_regenerate=True,
                         is_regen_with_options=False
                     )
                 llm_response = "\n".join(llm_response)
+                await _update_after_job_end(q)
             else:
                 llm_response = (
                     "Sure, I can generate a new response for you. "
@@ -406,17 +428,15 @@ async def chatbot(q: Q):
             # Attempts to regenerate response on the last supplied query
             logging.info(f"Attempt for regeneration with options.")
             if q.client.query is not None and q.client.query.strip() != "":
+                await _update_before_job_start(q)
                 with concurrent.futures.ThreadPoolExecutor() as pool:
-                    llm_response, alt_response, err = await q.exec(pool, ask,
-                        question=q.client.query,
-                        sample_queries_path=q.client.sample_qna_path,
-                        table_info_path=q.client.table_info_path,
-                        table_name=q.client.table_name,
-                        model_name=q.client.model_choice_dropdown,
+                    llm_response, alt_response, _ = await q.exec(pool,  _execute, q, "ask",
+                        loop=loop,
                         is_regenerate=False,
                         is_regen_with_options=True
                     )
                 response = "\n".join(llm_response)
+                await _update_after_job_end(q)
                 if alt_response:
                     llm_response = response + "\n\n" + "**Alternate options:**\n" + "\n".join(alt_response)
                     logging.info(f"Regenerate response: {llm_response}")
@@ -429,15 +449,14 @@ async def chatbot(q: Q):
                 )
         else:
             q.client.query = question
+            await _update_before_job_start(q)
             with concurrent.futures.ThreadPoolExecutor() as pool:
-                llm_response, alt_response, err = await q.exec(pool, ask, question=q.client.query,
-                    sample_queries_path=q.client.sample_qna_path,
-                    table_info_path=q.client.table_info_path,
-                    table_name=q.client.table_name,
-                    model_name=q.client.model_choice_dropdown,
+                llm_response, alt_response, err = await q.exec(pool, _execute, q, "ask",
+                    loop=loop,
                     debug_mode=q.args.debug_mode
                 )
             llm_response = "\n".join(llm_response)
+            await _update_after_job_end(q)
     except (MemoryError, RuntimeError) as e:
         logging.error(f"Something went wrong while generating response: {e}")
         gc.collect()
