@@ -317,7 +317,9 @@ async def _update_before_job_start(q: Q):
     q,
     "chat_card_progress",
     ui.form_card(
-        box=ui.box("vertical", height="500px"), items=[ui.progress(name='progress', label='Thinking ...', value=0)]))
+        box=ui.box("vertical", height="500px"), items=[ui.inline([ui.image(title='', path=q.user.progress_icon_path)], justify='center'),
+                                                       ui.progress(name='progress', label='Thinking ...', value=0)
+                                                       ]))
     await draw_additional_actions(q)
 
 
@@ -725,6 +727,7 @@ async def init(q: Q) -> None:
     q.client.timezone = "UTC"
     q.args.demo_mode = False
     q.app.toml = toml.load("app.toml")
+    q.user.progress_icon_path, = await q.site.upload(['./ui/assets/Loading_icon.gif'])
 
     username, profile_pic = q.auth.username, q.app.persona_path
     q.page["meta"] = ui.meta_card(
