@@ -276,7 +276,7 @@ async def update_ui(q: Q, value: int):
     await q.page.save()
 
 
-def _execute(q: Q, func_type: str, loop: asyncio.AbstractEventLoop, time_out=50, **kwargs):
+def _execute(q: Q, func_type: str, loop: asyncio.AbstractEventLoop, time_out=100, **kwargs):
     count = 0
     future = executor = None
     result = task = None
@@ -304,8 +304,10 @@ def _execute(q: Q, func_type: str, loop: asyncio.AbstractEventLoop, time_out=50,
         if not future or future.done():
             future = asyncio.ensure_future(update_ui(q, count / time_out), loop=loop)
             if task.done():
-                result = task.result(timeout=1)
+                result = (task.result())
                 break
+    if not result:
+        result = ("Something went wrong, couldn't compile the response. Try again!", None)
     return result
 
 
@@ -378,7 +380,7 @@ async def chatbot(q: Q):
     # For regeneration, currently there are 2 modes
     # 1. Quick fast approach by throttling the temperature
     # 2. "Try harder mode (THM)" Slow approach by using the diverse beam search
-    llm_response = None
+    llm_response = []
     try:
         loop = asyncio.get_event_loop()
         if q.args.chatbot and ("preview data" in q.args.chatbot.lower() or "data preview" in q.args.chatbot.lower() or "preview" in q.args.chatbot.lower()) or f"preview {q.client.table_name}" in q.args.chatbot.lower():
@@ -414,11 +416,14 @@ async def chatbot(q: Q):
             if q.client.query is not None and q.client.query.strip() != "":
                 await _update_before_job_start(q)
                 with concurrent.futures.ThreadPoolExecutor() as pool:
-                    llm_response, alt_response, _ = await q.exec(pool, _execute, q, "ask",
+                    result = await q.exec(pool, _execute, q, "ask",
                         loop=loop,
                         is_regenerate=True,
                         is_regen_with_options=False
                     )
+                    if result and len(result)>2:
+                        llm_response = result[0]
+                        alt_response = result[1]
                 llm_response = "\n".join(llm_response)
                 await _update_after_job_end(q)
             else:
@@ -432,11 +437,14 @@ async def chatbot(q: Q):
             if q.client.query is not None and q.client.query.strip() != "":
                 await _update_before_job_start(q)
                 with concurrent.futures.ThreadPoolExecutor() as pool:
-                    llm_response, alt_response, _ = await q.exec(pool,  _execute, q, "ask",
+                    result = await q.exec(pool,  _execute, q, "ask",
                         loop=loop,
                         is_regenerate=False,
                         is_regen_with_options=True
                     )
+                    if result and len(result)>2:
+                        llm_response = result[0]
+                        alt_response = result[1]
                 response = "\n".join(llm_response)
                 await _update_after_job_end(q)
                 if alt_response:
@@ -453,10 +461,13 @@ async def chatbot(q: Q):
             q.client.query = question
             await _update_before_job_start(q)
             with concurrent.futures.ThreadPoolExecutor() as pool:
-                llm_response, alt_response, err = await q.exec(pool, _execute, q, "ask",
+                result = await q.exec(pool, _execute, q, "ask",
                     loop=loop,
                     debug_mode=q.args.debug_mode
                 )
+                if result and len(result)>2:
+                    llm_response = result[0]
+                    alt_response = result[1]
             llm_response = "\n".join(llm_response)
             await _update_after_job_end(q)
     except (MemoryError, RuntimeError) as e:
