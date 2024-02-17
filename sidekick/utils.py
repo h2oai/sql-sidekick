@@ -629,7 +629,7 @@ def check_vulnerability(input_query: str):
 
 
 def generate_suggestions(remote_url, client_key:str, column_names: list, n_qs: int=10):
-    results = []
+    text_completion = []
 
     column_info = ','.join(column_names)
     _system_prompt = f"Act as a data analyst, based on below data schema help answer the question"
@@ -640,12 +640,13 @@ def generate_suggestions(remote_url, client_key:str, column_names: list, n_qs: i
     if "h2ogpt-" in recommender_model:
         try:
             client = H2OGPTE(address=remote_url, api_key=client_key)
-            text_completion = client.answer_question(
+            response = client.answer_question(
                 system_prompt=_system_prompt,
                 text_context_list=[],
                 question=_user_prompt,
                 llm=recommender_model
             )
+            text_completion = response.content.split("\n")[2:]
         except Exception as e:
             remote_url = os.getenv("H2OGPT_BASE_URL", None)
             client_key = os.getenv("H2OGPT_BASE_API_TOKEN", None)
@@ -660,7 +661,7 @@ def generate_suggestions(remote_url, client_key:str, column_names: list, n_qs: i
                         max_tokens=512,
                         temperature=0.5,
                         seed=42)
-            text_completion = completion.choices[0].message
+            text_completion = completion.choices[0].message.content.split("\n")[2:]
     elif 'gpt-3.5' in recommender_model.lower() or 'gpt-4' in recommender_model.lower():
         # Check if the API key is set, else inform user
         logger.info(f"Using OpenAI model: {recommender_model}")
@@ -674,9 +675,8 @@ def generate_suggestions(remote_url, client_key:str, column_names: list, n_qs: i
             seed=42,
             temperature=0.7
         )
-        text_completion = completion.choices[0].message
+        text_completion = completion.choices[0].message.content.split("\n")
     else:
         raise Exception("Model url or key is missing.")
-    _res = text_completion.content.split("\n")[2:]
-    results = "\n".join(_res)
+    results = "\n".join(text_completion)
     return results
