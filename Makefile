@@ -1,23 +1,22 @@
-demo_data = s3cmd get --recursive --skip-existing s3://h2o-sql-sidekick-public/demo/sleepEDA/ ./examples/demo/
+demo_data = wget -O ./examples/demo/demo_data.csv --no-clobber https://h2o-sql-sidekick-public.s3.amazonaws.com/demo/Sleep_health_and_lifestyle_dataset.csv
 
 .PHONY: download_demo_data
 
 all: download_demo_data
 
-setup: download_demo_data ## Setup
-	python3 -m venv .sidekickvenv
-	./.sidekickvenv/bin/python3 -m pip install --upgrade pip
-	./.sidekickvenv/bin/python3 -m pip install wheel
-	./.sidekickvenv/bin/python3 -m pip install -r requirements.txt
+setup: download_demo_data
+	python -m venv .sidekickvenv
+	./.sidekickvenv/bin/python -m pip install --upgrade pip
+	./.sidekickvenv/bin/python -m pip install wheel
+	./.sidekickvenv/bin/python -m pip install -r requirements.txt
 	mkdir -p ./examples/demo/
-
 
 download_demo_data:
 	mkdir -p ./examples/demo/
 	$(demo_data)
 
 run:
-	./.sidekickvenv/bin/python3 start.py
+	./.sidekickvenv/bin/python start.py
 
 clean:
 	rm -rf ./db

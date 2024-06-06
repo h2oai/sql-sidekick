@@ -4,7 +4,7 @@ Turn ★ into ⭐ (top-right corner) if you like the project! 🙏
 
 ## Motivation
 - Historically, it’s common for data to be stored in Databases, democratizing insight generation.
-- Enable a helpful assistant to help write complex queries across different database dialects with acceptable efficient execution accuracy (not just matching accuracy) 
+- Enable a helpful assistant to help write complex queries across different database dialects with acceptable efficient execution accuracy (not just matching accuracy)
 - Push to derive consistent generation without errors using smaller OSS models to save on compute costs.
 - Provide a toolkit for users to mix and match different model sizes to optimize compute cost - e.g., smaller models for generation, remote bigger models for syntax correction or spell correction …
 - Build a smart search engine for Databases/structured data, Text to SQL as a Natural Language interface (NLI) for data analysis
@@ -23,6 +23,15 @@ Turn ★ into ⭐ (top-right corner) if you like the project! 🙏
 - Recommend sample questions: Often, given a dataset, we are unsure what to ask. To come around this problem, we have enabled the ability to generate recommendations for possible questions.
 
 # Installation
+
+## Requirements
+This project requires Python version to be within the range "3.8.1" to "3.10.0". You can check your Python version by running the following command in your terminal:
+
+```
+python --version
+```
+If your Python version is not within the specified range, you may need to update or downgrade it.
+
 ## Dev
 ```
 1. git clone git@github.com:h2oai/sql-sidekick.git
@@ -39,7 +48,7 @@ Dialect: postgres
 - docker run --rm --name pgsql-dev -e POSTGRES_PASSWORD=abc -p 5432:5432 postgres
 
 Default: sqlite
-Step: 
+Step:
 - Download and install .whl --> s3://sql-sidekick/releases/sql_sidekick-0.0.3-py3-none-any.whl
 - python3 -m venv .sidekickvenv
 - source .sidekickvenv/bin/activate
@@ -51,7 +60,7 @@ Step:
 
 Welcome to the SQL Sidekick! I am an AI assistant that helps you with SQL
 queries. I can help you with the following:
-  0. Generate input schema: 
+  0. Generate input schema:
   `sql-sidekick configure generate_schema configure generate_schema --data_path "./sample_passenger_statisfaction.csv" --output_path "./table_config.jsonl"`
 
   1. Configure a local database(for schema validation and syntax checking):
