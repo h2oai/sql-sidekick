@@ -535,7 +535,6 @@ class SQLGenerator:
                     else context_queries
                 )
                 logger.info(f"Number of possible contextual queries to question: {len(filtered_context)}")
-                logger.info(f"HEEEEEEEEERE22: {filtered_context}")
                 # If QnA pairs > 5, we keep top 5 for focused context
                 # Most relevant match is closest to the generation post re-ranking
                 _samples = filtered_context
