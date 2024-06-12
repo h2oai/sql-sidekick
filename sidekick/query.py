@@ -223,6 +223,8 @@ class SQLGenerator:
 
             MODEL_CHOICE_MAP = MODEL_CHOICE_MAP_EVAL_MODE
             m_name = MODEL_CHOICE_MAP.get(self.model_name)
+            if m_name is None:
+                raise ValueError(f"Invalid model name {self.model_name}. Available models: {MODEL_CHOICE_MAP.keys()}")
 
             completion = self.openai_client.chat.completions.create(
                 model=m_name,
@@ -233,6 +235,8 @@ class SQLGenerator:
             )
             res = completion.choices[0].message.content
             return res
+        except ValueError as ve:
+            raise ve
         except Exception as se:
             _, ex_value, _ = sys.exc_info()
             res = ex_value.statement if ex_value.statement else None
@@ -531,6 +535,7 @@ class SQLGenerator:
                     else context_queries
                 )
                 logger.info(f"Number of possible contextual queries to question: {len(filtered_context)}")
+                logger.info(f"HEEEEEEEEERE22: {filtered_context}")
                 # If QnA pairs > 5, we keep top 5 for focused context
                 # Most relevant match is closest to the generation post re-ranking
                 _samples = filtered_context
