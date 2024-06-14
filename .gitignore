@@ -2,6 +2,7 @@ examples/demo
 .sidekickvenv
 models/
 db/
+sdk_quick_tutorial.ipynb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
