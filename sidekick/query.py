@@ -223,6 +223,8 @@ class SQLGenerator:
 
             MODEL_CHOICE_MAP = MODEL_CHOICE_MAP_EVAL_MODE
             m_name = MODEL_CHOICE_MAP.get(self.model_name)
+            if m_name is None:
+                raise ValueError(f"Invalid model name {self.model_name}. Available models: {MODEL_CHOICE_MAP.keys()}")
 
             completion = self.openai_client.chat.completions.create(
                 model=m_name,
@@ -233,6 +235,8 @@ class SQLGenerator:
             )
             res = completion.choices[0].message.content
             return res
+        except ValueError as ve:
+            raise ve
         except Exception as se:
             _, ex_value, _ = sys.exc_info()
             res = ex_value.statement if ex_value.statement else None
@@ -245,7 +249,12 @@ class SQLGenerator:
             user_prompt = DEBUGGING_PROMPT["user_prompt"].format(ex_traceback=error_msg, qry_txt=input_query).strip()
             _response = []
             _res = input_query
-            self_correction_model = os.getenv("SELF_CORRECTION_MODEL", "h2oai/h2ogpt-4096-llama2-70b-chat")
+            if os.getenv("OPENAI_API_KEY", None):
+                default_correction_model = "gpt-4"
+            else:
+                default_correction_model = "h2ogpt-4096-llama2-70b-chat"
+            self_correction_model = os.getenv("SELF_CORRECTION_MODEL", default_correction_model)
+            logger.info(f"Using LLM model: {self_correction_model} for self-correction")
             if "h2ogpt-" in self_correction_model:
                 if remote_url and client_key and remote_url != "" and client_key != "":
                     from h2ogpte import H2OGPTE
@@ -310,6 +319,7 @@ class SQLGenerator:
             res = response.metadata["sql_query"]
             return res
         except Exception as se:
+            logger.info(f"Error in generating response: {se}")
             # Take the SQL and make an attempt for correction
             _, ex_value, ex_traceback = sys.exc_info()
             qry_txt = ex_value.statement
@@ -337,6 +347,7 @@ class SQLGenerator:
                         res = qry_txt
                     return res
                 except Exception as se:
+                    logger.info(f"Error in generate_response, self correction: {se}")
                     # Another exception occurred, return the original SQL
                     res = qry_txt
                     return res

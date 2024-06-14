@@ -25,7 +25,10 @@ from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
 
 
 REMOTE_LLMS = ["h2ogpt-sql-sqlcoder-34b-alpha", "h2ogpt-sql-sqlcoder2", "h2ogpt-sql-nsql-llama-2-7B",
-               "h2ogpt-sql-sqlcoder-7b-2", "gpt-3.5-turbo", "gpt-4-8k", "gpt-4-1106-preview-128k"]
+               "h2ogpt-sql-sqlcoder-7b-2", "gpt-3.5-turbo", "gpt-4-8k", "gpt-4-1106-preview-128k",
+               "gpt-4o", "gpt-4-turbo", "gpt-4-turbo-2024-04-09", "gpt-4-turbo-preview", "gpt-4-0125-preview",
+                "gpt-4-vision-preview", "gpt-4-1106-vision-preview", "gpt-4", "gpt-4-0613", "gpt-4-32k",
+                "gpt-4-32k-0613"]
 
 # clone of models from https://huggingface.co/models
 # suffix `h2ogpt-sql-` is added to avoid conflict with the original models (we haven't done any changes to the original models yet)
@@ -38,9 +41,19 @@ MODEL_CHOICE_MAP_EVAL_MODE = {
     "h2ogpt-sql-sqlcoder-34b-alpha": "defog/sqlcoder-34b-alpha",
     "h2ogpt-sql-nsql-llama-2-7B": "NumbersStation/nsql-llama-2-7B",
     "gpt-3.5-turbo": "gpt-3.5-turbo-1106",
-    "gpt-4-8k": "gpt-4",
-    "gpt-4-1106-preview-128k": "gpt-4-1106-preview"
-
+    "gpt-4-8k": "gpt-4", # leaving this for backward compatibility
+    "gpt-4-1106-preview-128k": "gpt-4-1106-preview", # leaving this for backward compatibility
+    "gpt-4o": "gpt-4o",
+    "gpt-4-turbo": "gpt-4-turbo",
+    "gpt-4-turbo-2024-04-09": "gpt-4-turbo-2024-04-09",
+    "gpt-4-turbo-preview": "gpt-4-turbo-preview",
+    "gpt-4-0125-preview": "gpt-4-0125-preview",
+    "gpt-4-vision-preview": "gpt-4o", # legacy to be deprecated
+    "gpt-4-1106-vision-preview": "gpt-4o", # legacy to be deprecated
+    "gpt-4": "gpt-4",
+    "gpt-4-0613": "gpt-4-0613",
+    "gpt-4-32k": "gpt-4-turbo", # legacy to be deprecated
+    "gpt-4-32k-0613": "gpt-4-turbo", # legacy to be deprecated
 }
 
 MODEL_CHOICE_MAP_DEFAULT = {
@@ -573,7 +586,12 @@ def check_vulnerability(input_query: str):
     _user_prompt = GUARDRAIL_PROMPT["user_prompt"].format(query_txt=input_query, schema=output_schema).strip()
     temp_result = None
     try:
-        llm_scanner = os.getenv("VULNERABILITY_SCANNER", "h2oai/h2ogpt-4096-llama2-70b-chat")
+        if os.getenv("OPENAI_API_KEY", None):
+            default_scanner_model = "gpt-4"
+        else:
+            default_scanner_model = "h2ogpt-4096-llama2-70b-chat"
+        llm_scanner = os.getenv("VULNERABILITY_SCANNER", default_scanner_model)
+        logger.info(f"Using LLM model: {llm_scanner} for vulnerability scan")
         if "h2ogpt-" in llm_scanner and h2ogpte_client_url !='' and h2ogpte_client_url and h2ogpte_client_key != '' and h2ogpte_client_key:
             from h2ogpte import H2OGPTE
             client = H2OGPTE(address=h2ogpte_client_url, api_key=h2ogpte_client_key)
@@ -636,7 +654,12 @@ def generate_suggestions(remote_url, client_key:str, column_names: list, n_qs: i
     _user_prompt  = RECOMMENDATION_PROMPT.format(data_schema=column_info, n_questions=n_qs
     )
 
-    recommender_model = os.getenv("RECOMMENDATION_MODEL", "h2oai/h2ogpt-4096-llama2-70b-chat")
+    if os.getenv("OPENAI_API_KEY", None):
+        default_recommendation_model = "gpt-4"
+    else:
+        default_recommendation_model = "h2ogpt-4096-llama2-70b-chat"
+    recommender_model = os.getenv("RECOMMENDATION_MODEL", default_recommendation_model)
+    logger.info(f"Using LLM model: {recommender_model} for recommendation")
     if "h2ogpt-" in recommender_model:
         try:
             client = H2OGPTE(address=remote_url, api_key=client_key)
